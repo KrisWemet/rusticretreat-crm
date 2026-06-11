@@ -14,6 +14,9 @@ import Messages from './pages/admin/Messages'
 import Tasks from './pages/admin/Tasks'
 import VendorsAdmin from './pages/admin/VendorsAdmin'
 import Contracts from './pages/admin/Contracts'
+import Payments from './pages/admin/Payments'
+import VenueCalendar from './pages/admin/VenueCalendar'
+import Inquire from './pages/Inquire'
 import PortalDashboard from './pages/portal/PortalDashboard'
 import Checklist from './pages/portal/Checklist'
 import GuestList from './pages/portal/GuestList'
@@ -22,6 +25,7 @@ import VendorList from './pages/portal/VendorList'
 import Timeline from './pages/portal/Timeline'
 import PortalMessages from './pages/portal/PortalMessages'
 import Documents from './pages/portal/Documents'
+import PortalPayments from './pages/portal/Payments'
 
 function App() {
   return (
@@ -48,8 +52,9 @@ function App() {
           }}
         />
         <Routes>
-          {/* Public: contract signing (no auth needed) */}
+          {/* Public: no auth needed */}
           <Route path="/sign/:token" element={<SignContract />} />
+          <Route path="/inquire" element={<Inquire />} />
 
           {/* Admin/Staff routes */}
           <Route path="/login" element={<Login />} />
@@ -58,11 +63,13 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="clients" element={<Clients />} />
             <Route path="clients/:id" element={<ClientDetail />} />
+            <Route path="calendar" element={<VenueCalendar />} />
             <Route path="bookings" element={<Bookings />} />
+            <Route path="contracts" element={<Contracts />} />
+            <Route path="payments" element={<Payments />} />
             <Route path="messages" element={<Messages />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="vendors" element={<VendorsAdmin />} />
-            <Route path="contracts" element={<Contracts />} />
           </Route>
 
           {/* Couple portal routes */}
@@ -73,6 +80,7 @@ function App() {
             <Route path="checklist" element={<Checklist />} />
             <Route path="guests" element={<GuestList />} />
             <Route path="budget" element={<Budget />} />
+            <Route path="payments" element={<PortalPayments />} />
             <Route path="vendors" element={<VendorList />} />
             <Route path="timeline" element={<Timeline />} />
             <Route path="messages" element={<PortalMessages />} />

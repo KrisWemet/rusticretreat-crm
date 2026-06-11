@@ -179,6 +179,29 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+    booking_id INTEGER REFERENCES bookings(id) ON DELETE SET NULL,
+    description TEXT NOT NULL,
+    amount REAL NOT NULL DEFAULT 0,
+    due_date DATE,
+    paid INTEGER DEFAULT 0,
+    paid_at DATETIME,
+    payment_method TEXT,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS blocked_dates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL UNIQUE,
+    reason TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
 // Migrate existing contracts table with new event-detail columns
 for (const col of [
   'ALTER TABLE contracts ADD COLUMN wedding_date DATE',

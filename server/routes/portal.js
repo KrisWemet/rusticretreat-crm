@@ -118,6 +118,14 @@ router.get('/documents/admin/all', (req, res, next) => {
   res.json(documents);
 });
 
+// Couple: get their invoices / payment schedule
+router.get('/invoices', authenticateCouple, (req, res) => {
+  const rows = db.prepare(`
+    SELECT * FROM invoices WHERE couple_id = ? ORDER BY due_date ASC, created_at DESC
+  `).all(req.couple.coupleId);
+  res.json(rows);
+});
+
 // Couple: get their contracts
 router.get('/contracts', authenticateCouple, (req, res) => {
   const contracts = db.prepare(`

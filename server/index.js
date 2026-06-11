@@ -32,6 +32,9 @@ app.use('/api/timeline', require('./routes/timeline'));
 app.use('/api/portal', require('./routes/portal'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/contracts', require('./routes/contracts'));
+app.use('/api/invoices', require('./routes/invoices'));
+app.use('/api/calendar', require('./routes/calendar'));
+app.use('/api/inquire', require('./routes/inquire'));
 
 // Health check
 app.get('/api/health', (req, res) => {

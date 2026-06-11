@@ -10,16 +10,20 @@ import {
   ArrowRightOnRectangleIcon,
   HeartIcon,
   DocumentTextIcon,
+  BanknotesIcon,
+  CalendarIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
-  { to: '/dashboard', icon: HomeIcon, label: 'Dashboard' },
-  { to: '/clients', icon: UsersIcon, label: 'Clients & Leads' },
-  { to: '/bookings', icon: CalendarDaysIcon, label: 'Bookings' },
-  { to: '/contracts', icon: DocumentTextIcon, label: 'Contracts' },
-  { to: '/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages', badge: 'messages' },
-  { to: '/tasks', icon: ClipboardDocumentListIcon, label: 'Tasks', badge: 'tasks' },
-  { to: '/vendors', icon: BuildingStorefrontIcon, label: 'Vendors' },
+  { to: '/dashboard',  icon: HomeIcon,                  label: 'Dashboard' },
+  { to: '/clients',    icon: UsersIcon,                 label: 'Clients & Leads' },
+  { to: '/calendar',   icon: CalendarIcon,              label: 'Venue Calendar' },
+  { to: '/bookings',   icon: CalendarDaysIcon,          label: 'Bookings' },
+  { to: '/contracts',  icon: DocumentTextIcon,          label: 'Contracts' },
+  { to: '/payments',   icon: BanknotesIcon,             label: 'Payments' },
+  { to: '/messages',   icon: ChatBubbleLeftRightIcon,   label: 'Messages', badge: 'messages' },
+  { to: '/tasks',      icon: ClipboardDocumentListIcon, label: 'Tasks', badge: 'tasks' },
+  { to: '/vendors',    icon: BuildingStorefrontIcon,    label: 'Vendors' },
 ]
 
 export default function Sidebar({ unreadMessages = 0, pendingTasks = 0 }) {

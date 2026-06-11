@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken, authenticateCouple } = require('../middleware/auth');
+const email = require('../services/email');
 
 // Get all conversations (grouped by couple) - admin view
 router.get('/', authenticateToken, (req, res) => {
@@ -51,6 +52,16 @@ router.post('/:coupleId', authenticateToken, (req, res) => {
   `).run(req.params.coupleId, req.user.name, content);
 
   const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+
+  // Notify couple by email
+  const preview = content.length > 200 ? content.slice(0, 197) + '...' : content;
+  email.sendNewMessageCouple({
+    to: couple.email,
+    coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
+    senderName: req.user.name,
+    preview,
+  });
+
   res.status(201).json(message);
 });
 

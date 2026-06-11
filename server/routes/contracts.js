@@ -4,6 +4,7 @@ const db = require('../db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
+const email = require('../services/email');
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,16 @@ router.post('/:id/send', authenticateToken, (req, res) => {
       UPDATE contracts SET signing_token = ?, status = 'sent', sent_at = datetime('now')
       WHERE id = ?
     `).run(token, req.params.id);
+
+    // Email signing link to couple
+    const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
+    email.sendContractLink({
+      to: couple.email,
+      coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
+      contractTitle: contract.title,
+      signingUrl: `/sign/${token}`,
+    });
+
     res.json({ token, signing_url: `/sign/${token}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -236,10 +247,28 @@ router.post('/sign/:token', (req, res) => {
       is_new_account = true;
     }
 
+    const coupleNames = `${contract.partner1_name} & ${contract.partner2_name}`;
+    const signedAt = new Date().toLocaleString();
+
+    // Confirmation email to couple
+    email.sendContractSignedCouple({
+      to: contract.email,
+      coupleNames,
+      contractTitle: contract.title,
+    });
+
+    // Notification email to admin
+    email.sendContractSignedAdmin({
+      coupleNames,
+      contractTitle: contract.title,
+      signerName: signer_name,
+      signedAt,
+    });
+
     res.json({
       success: true,
       message: 'Contract signed successfully!',
-      couple_name: `${contract.partner1_name} & ${contract.partner2_name}`,
+      couple_name: coupleNames,
       portal_email: contract.email,
       portal_password: is_new_account ? plain_password : null,
       is_new_account,
