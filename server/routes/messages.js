@@ -33,6 +33,15 @@ router.get('/all', authenticateToken, (req, res) => {
   res.json(messages);
 });
 
+// Get unread count (must be registered before /:coupleId)
+router.get('/unread/count', authenticateToken, (req, res) => {
+  const count = db.prepare(`
+    SELECT COUNT(*) as count FROM messages
+    WHERE sender_type = 'couple' AND read_at IS NULL
+  `).get();
+  res.json(count);
+});
+
 // Get messages for a couple
 router.get('/:coupleId', authenticateToken, (req, res) => {
   const messages = db.prepare(`
@@ -73,15 +82,6 @@ router.post('/:coupleId', authenticateToken, (req, res) => {
   });
 
   res.status(201).json(message);
-});
-
-// Get unread count
-router.get('/unread/count', authenticateToken, (req, res) => {
-  const count = db.prepare(`
-    SELECT COUNT(*) as count FROM messages
-    WHERE sender_type = 'couple' AND read_at IS NULL
-  `).get();
-  res.json(count);
 });
 
 // Couple portal: get messages

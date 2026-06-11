@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { authenticateToken, authenticateCouple } = require('../middleware/auth');
+const { authenticateToken, authenticateCouple, authenticateAny } = require('../middleware/auth');
 
 // Admin: Get checklist for couple
 router.get('/couple/:coupleId', authenticateToken, (req, res) => {
@@ -48,21 +48,7 @@ router.post('/portal', authenticateCouple, (req, res) => {
 });
 
 // Update checklist item (both admin and couple)
-router.put('/:id', (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.auth = decoded;
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.put('/:id', authenticateAny, (req, res) => {
   const item = db.prepare('SELECT * FROM checklist_items WHERE id = ?').get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Item not found' });
 
@@ -95,10 +81,14 @@ router.put('/:id', (req, res, next) => {
   res.json(updated);
 });
 
-// Delete checklist item
-router.delete('/:id', authenticateToken, (req, res) => {
+// Delete checklist item (both admin and couple, couple limited to own items)
+router.delete('/:id', authenticateAny, (req, res) => {
   const item = db.prepare('SELECT * FROM checklist_items WHERE id = ?').get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Item not found' });
+
+  if (req.auth.coupleId && req.auth.coupleId !== item.couple_id) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
 
   db.prepare('DELETE FROM checklist_items WHERE id = ?').run(req.params.id);
   res.json({ message: 'Item deleted' });

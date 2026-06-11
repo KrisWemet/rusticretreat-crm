@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const email = require('../services/email');
+const rateLimit = require('../middleware/rateLimit');
 
 // ── Public: submit an inquiry ────────────────────────────────────────────────
-router.post('/', (req, res) => {
+router.post('/', rateLimit({ windowMs: 3600000, max: 5 }), (req, res) => {
   const {
     partner1_name, partner2_name,
     email: coupleEmail, phone,

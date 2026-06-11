@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { authenticateToken, authenticateCouple } = require('../middleware/auth');
+const { authenticateToken, authenticateCouple, authenticateAny } = require('../middleware/auth');
 
 // Admin: Get all vendors (global directory or for couple)
 router.get('/', authenticateToken, (req, res) => {
@@ -61,19 +61,7 @@ router.post('/couple/:coupleId', authenticateToken, (req, res) => {
 });
 
 // Update vendor
-router.put('/:id', (req, res, next) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.put('/:id', authenticateAny, (req, res) => {
   const vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(req.params.id);
   if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
 
@@ -104,10 +92,14 @@ router.put('/:id', (req, res, next) => {
   res.json(updated);
 });
 
-// Delete vendor
-router.delete('/:id', authenticateToken, (req, res) => {
+// Delete vendor (both admin and couple, couple limited to own vendors)
+router.delete('/:id', authenticateAny, (req, res) => {
   const vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(req.params.id);
   if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
+
+  if (req.auth.coupleId && req.auth.coupleId !== vendor.couple_id) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
 
   db.prepare('DELETE FROM vendors WHERE id = ?').run(req.params.id);
   res.json({ message: 'Vendor deleted' });

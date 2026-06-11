@@ -26,6 +26,7 @@ import Timeline from './pages/portal/Timeline'
 import PortalMessages from './pages/portal/PortalMessages'
 import Documents from './pages/portal/Documents'
 import PortalPayments from './pages/portal/Payments'
+import PortalSettings from './pages/portal/Settings'
 
 function App() {
   return (
@@ -85,6 +86,7 @@ function App() {
             <Route path="timeline" element={<Timeline />} />
             <Route path="messages" element={<PortalMessages />} />
             <Route path="documents" element={<Documents />} />
+            <Route path="settings" element={<PortalSettings />} />
           </Route>
         </Routes>
       </AuthProvider>

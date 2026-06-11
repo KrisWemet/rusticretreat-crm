@@ -12,6 +12,7 @@ import {
   DocumentTextIcon,
   ArrowRightOnRectangleIcon,
   HeartIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
@@ -24,6 +25,7 @@ const navItems = [
   { to: '/portal/timeline', icon: ClockIcon, label: 'Day-Of Timeline' },
   { to: '/portal/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages' },
   { to: '/portal/documents', icon: DocumentTextIcon, label: 'Documents' },
+  { to: '/portal/settings', icon: Cog6ToothIcon, label: 'Settings' },
 ]
 
 export default function PortalSidebar() {

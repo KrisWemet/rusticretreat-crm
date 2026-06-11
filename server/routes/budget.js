@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { authenticateToken, authenticateCouple } = require('../middleware/auth');
+const { authenticateToken, authenticateCouple, authenticateAny } = require('../middleware/auth');
 
 // Admin: Get budget items for couple
 router.get('/couple/:coupleId', authenticateToken, (req, res) => {
@@ -52,19 +52,7 @@ router.post('/couple/:coupleId', authenticateToken, (req, res) => {
 });
 
 // Update budget item
-router.put('/:id', (req, res, next) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.put('/:id', authenticateAny, (req, res) => {
   const item = db.prepare('SELECT * FROM budget_items WHERE id = ?').get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Budget item not found' });
 
@@ -95,19 +83,7 @@ router.put('/:id', (req, res, next) => {
 });
 
 // Delete budget item
-router.delete('/:id', (req, res, next) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.delete('/:id', authenticateAny, (req, res) => {
   const item = db.prepare('SELECT * FROM budget_items WHERE id = ?').get(req.params.id);
   if (!item) return res.status(404).json({ error: 'Budget item not found' });
 

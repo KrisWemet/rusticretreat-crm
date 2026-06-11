@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { authenticateCouple } = require('../middleware/auth');
+const { authenticateCouple, authenticateToken } = require('../middleware/auth');
+const bcrypt = require('bcryptjs');
 
 // Get couple's own profile/dashboard data
 router.get('/dashboard', authenticateCouple, (req, res) => {
@@ -70,45 +71,21 @@ router.get('/documents', authenticateCouple, (req, res) => {
 });
 
 // Admin: add document for couple
-router.post('/documents/:coupleId', (req, res, next) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.post('/documents/:coupleId', authenticateToken, (req, res) => {
   const { title, file_name, file_type } = req.body;
   if (!title || !file_name) return res.status(400).json({ error: 'Title and file name required' });
 
   const result = db.prepare(`
     INSERT INTO documents (couple_id, title, file_name, file_type, uploaded_by)
     VALUES (?, ?, ?, ?, ?)
-  `).run(req.params.coupleId, title, file_name, file_type || null, req.auth.name || 'Admin');
+  `).run(req.params.coupleId, title, file_name, file_type || null, req.user.name || 'Admin');
 
   const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(doc);
 });
 
 // Admin: Get all documents
-router.get('/documents/admin/all', (req, res, next) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.get('/documents/admin/all', authenticateToken, (req, res) => {
   const documents = db.prepare(`
     SELECT d.*, c.partner1_name, c.partner2_name
     FROM documents d
@@ -116,6 +93,26 @@ router.get('/documents/admin/all', (req, res, next) => {
     ORDER BY d.created_at DESC
   `).all();
   res.json(documents);
+});
+
+// Couple: change their portal password
+router.post('/change-password', authenticateCouple, (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: 'Current and new password are required' });
+  }
+  if (new_password.length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  }
+
+  const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.couple.coupleId);
+  if (!couple || !couple.password_hash || !bcrypt.compareSync(current_password, couple.password_hash)) {
+    return res.status(401).json({ error: 'Current password is incorrect' });
+  }
+
+  db.prepare('UPDATE couples SET password_hash = ? WHERE id = ?')
+    .run(bcrypt.hashSync(new_password, 10), req.couple.coupleId);
+  res.json({ success: true, message: 'Password updated successfully' });
 });
 
 // Couple: get their invoices / payment schedule

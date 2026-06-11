@@ -9,3 +9,4 @@ server/uploads/
 .env.local
 dist/
 client/dist/
+server/.jwt-secret

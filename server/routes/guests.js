@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { authenticateToken, authenticateCouple } = require('../middleware/auth');
+const { authenticateToken, authenticateCouple, authenticateAny } = require('../middleware/auth');
 
 // Admin: Get guests for couple
 router.get('/couple/:coupleId', authenticateToken, (req, res) => {
@@ -50,19 +50,7 @@ router.post('/couple/:coupleId', authenticateToken, (req, res) => {
 });
 
 // Update guest
-router.put('/:id', (req, res, next) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.put('/:id', authenticateAny, (req, res) => {
   const guest = db.prepare('SELECT * FROM guests WHERE id = ?').get(req.params.id);
   if (!guest) return res.status(404).json({ error: 'Guest not found' });
 
@@ -96,19 +84,7 @@ router.put('/:id', (req, res, next) => {
 });
 
 // Delete guest
-router.delete('/:id', (req, res, next) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.delete('/:id', authenticateAny, (req, res) => {
   const guest = db.prepare('SELECT * FROM guests WHERE id = ?').get(req.params.id);
   if (!guest) return res.status(404).json({ error: 'Guest not found' });
 

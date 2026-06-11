@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { authenticateToken, authenticateCouple } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // ── Admin: get all invoices ──────────────────────────────────────────────────
 router.get('/', authenticateToken, (req, res) => {
@@ -107,14 +107,6 @@ router.post('/schedule/:coupleId', authenticateToken, (req, res) => {
   });
 
   res.status(201).json(inserted);
-});
-
-// ── Portal: couple's own invoices ────────────────────────────────────────────
-router.get('/portal/mine', authenticateCouple, (req, res) => {
-  const rows = db.prepare(`
-    SELECT * FROM invoices WHERE couple_id = ? ORDER BY due_date ASC, created_at DESC
-  `).all(req.couple.coupleId);
-  res.json(rows);
 });
 
 module.exports = router;

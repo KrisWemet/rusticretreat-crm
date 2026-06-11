@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { authenticateToken, authenticateCouple } = require('../middleware/auth');
+const { authenticateToken, authenticateCouple, authenticateAny } = require('../middleware/auth');
 
 // Admin: Get timeline for couple
 router.get('/couple/:coupleId', authenticateToken, (req, res) => {
@@ -57,19 +57,7 @@ router.post('/portal', authenticateCouple, (req, res) => {
 });
 
 // Update timeline event
-router.put('/:id', (req, res, next) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.put('/:id', authenticateAny, (req, res) => {
   const event = db.prepare('SELECT * FROM timeline_events WHERE id = ?').get(req.params.id);
   if (!event) return res.status(404).json({ error: 'Event not found' });
 
@@ -99,19 +87,7 @@ router.put('/:id', (req, res, next) => {
 });
 
 // Delete timeline event
-router.delete('/:id', (req, res, next) => {
-  const jwt = require('jsonwebtoken');
-  const { JWT_SECRET } = require('../middleware/auth');
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-  try {
-    req.auth = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-}, (req, res) => {
+router.delete('/:id', authenticateAny, (req, res) => {
   const event = db.prepare('SELECT * FROM timeline_events WHERE id = ?').get(req.params.id);
   if (!event) return res.status(404).json({ error: 'Event not found' });
 

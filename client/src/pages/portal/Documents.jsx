@@ -177,11 +177,8 @@ export default function Documents() {
                       <p className="text-xs text-slate-300 mt-0.5">{doc.created_at ? format(parseISO(doc.created_at), 'MMM d, yyyy') : ''}</p>
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-slate-50 flex justify-end">
-                    <button className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ArrowDownTrayIcon className="w-3.5 h-3.5" />
-                      Download
-                    </button>
+                  <div className="mt-3 pt-3 border-t border-slate-50">
+                    <p className="text-xs text-slate-400">Need a copy? Ask your coordinator via Messages.</p>
                   </div>
                 </div>
               ))}

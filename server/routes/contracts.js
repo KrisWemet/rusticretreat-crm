@@ -5,6 +5,11 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
+const rateLimit = require('../middleware/rateLimit');
+
+// Public signing endpoints share one limiter: generous enough for normal
+// reading/signing, tight enough to stop token brute-forcing.
+const signLimiter = rateLimit({ windowMs: 60000, max: 20 });
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -137,7 +142,7 @@ router.post('/:id/send', authenticateToken, (req, res) => {
 });
 
 // ── Public: get contract for signing (no auth) ───────────────────────────────
-router.get('/sign/:token', (req, res) => {
+router.get('/sign/:token', signLimiter, (req, res) => {
   try {
     const contract = db.prepare(`
       SELECT c.id, c.title, c.content, c.status, c.signer_name, c.signed_at,
@@ -157,7 +162,7 @@ router.get('/sign/:token', (req, res) => {
 });
 
 // ── Public: submit signature ─────────────────────────────────────────────────
-router.post('/sign/:token', (req, res) => {
+router.post('/sign/:token', signLimiter, (req, res) => {
   const { signer_name, signature_data } = req.body;
   if (!signer_name || !signature_data) {
     return res.status(400).json({ error: 'Signer name and signature are required' });
@@ -276,12 +281,6 @@ router.post('/sign/:token', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-
-// ── Portal: couple's contracts ───────────────────────────────────────────────
-router.get('/portal/mine', (req, res) => {
-  // Handled via portal route — import authenticateCouple there
-  res.status(404).json({ error: 'Use /api/portal/contracts' });
 });
 
 module.exports = router;
