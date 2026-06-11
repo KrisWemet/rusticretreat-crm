@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   HomeIcon,
@@ -26,67 +26,64 @@ const navItems = [
 
 export default function PortalSidebar() {
   const { couple, logoutCouple } = useAuth()
+  const location = useLocation()
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 w-64 flex flex-col shadow-sm"
-      style={{ background: 'linear-gradient(180deg, #fff1f2 0%, #ffffff 50%, #f2f7f2 100%)' }}>
+    <aside className="fixed inset-y-0 left-0 z-30 w-60 bg-white border-r border-rose-100 flex flex-col">
       {/* Logo */}
-      <div className="p-6 border-b border-rose-100">
+      <div className="px-5 py-5 border-b border-rose-100">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-rose-500 rounded-xl flex items-center justify-center">
+          <div className="w-9 h-9 bg-rose-500 rounded-lg flex items-center justify-center flex-shrink-0">
             <HeartIcon className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-rose-900 leading-tight font-serif">Rustic Retreat</h1>
-            <p className="text-xs text-rose-400">Wedding Portal</p>
+            <div className="text-rose-900 font-semibold text-sm leading-tight">Rustic Retreat</div>
+            <div className="text-rose-400 text-xs">Couple Portal</div>
           </div>
         </div>
       </div>
 
-      {/* Couple info */}
+      {/* Couple info banner */}
       {couple && (
-        <div className="px-4 py-3 border-b border-rose-100 bg-rose-50/50">
-          <p className="text-xs text-rose-400 font-medium uppercase tracking-wide">Your Wedding</p>
-          <p className="text-sm font-semibold text-rose-900 mt-0.5">
-            {couple.partner1_name} & {couple.partner2_name}
-          </p>
+        <div className="mx-3 mt-3 mb-1 bg-rose-50 rounded-xl px-3.5 py-3 border border-rose-100">
+          <p className="text-xs text-rose-400 font-semibold uppercase tracking-wide mb-0.5">Your Wedding</p>
+          <p className="text-sm font-semibold text-rose-800">{couple.partner1_name} & {couple.partner2_name}</p>
           {couple.wedding_date && (
             <p className="text-xs text-rose-500 mt-0.5">
-              {new Date(couple.wedding_date + 'T00:00:00').toLocaleDateString('en-US', {
-                month: 'long', day: 'numeric', year: 'numeric'
-              })}
+              {new Date(couple.wedding_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             </p>
           )}
         </div>
       )}
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+        {navItems.map(({ to, icon: Icon, label }) => {
+          const isActive = location.pathname === to
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
                 isActive
-                  ? 'bg-rose-100 text-rose-700'
-                  : 'text-gray-600 hover:bg-rose-50 hover:text-rose-700'
-              }`
-            }
-          >
-            <Icon className="w-5 h-5 flex-shrink-0" />
-            {label}
-          </NavLink>
-        ))}
+                  ? 'bg-rose-600 text-white'
+                  : 'text-slate-600 hover:text-rose-700 hover:bg-rose-50'
+              }`}
+            >
+              <Icon className="w-5 h-5 flex-shrink-0" />
+              {label}
+            </NavLink>
+          )
+        })}
       </nav>
 
       {/* Logout */}
-      <div className="p-4 border-t border-rose-100">
+      <div className="px-3 py-4 border-t border-rose-100">
         <button
           onClick={logoutCouple}
-          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
         >
-          <ArrowRightOnRectangleIcon className="w-4 h-4" />
+          <ArrowRightOnRectangleIcon className="w-5 h-5" />
           Sign Out
         </button>
       </div>

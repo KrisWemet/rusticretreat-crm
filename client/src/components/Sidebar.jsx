@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   HomeIcon,
@@ -8,73 +8,85 @@ import {
   ClipboardDocumentListIcon,
   BuildingStorefrontIcon,
   ArrowRightOnRectangleIcon,
+  HeartIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
   { to: '/dashboard', icon: HomeIcon, label: 'Dashboard' },
   { to: '/clients', icon: UsersIcon, label: 'Clients & Leads' },
   { to: '/bookings', icon: CalendarDaysIcon, label: 'Bookings' },
-  { to: '/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages' },
-  { to: '/tasks', icon: ClipboardDocumentListIcon, label: 'Tasks' },
+  { to: '/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages', badge: 'messages' },
+  { to: '/tasks', icon: ClipboardDocumentListIcon, label: 'Tasks', badge: 'tasks' },
   { to: '/vendors', icon: BuildingStorefrontIcon, label: 'Vendors' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ unreadMessages = 0, pendingTasks = 0 }) {
   const { user, logoutAdmin } = useAuth()
+  const location = useLocation()
+
+  const getBadge = (badge) => {
+    if (badge === 'messages' && unreadMessages > 0) return unreadMessages
+    if (badge === 'tasks' && pendingTasks > 0) return pendingTasks
+    return null
+  }
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-100 flex flex-col shadow-sm">
+    <aside className="fixed inset-y-0 left-0 z-30 w-60 bg-slate-900 flex flex-col">
       {/* Logo */}
-      <div className="p-6 border-b border-gray-100">
+      <div className="px-5 py-5 border-b border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center">
-            <span className="text-white text-lg font-bold font-serif">R</span>
+          <div className="w-9 h-9 bg-rose-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <HeartIcon className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-gray-900 leading-tight">Rustic Retreat</h1>
-            <p className="text-xs text-gray-400">Wedding Venue CRM</p>
+            <div className="text-white font-semibold text-sm leading-tight">Rustic Retreat</div>
+            <div className="text-slate-500 text-xs">Wedding Venue</div>
           </div>
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
-                isActive
-                  ? 'bg-rose-50 text-rose-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`
-            }
-          >
-            <Icon className="w-5 h-5 flex-shrink-0" />
-            {label}
-          </NavLink>
-        ))}
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <div className="text-slate-600 text-xs font-semibold uppercase tracking-widest px-3 mb-2">Main Menu</div>
+        {navItems.map(({ to, icon: Icon, label, badge }) => {
+          const count = getBadge(badge)
+          const isActive = location.pathname === to || (to !== '/dashboard' && location.pathname.startsWith(to))
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              className={`nav-item ${isActive ? 'nav-item-active' : 'nav-item-inactive'}`}
+            >
+              <Icon className="w-5 h-5 flex-shrink-0" />
+              <span className="flex-1">{label}</span>
+              {count > 0 && (
+                <span className={`text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center ${isActive ? 'bg-white/20 text-white' : 'bg-rose-600 text-white'}`}>
+                  {count > 99 ? '99+' : count}
+                </span>
+              )}
+            </NavLink>
+          )
+        })}
       </nav>
 
-      {/* User info & logout */}
-      <div className="p-4 border-t border-gray-100">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 bg-rose-100 rounded-full flex items-center justify-center">
-            <span className="text-rose-700 text-sm font-semibold">
-              {user?.name?.charAt(0) || 'A'}
+      {/* Bottom: user + logout */}
+      <div className="px-3 py-4 border-t border-slate-800">
+        <div className="flex items-center gap-3 px-2 mb-2">
+          <div className="w-8 h-8 bg-rose-600/20 border border-rose-500/30 rounded-full flex items-center justify-center flex-shrink-0">
+            <span className="text-rose-400 text-sm font-semibold">
+              {user?.name?.charAt(0)?.toUpperCase() || 'A'}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
-            <p className="text-xs text-gray-400 capitalize">{user?.role}</p>
+            <div className="text-white text-sm font-medium truncate">{user?.name || 'Admin'}</div>
+            <div className="text-slate-500 text-xs capitalize">{user?.role || 'Staff'}</div>
           </div>
         </div>
         <button
           onClick={logoutAdmin}
-          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          className="nav-item nav-item-inactive w-full hover:text-red-400 hover:bg-red-900/20"
         >
-          <ArrowRightOnRectangleIcon className="w-4 h-4" />
+          <ArrowRightOnRectangleIcon className="w-5 h-5" />
           Sign Out
         </button>
       </div>

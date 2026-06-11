@@ -8,22 +8,21 @@ export default function PortalLayout() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-rose-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-500"></div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-rose-200 border-t-rose-500"></div>
+          <p className="text-sm text-rose-400">Loading your wedding portal...</p>
+        </div>
       </div>
     )
   }
 
-  if (!couple) {
-    return <Navigate to="/portal/login" replace />
-  }
+  if (!couple) return <Navigate to="/portal/login" replace />
 
   return (
-    <div className="min-h-screen bg-rose-50/30 flex">
+    <div className="min-h-screen bg-slate-50 flex">
       <PortalSidebar />
-      <main className="flex-1 ml-64 min-h-screen">
-        <div className="p-8">
-          <Outlet />
-        </div>
+      <main className="flex-1 ml-60 min-h-screen overflow-y-auto">
+        <Outlet />
       </main>
     </div>
   )
