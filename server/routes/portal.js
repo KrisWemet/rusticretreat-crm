@@ -118,4 +118,13 @@ router.get('/documents/admin/all', (req, res, next) => {
   res.json(documents);
 });
 
+// Couple: get their contracts
+router.get('/contracts', authenticateCouple, (req, res) => {
+  const contracts = db.prepare(`
+    SELECT id, title, status, sent_at, signed_at, signer_name, created_at
+    FROM contracts WHERE couple_id = ? ORDER BY created_at DESC
+  `).all(req.couple.coupleId);
+  res.json(contracts);
+});
+
 module.exports = router;

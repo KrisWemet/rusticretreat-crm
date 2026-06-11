@@ -31,6 +31,7 @@ app.use('/api/vendors', require('./routes/vendors'));
 app.use('/api/timeline', require('./routes/timeline'));
 app.use('/api/portal', require('./routes/portal'));
 app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/contracts', require('./routes/contracts'));
 
 // Health check
 app.get('/api/health', (req, res) => {

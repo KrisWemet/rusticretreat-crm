@@ -9,12 +9,14 @@ import {
   BuildingStorefrontIcon,
   ArrowRightOnRectangleIcon,
   HeartIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
   { to: '/dashboard', icon: HomeIcon, label: 'Dashboard' },
   { to: '/clients', icon: UsersIcon, label: 'Clients & Leads' },
   { to: '/bookings', icon: CalendarDaysIcon, label: 'Bookings' },
+  { to: '/contracts', icon: DocumentTextIcon, label: 'Contracts' },
   { to: '/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages', badge: 'messages' },
   { to: '/tasks', icon: ClipboardDocumentListIcon, label: 'Tasks', badge: 'tasks' },
   { to: '/vendors', icon: BuildingStorefrontIcon, label: 'Vendors' },

@@ -152,6 +152,23 @@ db.exec(`
     completed_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS contracts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'sent', 'signed', 'declined')),
+    signing_token TEXT UNIQUE,
+    sent_at DATETIME,
+    signed_at DATETIME,
+    signer_name TEXT,
+    signer_email TEXT,
+    signature_data TEXT,
+    signer_ip TEXT,
+    portal_credentials_sent INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Seed data function

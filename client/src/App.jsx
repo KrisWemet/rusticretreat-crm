@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import Login from './pages/Login'
 import PortalLogin from './pages/PortalLogin'
+import SignContract from './pages/SignContract'
 import Dashboard from './pages/admin/Dashboard'
 import Clients from './pages/admin/Clients'
 import ClientDetail from './pages/admin/ClientDetail'
@@ -12,6 +13,7 @@ import Bookings from './pages/admin/Bookings'
 import Messages from './pages/admin/Messages'
 import Tasks from './pages/admin/Tasks'
 import VendorsAdmin from './pages/admin/VendorsAdmin'
+import Contracts from './pages/admin/Contracts'
 import PortalDashboard from './pages/portal/PortalDashboard'
 import Checklist from './pages/portal/Checklist'
 import GuestList from './pages/portal/GuestList'
@@ -46,6 +48,9 @@ function App() {
           }}
         />
         <Routes>
+          {/* Public: contract signing (no auth needed) */}
+          <Route path="/sign/:token" element={<SignContract />} />
+
           {/* Admin/Staff routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Layout />}>
@@ -57,6 +62,7 @@ function App() {
             <Route path="messages" element={<Messages />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="vendors" element={<VendorsAdmin />} />
+            <Route path="contracts" element={<Contracts />} />
           </Route>
 
           {/* Couple portal routes */}

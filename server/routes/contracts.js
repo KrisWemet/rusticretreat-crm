@@ -1,0 +1,204 @@
+const express = require('express');
+const router = express.Router();
+const db = require('../db');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { authenticateToken } = require('../middleware/auth');
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function generatePassword(len = 10) {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+// ── Admin: list all contracts ────────────────────────────────────────────────
+router.get('/', authenticateToken, (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
+      FROM contracts c
+      JOIN couples co ON co.id = c.couple_id
+      ORDER BY c.created_at DESC
+    `).all();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: get single contract ───────────────────────────────────────────────
+router.get('/:id', authenticateToken, (req, res) => {
+  try {
+    const row = db.prepare(`
+      SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
+      FROM contracts c JOIN couples co ON co.id = c.couple_id
+      WHERE c.id = ?
+    `).get(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Contract not found' });
+    res.json(row);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: create contract ───────────────────────────────────────────────────
+router.post('/', authenticateToken, (req, res) => {
+  const { couple_id, title, content } = req.body;
+  if (!couple_id || !title || !content) {
+    return res.status(400).json({ error: 'couple_id, title and content are required' });
+  }
+  try {
+    const result = db.prepare(
+      'INSERT INTO contracts (couple_id, title, content) VALUES (?, ?, ?)'
+    ).run(couple_id, title, content);
+    const contract = db.prepare(`
+      SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
+      FROM contracts c JOIN couples co ON co.id = c.couple_id
+      WHERE c.id = ?
+    `).get(result.lastInsertRowid);
+    res.status(201).json(contract);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: update contract (title / content, only if not signed) ─────────────
+router.put('/:id', authenticateToken, (req, res) => {
+  const { title, content } = req.body;
+  try {
+    const existing = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    if (existing.status === 'signed') {
+      return res.status(400).json({ error: 'Cannot edit a signed contract' });
+    }
+    db.prepare('UPDATE contracts SET title = ?, content = ? WHERE id = ?')
+      .run(title ?? existing.title, content ?? existing.content, req.params.id);
+    res.json(db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: delete contract ───────────────────────────────────────────────────
+router.delete('/:id', authenticateToken, (req, res) => {
+  try {
+    db.prepare('DELETE FROM contracts WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: send contract (generate signing link) ─────────────────────────────
+router.post('/:id/send', authenticateToken, (req, res) => {
+  try {
+    const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
+    if (!contract) return res.status(404).json({ error: 'Not found' });
+    if (contract.status === 'signed') {
+      return res.status(400).json({ error: 'Contract already signed' });
+    }
+    const token = generateToken();
+    db.prepare(`
+      UPDATE contracts SET signing_token = ?, status = 'sent', sent_at = datetime('now')
+      WHERE id = ?
+    `).run(token, req.params.id);
+    res.json({ token, signing_url: `/sign/${token}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Public: get contract for signing (no auth) ───────────────────────────────
+router.get('/sign/:token', (req, res) => {
+  try {
+    const contract = db.prepare(`
+      SELECT c.id, c.title, c.content, c.status, c.signer_name, c.signed_at,
+             co.partner1_name, co.partner2_name, co.email AS couple_email
+      FROM contracts c JOIN couples co ON co.id = c.couple_id
+      WHERE c.signing_token = ?
+    `).get(req.params.token);
+
+    if (!contract) return res.status(404).json({ error: 'Invalid or expired signing link' });
+    if (contract.status === 'signed') {
+      return res.json({ ...contract, already_signed: true });
+    }
+    res.json(contract);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Public: submit signature ─────────────────────────────────────────────────
+router.post('/sign/:token', (req, res) => {
+  const { signer_name, signature_data } = req.body;
+  if (!signer_name || !signature_data) {
+    return res.status(400).json({ error: 'Signer name and signature are required' });
+  }
+
+  try {
+    const contract = db.prepare(`
+      SELECT c.*, co.partner1_name, co.partner2_name, co.email, co.password_hash
+      FROM contracts c JOIN couples co ON co.id = c.couple_id
+      WHERE c.signing_token = ?
+    `).get(req.params.token);
+
+    if (!contract) return res.status(404).json({ error: 'Invalid signing link' });
+    if (contract.status === 'signed') {
+      return res.status(400).json({ error: 'Contract already signed' });
+    }
+
+    const signer_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+
+    // Mark signed
+    db.prepare(`
+      UPDATE contracts
+      SET status = 'signed', signed_at = datetime('now'),
+          signer_name = ?, signer_email = ?, signature_data = ?, signer_ip = ?,
+          portal_credentials_sent = 1
+      WHERE signing_token = ?
+    `).run(signer_name, contract.email, signature_data, signer_ip, req.params.token);
+
+    // Update couple status to 'booked' if still lead/inquiry
+    const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
+    if (couple.status === 'lead' || couple.status === 'inquiry') {
+      db.prepare("UPDATE couples SET status = 'booked' WHERE id = ?").run(contract.couple_id);
+    }
+
+    // Create / reveal portal credentials
+    let plain_password = null;
+    let is_new_account = false;
+
+    if (!contract.password_hash) {
+      // First-time: generate credentials
+      plain_password = generatePassword();
+      const hashed = bcrypt.hashSync(plain_password, 10);
+      db.prepare('UPDATE couples SET password_hash = ? WHERE id = ?')
+        .run(hashed, contract.couple_id);
+      is_new_account = true;
+    }
+
+    res.json({
+      success: true,
+      message: 'Contract signed successfully!',
+      couple_name: `${contract.partner1_name} & ${contract.partner2_name}`,
+      portal_email: contract.email,
+      portal_password: is_new_account ? plain_password : null,
+      is_new_account,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Portal: couple's contracts ───────────────────────────────────────────────
+router.get('/portal/mine', (req, res) => {
+  // Handled via portal route — import authenticateCouple there
+  res.status(404).json({ error: 'Use /api/portal/contracts' });
+});
+
+module.exports = router;
