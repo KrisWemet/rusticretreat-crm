@@ -1,0 +1,11 @@
+node_modules/
+server/node_modules/
+client/node_modules/
+server/rusticretreat.db
+server/rusticretreat.db-shm
+server/rusticretreat.db-wal
+server/uploads/
+.env
+.env.local
+dist/
+client/dist/
