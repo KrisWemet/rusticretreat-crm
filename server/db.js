@@ -167,9 +167,29 @@ db.exec(`
     signature_data TEXT,
     signer_ip TEXT,
     portal_credentials_sent INTEGER DEFAULT 0,
+    wedding_date DATE,
+    start_time TEXT,
+    end_time TEXT,
+    guest_count INTEGER,
+    ceremony_location TEXT,
+    reception_location TEXT,
+    package_name TEXT,
+    total_price REAL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+// Migrate existing contracts table with new event-detail columns
+for (const col of [
+  'ALTER TABLE contracts ADD COLUMN wedding_date DATE',
+  'ALTER TABLE contracts ADD COLUMN start_time TEXT',
+  'ALTER TABLE contracts ADD COLUMN end_time TEXT',
+  'ALTER TABLE contracts ADD COLUMN guest_count INTEGER',
+  'ALTER TABLE contracts ADD COLUMN ceremony_location TEXT',
+  'ALTER TABLE contracts ADD COLUMN reception_location TEXT',
+  'ALTER TABLE contracts ADD COLUMN package_name TEXT',
+  'ALTER TABLE contracts ADD COLUMN total_price REAL',
+]) { try { db.exec(col); } catch (_) {} }
 
 // Seed data function
 function seedDatabase() {

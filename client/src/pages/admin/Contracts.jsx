@@ -9,32 +9,27 @@ import {
   LinkIcon,
   CheckCircleIcon,
   ClockIcon,
-  PencilIcon,
   TrashIcon,
   ClipboardDocumentIcon,
   EyeIcon,
+  CalendarDaysIcon,
+  UserGroupIcon,
+  MapPinIcon,
+  CurrencyDollarIcon,
 } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid'
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
 
 const statusStyle = {
-  draft: 'bg-slate-100 text-slate-600',
-  sent: 'bg-blue-100 text-blue-700',
-  signed: 'bg-emerald-100 text-emerald-700',
+  draft:    'bg-slate-100 text-slate-600',
+  sent:     'bg-blue-100 text-blue-700',
+  signed:   'bg-emerald-100 text-emerald-700',
   declined: 'bg-red-100 text-red-600',
 }
 
-const DEFAULT_CONTRACT = `RUSTIC RETREAT WEDDING VENUE
-EVENT SERVICES AGREEMENT
-
-This Event Services Agreement ("Agreement") is entered into between Rustic Retreat Wedding Venue ("Venue") and the clients identified below ("Clients").
-
-EVENT DETAILS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. VENUE RENTAL
-The Venue agrees to reserve the property exclusively for the Clients' event on the date and times specified in the booking confirmation. The rental includes use of all designated event spaces, tables, chairs, and standard decor as outlined in the selected package.
+const DEFAULT_TERMS = `1. VENUE RENTAL
+The Venue agrees to reserve the property exclusively for the Clients' event on the date and times specified above. The rental includes use of all designated event spaces, tables, chairs, and standard decor as outlined in the selected package.
 
 2. PAYMENT TERMS
 A non-refundable deposit of 25% of the total package price is required to secure the date. The remaining balance is due no later than 30 days prior to the event date. Payments may be made by check, credit card, or bank transfer.
@@ -59,6 +54,43 @@ This Agreement shall be governed by the laws of the state in which the Venue is 
 
 IN WITNESS WHEREOF, the Clients have read, understood, and agree to be legally bound by the terms of this Agreement, as evidenced by their electronic signature below.`
 
+function fmtDate(v) {
+  try { return v ? format(parseISO(v), 'MMMM d, yyyy') : '___________________' } catch { return '___________________' }
+}
+function fmtPrice(v) {
+  return v ? `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '___________________'
+}
+function blank(v) { return v || '___________________' }
+
+function buildContent(coupleNames, f, terms) {
+  return `RUSTIC RETREAT WEDDING VENUE
+EVENT SERVICES AGREEMENT
+
+This Event Services Agreement ("Agreement") is entered into between Rustic Retreat Wedding Venue ("Venue") and the clients identified below ("Clients").
+
+EVENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Clients:              ${blank(coupleNames)}
+Wedding Date:         ${fmtDate(f.wedding_date)}
+Event Hours:          ${blank(f.start_time)} – ${blank(f.end_time)}
+Guest Count:          ${f.guest_count ? f.guest_count + ' guests' : '___________________'}
+Package:              ${blank(f.package_name)}
+Ceremony Location:    ${blank(f.ceremony_location)}
+Reception Location:   ${blank(f.reception_location)}
+Total Contract Price: ${fmtPrice(f.total_price)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${terms}`
+}
+
+const EMPTY_FORM = {
+  couple_id: '', title: 'Event Services Agreement', terms: DEFAULT_TERMS,
+  wedding_date: '', start_time: '', end_time: '', guest_count: '',
+  ceremony_location: '', reception_location: '', package_name: '', total_price: '',
+}
+
 export default function Contracts() {
   const { getAdminAxios } = useAuth()
   const [contracts, setContracts] = useState([])
@@ -68,7 +100,7 @@ export default function Contracts() {
   const [showView, setShowView] = useState(false)
   const [viewContract, setViewContract] = useState(null)
   const [signingLink, setSigningLink] = useState(null)
-  const [form, setForm] = useState({ couple_id: '', title: 'Event Services Agreement', content: DEFAULT_CONTRACT })
+  const [form, setForm] = useState(EMPTY_FORM)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const fetchData = async () => {
@@ -80,13 +112,67 @@ export default function Contracts() {
 
   useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
 
+  // When couple is selected, pre-fill event details from their existing booking
+  const handleCoupleChange = async (e) => {
+    const coupleId = e.target.value
+    setForm(p => ({ ...p, couple_id: coupleId }))
+    if (!coupleId) return
+
+    const couple = couples.find(c => String(c.id) === String(coupleId))
+    if (!couple) return
+
+    try {
+      const api = getAdminAxios()
+      const bRes = await api.get(`/api/bookings/couple/${coupleId}`)
+      const booking = bRes.data[0]
+      setForm(p => ({
+        ...p,
+        couple_id: coupleId,
+        wedding_date:       booking?.event_date          || couple.wedding_date    || '',
+        start_time:         booking?.start_time          || '',
+        end_time:           booking?.end_time            || '',
+        guest_count:        booking?.guest_count         ? String(booking.guest_count) : '',
+        ceremony_location:  booking?.ceremony_location   || '',
+        reception_location: booking?.reception_location  || '',
+        package_name:       booking?.package_name        || couple.venue_package   || '',
+        total_price:        booking?.total_price         ? String(booking.total_price) : '',
+      }))
+    } catch {
+      // No booking yet — pre-fill what we have from couple record
+      setForm(p => ({
+        ...p,
+        couple_id: coupleId,
+        wedding_date: couple.wedding_date  || '',
+        package_name: couple.venue_package || '',
+      }))
+    }
+  }
+
+  const selectedCouple = couples.find(c => String(c.id) === String(form.couple_id))
+  const coupleNames = selectedCouple
+    ? `${selectedCouple.partner1_name} & ${selectedCouple.partner2_name}`
+    : ''
+
   const handleCreate = async (e) => {
     e.preventDefault()
+    const content = buildContent(coupleNames, form, form.terms)
     try {
-      await getAdminAxios().post('/api/contracts', form)
+      await getAdminAxios().post('/api/contracts', {
+        couple_id: form.couple_id,
+        title: form.title,
+        content,
+        wedding_date:       form.wedding_date       || null,
+        start_time:         form.start_time         || null,
+        end_time:           form.end_time           || null,
+        guest_count:        form.guest_count        ? Number(form.guest_count) : null,
+        ceremony_location:  form.ceremony_location  || null,
+        reception_location: form.reception_location || null,
+        package_name:       form.package_name       || null,
+        total_price:        form.total_price        ? Number(form.total_price) : null,
+      })
       toast.success('Contract created!')
       setShowCreate(false)
-      setForm({ couple_id: '', title: 'Event Services Agreement', content: DEFAULT_CONTRACT })
+      setForm(EMPTY_FORM)
       fetchData()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to create contract')
@@ -120,10 +206,10 @@ export default function Contracts() {
   const openView = (c) => { setViewContract(c); setShowView(true) }
 
   const stats = {
-    total: contracts.length,
-    sent: contracts.filter(c => c.status === 'sent').length,
+    total:  contracts.length,
+    sent:   contracts.filter(c => c.status === 'sent').length,
     signed: contracts.filter(c => c.status === 'signed').length,
-    draft: contracts.filter(c => c.status === 'draft').length,
+    draft:  contracts.filter(c => c.status === 'draft').length,
   }
 
   return (
@@ -143,10 +229,10 @@ export default function Contracts() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total', value: stats.total, color: 'text-slate-800' },
-          { label: 'Draft', value: stats.draft, color: 'text-slate-500' },
-          { label: 'Awaiting Signature', value: stats.sent, color: 'text-blue-700' },
-          { label: 'Signed', value: stats.signed, color: 'text-emerald-700' },
+          { label: 'Total',              value: stats.total,  color: 'text-slate-800' },
+          { label: 'Draft',              value: stats.draft,  color: 'text-slate-500' },
+          { label: 'Awaiting Signature', value: stats.sent,   color: 'text-blue-700'  },
+          { label: 'Signed',             value: stats.signed, color: 'text-emerald-700' },
         ].map(({ label, value, color }) => (
           <div key={label} className="card p-4 text-center">
             <div className={`text-2xl font-bold ${color}`}>{value}</div>
@@ -196,10 +282,10 @@ export default function Contracts() {
               <tr>
                 <th>Contract</th>
                 <th>Client</th>
+                <th>Wedding Date</th>
                 <th>Status</th>
                 <th>Signed By</th>
                 <th>Signed Date</th>
-                <th>Created</th>
                 <th></th>
               </tr>
             </thead>
@@ -215,6 +301,9 @@ export default function Contracts() {
                     <div className="text-slate-700">{c.partner1_name} & {c.partner2_name}</div>
                     <div className="text-xs text-slate-400">{c.couple_email}</div>
                   </td>
+                  <td className="text-slate-500 text-xs">
+                    {c.wedding_date ? format(parseISO(c.wedding_date), 'MMM d, yyyy') : <span className="text-slate-300">—</span>}
+                  </td>
                   <td>
                     <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium capitalize ${statusStyle[c.status]}`}>
                       {c.status === 'signed' && <CheckCircleSolid className="w-3.5 h-3.5" />}
@@ -225,7 +314,6 @@ export default function Contracts() {
                   <td className="text-slate-500 text-xs">
                     {c.signed_at ? format(parseISO(c.signed_at), 'MMM d, yyyy h:mm a') : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="text-slate-400 text-xs">{format(parseISO(c.created_at), 'MMM d')}</td>
                   <td>
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => openView(c)} className="btn-ghost py-1 px-2 text-xs">
@@ -254,35 +342,87 @@ export default function Contracts() {
         </div>
       )}
 
-      {/* Create modal */}
-      <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="New Contract" size="xl">
-        <form onSubmit={handleCreate} className="space-y-4">
+      {/* ── Create modal ───────────────────────────────────────────────── */}
+      <Modal isOpen={showCreate} onClose={() => { setShowCreate(false); setForm(EMPTY_FORM) }} title="New Contract" size="xl">
+        <form onSubmit={handleCreate} className="space-y-5">
+
+          {/* Basic info */}
           <div className="grid grid-cols-2 gap-4">
-            <Select label="Client Couple" value={form.couple_id} onChange={f('couple_id')} required>
-              <option value="">Select couple...</option>
-              {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
-            </Select>
+            <div>
+              <label className="label">Client Couple <span className="text-red-500">*</span></label>
+              <select
+                value={form.couple_id}
+                onChange={handleCoupleChange}
+                required
+                className="input-field"
+              >
+                <option value="">Select couple...</option>
+                {couples.map(c => (
+                  <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>
+                ))}
+              </select>
+            </div>
             <Input label="Contract Title" value={form.title} onChange={f('title')} required />
           </div>
+
+          {/* Event details */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+              <CalendarDaysIcon className="w-4 h-4 text-slate-500" />
+              <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Event Details</span>
+              <span className="text-xs text-slate-400 ml-1">— auto-filled into contract · synced to client profile on signing</span>
+            </div>
+            <div className="p-4 grid grid-cols-3 gap-4">
+              <Input type="date" label="Wedding Date" value={form.wedding_date} onChange={f('wedding_date')} />
+              <Input label="Start Time" value={form.start_time} onChange={f('start_time')} placeholder="e.g. 4:00 PM" />
+              <Input label="End Time" value={form.end_time} onChange={f('end_time')} placeholder="e.g. 11:00 PM" />
+
+              <Input type="number" label="Guest Count" value={form.guest_count} onChange={f('guest_count')} placeholder="e.g. 150" min="1" />
+              <Input label="Package" value={form.package_name} onChange={f('package_name')} placeholder="e.g. Grand Estate" />
+              <div>
+                <label className="label">Total Price ($)</label>
+                <div className="relative">
+                  <CurrencyDollarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="number"
+                    value={form.total_price}
+                    onChange={f('total_price')}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="input-field pl-8"
+                  />
+                </div>
+              </div>
+
+              <Input label="Ceremony Location" value={form.ceremony_location} onChange={f('ceremony_location')} placeholder="e.g. Rose Garden Terrace" className="col-span-1" />
+              <Input label="Reception Location" value={form.reception_location} onChange={f('reception_location')} placeholder="e.g. Grand Ballroom" className="col-span-1" />
+            </div>
+          </div>
+
+          {/* Terms body */}
           <div>
-            <label className="label">Contract Body</label>
+            <label className="label">Contract Terms</label>
             <textarea
-              value={form.content}
-              onChange={f('content')}
+              value={form.terms}
+              onChange={f('terms')}
               required
-              rows={16}
+              rows={12}
               className="input-field font-mono text-xs resize-y leading-relaxed"
             />
-            <p className="text-xs text-slate-400 mt-1">Plain text — the client will see this exactly as written. Paste your template or edit the default above.</p>
+            <p className="text-xs text-slate-400 mt-1">
+              The event details above will be automatically inserted at the top of the contract. Edit the legal terms here as needed.
+            </p>
           </div>
+
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-            <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
+            <button type="button" className="btn-secondary" onClick={() => { setShowCreate(false); setForm(EMPTY_FORM) }}>Cancel</button>
             <button type="submit" className="btn-primary">Create Contract</button>
           </div>
         </form>
       </Modal>
 
-      {/* View/preview modal */}
+      {/* ── View / preview modal ──────────────────────────────────────── */}
       <Modal isOpen={showView} onClose={() => setShowView(false)} title={viewContract?.title} size="xl">
         {viewContract && (
           <div className="space-y-4">
@@ -290,6 +430,51 @@ export default function Contracts() {
               <span>Client: <strong className="text-slate-800">{viewContract.partner1_name} & {viewContract.partner2_name}</strong></span>
               <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${statusStyle[viewContract.status]}`}>{viewContract.status}</span>
             </div>
+
+            {/* Event details summary */}
+            {(viewContract.wedding_date || viewContract.guest_count || viewContract.package_name) && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {viewContract.wedding_date && (
+                  <div className="bg-rose-50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-rose-500 mb-1">
+                      <CalendarDaysIcon className="w-3.5 h-3.5" />
+                      Wedding Date
+                    </div>
+                    <div className="text-sm font-semibold text-rose-900">{format(parseISO(viewContract.wedding_date), 'MMM d, yyyy')}</div>
+                    {(viewContract.start_time || viewContract.end_time) && (
+                      <div className="text-xs text-rose-600 mt-0.5">{viewContract.start_time} – {viewContract.end_time}</div>
+                    )}
+                  </div>
+                )}
+                {viewContract.guest_count && (
+                  <div className="bg-blue-50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-blue-500 mb-1">
+                      <UserGroupIcon className="w-3.5 h-3.5" />
+                      Guest Count
+                    </div>
+                    <div className="text-sm font-semibold text-blue-900">{viewContract.guest_count} guests</div>
+                  </div>
+                )}
+                {viewContract.package_name && (
+                  <div className="bg-violet-50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-violet-500 mb-1">
+                      <DocumentTextIcon className="w-3.5 h-3.5" />
+                      Package
+                    </div>
+                    <div className="text-sm font-semibold text-violet-900">{viewContract.package_name}</div>
+                  </div>
+                )}
+                {viewContract.total_price > 0 && (
+                  <div className="bg-emerald-50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-500 mb-1">
+                      <CurrencyDollarIcon className="w-3.5 h-3.5" />
+                      Total Price
+                    </div>
+                    <div className="text-sm font-semibold text-emerald-900">${Number(viewContract.total_price).toLocaleString()}</div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {viewContract.status === 'signed' && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
@@ -321,10 +506,7 @@ export default function Contracts() {
                 <button className="btn-secondary" onClick={() => setShowView(false)}>Close</button>
                 <button
                   className="btn-primary"
-                  onClick={async () => {
-                    await sendContract(viewContract.id)
-                    setShowView(false)
-                  }}
+                  onClick={async () => { await sendContract(viewContract.id); setShowView(false) }}
                 >
                   <PaperAirplaneIcon className="w-4 h-4" />
                   Send for Signature

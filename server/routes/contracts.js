@@ -48,14 +48,26 @@ router.get('/:id', authenticateToken, (req, res) => {
 
 // ── Admin: create contract ───────────────────────────────────────────────────
 router.post('/', authenticateToken, (req, res) => {
-  const { couple_id, title, content } = req.body;
+  const {
+    couple_id, title, content,
+    wedding_date, start_time, end_time, guest_count,
+    ceremony_location, reception_location, package_name, total_price,
+  } = req.body;
   if (!couple_id || !title || !content) {
     return res.status(400).json({ error: 'couple_id, title and content are required' });
   }
   try {
-    const result = db.prepare(
-      'INSERT INTO contracts (couple_id, title, content) VALUES (?, ?, ?)'
-    ).run(couple_id, title, content);
+    const result = db.prepare(`
+      INSERT INTO contracts
+        (couple_id, title, content, wedding_date, start_time, end_time,
+         guest_count, ceremony_location, reception_location, package_name, total_price)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      couple_id, title, content,
+      wedding_date || null, start_time || null, end_time || null,
+      guest_count || null, ceremony_location || null, reception_location || null,
+      package_name || null, total_price || null,
+    );
     const contract = db.prepare(`
       SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
       FROM contracts c JOIN couples co ON co.id = c.couple_id
@@ -163,10 +175,52 @@ router.post('/sign/:token', (req, res) => {
       WHERE signing_token = ?
     `).run(signer_name, contract.email, signature_data, signer_ip, req.params.token);
 
-    // Update couple status to 'booked' if still lead/inquiry
-    const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
-    if (couple.status === 'lead' || couple.status === 'inquiry') {
-      db.prepare("UPDATE couples SET status = 'booked' WHERE id = ?").run(contract.couple_id);
+    // Update couple: status → booked, and sync event details from contract
+    db.prepare(`
+      UPDATE couples SET
+        status = CASE WHEN status IN ('lead','inquiry') THEN 'booked' ELSE status END,
+        wedding_date   = COALESCE(?, wedding_date),
+        venue_package  = COALESCE(?, venue_package)
+      WHERE id = ?
+    `).run(contract.wedding_date || null, contract.package_name || null, contract.couple_id);
+
+    // Upsert booking with event details from the signed contract
+    if (contract.wedding_date) {
+      const existing = db.prepare(
+        'SELECT id FROM bookings WHERE couple_id = ? ORDER BY id LIMIT 1'
+      ).get(contract.couple_id);
+
+      if (existing) {
+        db.prepare(`
+          UPDATE bookings SET
+            event_date          = COALESCE(?, event_date),
+            start_time          = COALESCE(?, start_time),
+            end_time            = COALESCE(?, end_time),
+            guest_count         = COALESCE(?, guest_count),
+            ceremony_location   = COALESCE(?, ceremony_location),
+            reception_location  = COALESCE(?, reception_location),
+            package_name        = COALESCE(?, package_name),
+            total_price         = COALESCE(?, total_price)
+          WHERE id = ?
+        `).run(
+          contract.wedding_date, contract.start_time, contract.end_time,
+          contract.guest_count, contract.ceremony_location, contract.reception_location,
+          contract.package_name, contract.total_price, existing.id,
+        );
+      } else {
+        db.prepare(`
+          INSERT INTO bookings
+            (couple_id, event_date, start_time, end_time, guest_count,
+             ceremony_location, reception_location, package_name, total_price)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          contract.couple_id, contract.wedding_date,
+          contract.start_time || null, contract.end_time || null,
+          contract.guest_count || null, contract.ceremony_location || null,
+          contract.reception_location || null, contract.package_name || null,
+          contract.total_price || null,
+        );
+      }
     }
 
     // Create / reveal portal credentials
