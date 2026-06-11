@@ -23,6 +23,16 @@ router.get('/', authenticateToken, (req, res) => {
   res.json(conversations);
 });
 
+// Get ALL messages (used by dashboard for recent messages + unread count)
+router.get('/all', authenticateToken, (req, res) => {
+  const messages = db.prepare(`
+    SELECT m.*, c.partner1_name, c.partner2_name
+    FROM messages m JOIN couples c ON m.couple_id = c.id
+    ORDER BY m.created_at ASC
+  `).all();
+  res.json(messages);
+});
+
 // Get messages for a couple
 router.get('/:coupleId', authenticateToken, (req, res) => {
   const messages = db.prepare(`

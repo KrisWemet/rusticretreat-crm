@@ -393,6 +393,65 @@ function seedDatabase() {
   `);
   taskList.forEach(t => insertTask.run(...t));
 
+  // Seed contracts with full event details for the two booked couples
+  const contractBody = `1. VENUE RENTAL
+The Venue agrees to reserve the property exclusively for the Clients' event on the date and times specified above. The rental includes use of all designated event spaces, tables, chairs, and standard decor as outlined in the selected package.
+
+2. PAYMENT TERMS
+A non-refundable deposit of 25% of the total package price is required to secure the date. The remaining balance is due no later than 30 days prior to the event date. Payments may be made by check, credit card, or bank transfer.
+
+3. CANCELLATION POLICY
+Cancellations made more than 90 days before the event will forfeit the deposit only. Cancellations within 60–90 days will incur a charge of 50% of the total balance. Cancellations within 60 days of the event will incur a charge of 100% of the total balance.
+
+4. VENDOR ACCESS
+All vendors must carry their own liability insurance and provide proof upon request.
+
+5. DAMAGE & LIABILITY
+Clients are responsible for any damage to the Venue property caused by the Clients, their guests, or their vendors.
+
+6. GOVERNING LAW
+This Agreement shall be governed by the laws of the state in which the Venue is located.
+
+IN WITNESS WHEREOF, the Clients have read, understood, and agree to be legally bound by the terms of this Agreement.`;
+
+  const contract1Content = `RUSTIC RETREAT WEDDING VENUE\nEVENT SERVICES AGREEMENT\n\nThis Event Services Agreement is entered into between Rustic Retreat Wedding Venue ("Venue") and the clients identified below ("Clients").\n\nEVENT DETAILS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nClients:              Emma Johnson & Liam Wilson\nWedding Date:         September 15, 2026\nEvent Hours:          4:00 PM – 11:00 PM\nGuest Count:          180 guests\nPackage:              Grand Estate\nCeremony Location:    Rose Garden Terrace\nReception Location:   Grand Ballroom\nTotal Contract Price: $45,000.00\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` + contractBody;
+
+  const contract2Content = `RUSTIC RETREAT WEDDING VENUE\nEVENT SERVICES AGREEMENT\n\nThis Event Services Agreement is entered into between Rustic Retreat Wedding Venue ("Venue") and the clients identified below ("Clients").\n\nEVENT DETAILS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nClients:              Olivia Chen & Noah Martinez\nWedding Date:         November 22, 2026\nEvent Hours:          3:00 PM – 10:00 PM\nGuest Count:          120 guests\nPackage:              Garden Pavilion\nCeremony Location:    Fountain Courtyard\nReception Location:   Garden Pavilion\nTotal Contract Price: $38,000.00\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` + contractBody;
+
+  const c1 = db.prepare(`
+    INSERT INTO contracts (couple_id, title, content, status, signed_at, signer_name,
+      wedding_date, start_time, end_time, guest_count, ceremony_location, reception_location,
+      package_name, total_price, portal_credentials_sent)
+    VALUES (?, ?, ?, 'signed', datetime('now', '-30 days'), ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `).run(couple1.lastInsertRowid, 'Event Services Agreement', contract1Content,
+    'Emma Johnson', '2026-09-15', '4:00 PM', '11:00 PM', 180,
+    'Rose Garden Terrace', 'Grand Ballroom', 'Grand Estate', 45000);
+
+  const c2 = db.prepare(`
+    INSERT INTO contracts (couple_id, title, content, status, signed_at, signer_name,
+      wedding_date, start_time, end_time, guest_count, ceremony_location, reception_location,
+      package_name, total_price, portal_credentials_sent)
+    VALUES (?, ?, ?, 'signed', datetime('now', '-15 days'), ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `).run(couple2.lastInsertRowid, 'Event Services Agreement', contract2Content,
+    'Olivia Chen', '2026-11-22', '3:00 PM', '10:00 PM', 120,
+    'Fountain Courtyard', 'Garden Pavilion', 'Garden Pavilion', 38000);
+
+  // Seed invoices / payment schedules for the two booked couples
+  const insertInvoice = db.prepare(`
+    INSERT INTO invoices (couple_id, booking_id, description, amount, due_date, paid, paid_at, payment_method)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  // Emma & Liam (couple1, booking1) — deposit paid, 2nd due soon, final due later
+  insertInvoice.run(couple1.lastInsertRowid, 1, 'Booking Deposit (25%)', 11250, '2026-04-01', 1, '2026-04-01T10:00:00Z', 'Credit Card');
+  insertInvoice.run(couple1.lastInsertRowid, 1, 'Second Payment (25%) — 90 days before event', 11250, '2026-06-17', 0, null, null);
+  insertInvoice.run(couple1.lastInsertRowid, 1, 'Final Balance (50%) — 30 days before event', 22500, '2026-08-16', 0, null, null);
+
+  // Olivia & Noah (couple2, booking2) — deposit paid
+  insertInvoice.run(couple2.lastInsertRowid, 2, 'Booking Deposit (25%)', 9500, '2026-04-15', 1, '2026-04-18T14:00:00Z', 'Bank Transfer');
+  insertInvoice.run(couple2.lastInsertRowid, 2, 'Second Payment (25%) — 90 days before event', 9500, '2026-08-24', 0, null, null);
+  insertInvoice.run(couple2.lastInsertRowid, 2, 'Final Balance (50%) — 30 days before event', 19000, '2026-10-23', 0, null, null);
+
   console.log('Database seeded successfully!');
 }
 
