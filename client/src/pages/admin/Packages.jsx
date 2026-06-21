@@ -118,7 +118,7 @@ export default function Packages() {
                       : <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Inactive</span>}
                   </div>
                   <div className="text-2xl font-bold text-rose-600 mt-1">
-                    ${Number(pkg.price).toLocaleString()}
+                    ${Number(pkg.price).toLocaleString()} CAD
                   </div>
                   {pkg.max_guests && <p className="text-xs text-slate-400 mt-0.5">Up to {pkg.max_guests} guests</p>}
                 </div>
@@ -168,11 +168,11 @@ export default function Packages() {
             <div className="p-6 space-y-4">
               <div>
                 <label className="label">Package Name</label>
-                <input className="input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Grand Estate" />
+                <input className="input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. 3-Day Weekend" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Price ($)</label>
+                  <label className="label">Price (CAD $)</label>
                   <input className="input" type="number" min="0" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="45000" />
                 </div>
                 <div>
@@ -186,7 +186,7 @@ export default function Packages() {
               </div>
               <div>
                 <label className="label">What's Included <span className="text-slate-400 font-normal">(comma-separated)</span></label>
-                <textarea className="input" rows={3} value={form.includes} onChange={e => setForm(f => ({ ...f, includes: e.target.value }))} placeholder="Grand Ballroom, 10 hrs access, Tables & chairs, Custom lighting..." />
+                <textarea className="input" rows={3} value={form.includes} onChange={e => setForm(f => ({ ...f, includes: e.target.value }))} placeholder="Forest Clearing ceremony, Clear-Top Gazebo reception, Tables & chairs, Fire pit access..." />
               </div>
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="active" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4 accent-rose-600" />

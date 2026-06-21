@@ -16,7 +16,7 @@ const paymentStyle = {
 const emptyForm = {
   couple_id: '', event_date: '', start_time: '', end_time: '',
   package_name: '', guest_count: '', ceremony_location: '', reception_location: '',
-  catering_type: '', special_requests: '', payment_status: 'pending', deposit_paid: '', total_price: ''
+  catering_type: '', add_ons: '', special_requests: '', payment_status: 'pending', deposit_paid: '', total_price: ''
 }
 
 export default function Bookings() {
@@ -51,7 +51,7 @@ export default function Bookings() {
 
   const openEdit = (b) => {
     setEditBooking(b)
-    setForm({ couple_id: b.couple_id, event_date: b.event_date || '', start_time: b.start_time || '', end_time: b.end_time || '', package_name: b.package_name || '', guest_count: b.guest_count || '', ceremony_location: b.ceremony_location || '', reception_location: b.reception_location || '', catering_type: b.catering_type || '', special_requests: b.special_requests || '', payment_status: b.payment_status || 'pending', deposit_paid: b.deposit_paid || '', total_price: b.total_price || '' })
+    setForm({ couple_id: b.couple_id, event_date: b.event_date || '', start_time: b.start_time || '', end_time: b.end_time || '', package_name: b.package_name || '', guest_count: b.guest_count || '', ceremony_location: b.ceremony_location || '', reception_location: b.reception_location || '', catering_type: b.catering_type || '', add_ons: b.add_ons || '', special_requests: b.special_requests || '', payment_status: b.payment_status || 'pending', deposit_paid: b.deposit_paid || '', total_price: b.total_price || '' })
     setShowForm(true)
   }
 
@@ -100,7 +100,7 @@ export default function Bookings() {
                 <tr key={b.id}>
                   <td>
                     <div className="font-medium text-slate-800">{b.partner1_name} & {b.partner2_name}</div>
-                    {b.catering_type && <div className="text-xs text-slate-400 mt-0.5">{b.catering_type}</div>}
+                    {b.add_ons && <div className="text-xs text-slate-400 mt-0.5">Add-ons: {b.add_ons}</div>}
                   </td>
                   <td>
                     <div className="font-medium text-slate-700">
@@ -122,7 +122,7 @@ export default function Bookings() {
                     )}
                   </td>
                   <td>
-                    <div className="text-sm font-medium text-slate-800">${(b.total_price || 0).toLocaleString()}</div>
+                    <div className="text-sm font-medium text-slate-800">${(b.total_price || 0).toLocaleString()} CAD</div>
                     <div className="text-xs text-slate-400">Deposit: ${(b.deposit_paid || 0).toLocaleString()}</div>
                   </td>
                   <td>
@@ -155,19 +155,20 @@ export default function Bookings() {
             <Input label="End Time" value={form.end_time} onChange={f('end_time')} placeholder="11:00 PM" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Package Name" value={form.package_name} onChange={f('package_name')} placeholder="e.g. Grand Estate" />
-            <Input label="Guest Count" type="number" value={form.guest_count} onChange={f('guest_count')} />
+            <Input label="Package" value={form.package_name} onChange={f('package_name')} placeholder="e.g. 3-Day Weekend" />
+            <Input label="Guest Count" type="number" min="1" max="80" value={form.guest_count} onChange={f('guest_count')} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Ceremony Location" value={form.ceremony_location} onChange={f('ceremony_location')} />
-            <Input label="Reception Location" value={form.reception_location} onChange={f('reception_location')} />
+            <Input label="Ceremony Location" value={form.ceremony_location} onChange={f('ceremony_location')} placeholder="e.g. Forest Clearing" />
+            <Input label="Reception / Dancing" value={form.reception_location} onChange={f('reception_location')} placeholder="e.g. Clear-Top Gazebo" />
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <Input label="Catering Type" value={form.catering_type} onChange={f('catering_type')} />
+          <Input label="Food & Beverage Notes" value={form.catering_type} onChange={f('catering_type')} placeholder="e.g. Self-arranged BBQ + food truck Saturday. No kitchen on-site." />
+          <Input label="Add-Ons" value={form.add_ons} onChange={f('add_ons')} placeholder="e.g. Fireworks – $250, Generator rental, Pet cabin stay – $50" />
+          <div className="grid grid-cols-2 gap-4">
             <Select label="Payment Status" value={form.payment_status} onChange={f('payment_status')}>
               {['pending','partial','paid','overdue'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
             </Select>
-            <Input label="Total Price ($)" type="number" value={form.total_price} onChange={f('total_price')} />
+            <Input label="Total Package Price (CAD)" type="number" value={form.total_price} onChange={f('total_price')} placeholder="6500" />
           </div>
           <Input label="Deposit Paid ($)" type="number" value={form.deposit_paid} onChange={f('deposit_paid')} />
           <Textarea label="Special Requests" value={form.special_requests} onChange={f('special_requests')} />

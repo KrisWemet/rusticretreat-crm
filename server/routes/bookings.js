@@ -37,7 +37,7 @@ router.post('/', authenticateToken, (req, res) => {
   const {
     couple_id, event_date, start_time, end_time, package_name,
     guest_count, ceremony_location, reception_location, catering_type,
-    special_requests, payment_status, deposit_paid, total_price
+    special_requests, payment_status, deposit_paid, total_price, add_ons
   } = req.body;
 
   if (!couple_id || !event_date) {
@@ -47,12 +47,12 @@ router.post('/', authenticateToken, (req, res) => {
   const result = db.prepare(`
     INSERT INTO bookings (couple_id, event_date, start_time, end_time, package_name, guest_count,
       ceremony_location, reception_location, catering_type, special_requests,
-      payment_status, deposit_paid, total_price)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      payment_status, deposit_paid, total_price, add_ons)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(couple_id, event_date, start_time || null, end_time || null, package_name || null,
     guest_count || null, ceremony_location || null, reception_location || null,
     catering_type || null, special_requests || null, payment_status || 'pending',
-    deposit_paid || 0, total_price || 0);
+    deposit_paid || 0, total_price || 0, add_ons || null);
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(booking);
@@ -66,7 +66,7 @@ router.put('/:id', authenticateToken, (req, res) => {
   const {
     event_date, start_time, end_time, package_name, guest_count,
     ceremony_location, reception_location, catering_type, special_requests,
-    payment_status, deposit_paid, total_price
+    payment_status, deposit_paid, total_price, add_ons
   } = req.body;
 
   db.prepare(`
@@ -74,7 +74,7 @@ router.put('/:id', authenticateToken, (req, res) => {
       event_date = ?, start_time = ?, end_time = ?, package_name = ?,
       guest_count = ?, ceremony_location = ?, reception_location = ?,
       catering_type = ?, special_requests = ?, payment_status = ?,
-      deposit_paid = ?, total_price = ?
+      deposit_paid = ?, total_price = ?, add_ons = ?
     WHERE id = ?
   `).run(
     event_date || booking.event_date,
@@ -89,6 +89,7 @@ router.put('/:id', authenticateToken, (req, res) => {
     payment_status || booking.payment_status,
     deposit_paid !== undefined ? deposit_paid : booking.deposit_paid,
     total_price !== undefined ? total_price : booking.total_price,
+    add_ons !== undefined ? add_ons : booking.add_ons,
     req.params.id
   );
 

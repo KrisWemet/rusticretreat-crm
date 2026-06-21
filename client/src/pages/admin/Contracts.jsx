@@ -66,7 +66,7 @@ function buildContent(coupleNames, f, terms) {
   return `RUSTIC RETREAT WEDDING VENUE
 EVENT SERVICES AGREEMENT
 
-This Event Services Agreement ("Agreement") is entered into between Rustic Retreat Wedding Venue ("Venue") and the clients identified below ("Clients").
+This Event Services Agreement ("Agreement") is entered into between Rustic Retreat Weddings ("Venue") and the clients identified below ("Clients").
 
 EVENT DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -378,9 +378,9 @@ export default function Contracts() {
               <Input label="End Time" value={form.end_time} onChange={f('end_time')} placeholder="e.g. 11:00 PM" />
 
               <Input type="number" label="Guest Count" value={form.guest_count} onChange={f('guest_count')} placeholder="e.g. 150" min="1" />
-              <Input label="Package" value={form.package_name} onChange={f('package_name')} placeholder="e.g. Grand Estate" />
+              <Input label="Package" value={form.package_name} onChange={f('package_name')} placeholder="e.g. 3-Day Weekend" />
               <div>
-                <label className="label">Total Price ($)</label>
+                <label className="label">Total Price (CAD $)</label>
                 <div className="relative">
                   <CurrencyDollarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
@@ -395,8 +395,8 @@ export default function Contracts() {
                 </div>
               </div>
 
-              <Input label="Ceremony Location" value={form.ceremony_location} onChange={f('ceremony_location')} placeholder="e.g. Rose Garden Terrace" className="col-span-1" />
-              <Input label="Reception Location" value={form.reception_location} onChange={f('reception_location')} placeholder="e.g. Grand Ballroom" className="col-span-1" />
+              <Input label="Ceremony Location" value={form.ceremony_location} onChange={f('ceremony_location')} placeholder="e.g. Forest Clearing" className="col-span-1" />
+              <Input label="Reception Location" value={form.reception_location} onChange={f('reception_location')} placeholder="e.g. Clear-Top Gazebo" className="col-span-1" />
             </div>
           </div>
 
