@@ -27,6 +27,8 @@ import PortalMessages from './pages/portal/PortalMessages'
 import Documents from './pages/portal/Documents'
 import PortalPayments from './pages/portal/Payments'
 import PortalSettings from './pages/portal/Settings'
+import Analytics from './pages/admin/Analytics'
+import Packages from './pages/admin/Packages'
 
 function App() {
   return (
@@ -71,6 +73,8 @@ function App() {
             <Route path="messages" element={<Messages />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="vendors" element={<VendorsAdmin />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="packages" element={<Packages />} />
           </Route>
 
           {/* Couple portal routes */}

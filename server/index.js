@@ -35,6 +35,11 @@ app.use('/api/contracts', require('./routes/contracts'));
 app.use('/api/invoices', require('./routes/invoices'));
 app.use('/api/calendar', require('./routes/calendar'));
 app.use('/api/inquire', require('./routes/inquire'));
+app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/packages', require('./routes/packages'));
+
+// Start payment reminder scheduler
+require('./services/paymentReminder').startReminderScheduler();
 
 // Health check
 app.get('/api/health', (req, res) => {

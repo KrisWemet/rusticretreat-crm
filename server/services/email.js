@@ -105,10 +105,32 @@ ${message ? `<p><strong>Message:</strong><br>${message}</p>` : ''}`,
   });
 }
 
+// ── Payment reminder to couple ───────────────────────────────────────────────
+async function sendPaymentReminder({ to, coupleNames, description, amount, dueDate, daysUntilDue }) {
+  const url = `${BASE_URL}/portal/payments`;
+  const urgency = daysUntilDue <= 1 ? 'tomorrow' : `in ${daysUntilDue} days`;
+  await send({
+    to,
+    subject: `Payment reminder: ${description} due ${urgency}`,
+    text: `Hi ${coupleNames},\n\nThis is a friendly reminder that your payment "${description}" of $${amount.toLocaleString()} is due ${urgency} (${dueDate}).\n\nLog in to your wedding portal to view your payment schedule: ${url}\n\nIf you have questions, please contact your coordinator.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
+<p>This is a friendly reminder that your payment is coming up:</p>
+<table cellpadding="8" style="border-collapse:collapse;background:#fdf2f8;border-radius:8px;width:100%;max-width:400px;margin:16px 0">
+<tr><td style="color:#888">Payment:</td><td><strong>${description}</strong></td></tr>
+<tr><td style="color:#888">Amount:</td><td><strong style="color:#e11d48">$${amount.toLocaleString()}</strong></td></tr>
+<tr><td style="color:#888">Due Date:</td><td><strong>${dueDate}</strong></td></tr>
+</table>
+<p style="margin:24px 0"><a href="${url}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">View Payment Portal</a></p>
+<p>If you have any questions, please don't hesitate to reach out to your coordinator.</p>
+<p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
 module.exports = {
   sendContractLink,
   sendContractSignedCouple,
   sendContractSignedAdmin,
   sendNewMessageCouple,
   sendNewLeadAdmin,
+  sendPaymentReminder,
 };

@@ -30,15 +30,16 @@ router.post('/', rateLimit({ windowMs: 3600000, max: 5 }), (req, res) => {
   try {
     const result = db.prepare(`
       INSERT INTO couples
-        (partner1_name, partner2_name, email, phone, wedding_date, status, notes, budget_total)
-      VALUES (?, ?, ?, ?, ?, 'lead', ?, 0)
+        (partner1_name, partner2_name, email, phone, wedding_date, status, notes, budget_total, referral_source)
+      VALUES (?, ?, ?, ?, ?, 'lead', ?, 0, ?)
     `).run(
       partner1_name.trim(),
       partner2_name.trim(),
       coupleEmail.trim().toLowerCase(),
       phone || null,
       wedding_date || null,
-      notesParts.join('\n\n') || null,
+      message || null,
+      heard_about || null,
     );
 
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(result.lastInsertRowid);

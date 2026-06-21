@@ -12,6 +12,8 @@ import {
   DocumentTextIcon,
   BanknotesIcon,
   CalendarIcon,
+  ChartBarIcon,
+  CubeIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
@@ -24,6 +26,8 @@ const navItems = [
   { to: '/messages',   icon: ChatBubbleLeftRightIcon,   label: 'Messages', badge: 'messages' },
   { to: '/tasks',      icon: ClipboardDocumentListIcon, label: 'Tasks', badge: 'tasks' },
   { to: '/vendors',    icon: BuildingStorefrontIcon,    label: 'Vendors' },
+  { to: '/analytics',  icon: ChartBarIcon,              label: 'Analytics' },
+  { to: '/packages',   icon: CubeIcon,                  label: 'Packages' },
 ]
 
 export default function Sidebar({ unreadMessages = 0, pendingTasks = 0 }) {

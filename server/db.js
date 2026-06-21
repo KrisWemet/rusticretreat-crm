@@ -214,6 +214,36 @@ for (const col of [
   'ALTER TABLE contracts ADD COLUMN total_price REAL',
 ]) { try { db.exec(col); } catch (_) {} }
 
+// Packages table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS packages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    price REAL NOT NULL DEFAULT 0,
+    max_guests INTEGER,
+    includes TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// New column migrations
+for (const col of [
+  'ALTER TABLE couples ADD COLUMN referral_source TEXT',
+  'ALTER TABLE invoices ADD COLUMN reminder_14d_sent INTEGER DEFAULT 0',
+  'ALTER TABLE invoices ADD COLUMN reminder_7d_sent INTEGER DEFAULT 0',
+  'ALTER TABLE invoices ADD COLUMN reminder_1d_sent INTEGER DEFAULT 0',
+]) { try { db.exec(col); } catch (_) {} }
+
+// Backfill sample referral sources for demo data
+try {
+  db.prepare(`UPDATE couples SET referral_source = 'Wedding Wire' WHERE id = 1 AND referral_source IS NULL`).run();
+  db.prepare(`UPDATE couples SET referral_source = 'Friend Referral' WHERE id = 2 AND referral_source IS NULL`).run();
+  db.prepare(`UPDATE couples SET referral_source = 'Google Search' WHERE id = 3 AND referral_source IS NULL`).run();
+  db.prepare(`UPDATE couples SET referral_source = 'Instagram' WHERE id = 4 AND referral_source IS NULL`).run();
+} catch (_) {}
+
 // Seed data function
 function seedDatabase() {
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
@@ -451,6 +481,20 @@ IN WITNESS WHEREOF, the Clients have read, understood, and agree to be legally b
   insertInvoice.run(couple2.lastInsertRowid, 2, 'Booking Deposit (25%)', 9500, '2026-04-15', 1, '2026-04-18T14:00:00Z', 'Bank Transfer');
   insertInvoice.run(couple2.lastInsertRowid, 2, 'Second Payment (25%) — 90 days before event', 9500, '2026-08-24', 0, null, null);
   insertInvoice.run(couple2.lastInsertRowid, 2, 'Final Balance (50%) — 30 days before event', 19000, '2026-10-23', 0, null, null);
+
+  // Seed packages
+  const pkgCount = db.prepare('SELECT COUNT(*) as count FROM packages').get();
+  if (pkgCount.count === 0) {
+    const insertPkg = db.prepare(`
+      INSERT INTO packages (name, description, price, max_guests, includes) VALUES (?, ?, ?, ?, ?)
+    `);
+    [
+      ['Elopement Package', 'A simple, beautiful ceremony for just the two of you and your closest loved ones.', 5000, 20, 'Intimate ceremony space, 4 hrs venue access, Basic florals, Officiant coordination, Champagne toast'],
+      ['Intimate Garden', 'Perfect for smaller, intimate celebrations in our beautiful Garden Pavilion.', 18000, 80, 'Garden Pavilion, Fountain Courtyard, 8 hrs venue access, Tables & chairs, Standard lighting, Bridal suite access'],
+      ['Rustic Barn', 'A charming barn wedding experience with rustic decor and countryside charm.', 25000, 150, 'Rustic Barn exclusive use, Outdoor ceremony space, 9 hrs venue access, Rustic furniture, String lights, Getting ready rooms'],
+      ['Grand Estate', 'Our most popular full-venue package. Exclusive access to all ceremony and reception spaces.', 45000, 200, 'Full venue exclusive use, Rose Garden Terrace, Grand Ballroom, 10 hrs venue access, Premium furniture, Custom lighting, Two bridal suites, Day-of coordinator'],
+    ].forEach(p => insertPkg.run(...p));
+  }
 
   console.log('Database seeded successfully!');
 }
