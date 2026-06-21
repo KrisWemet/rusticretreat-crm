@@ -8,7 +8,7 @@ import {
   ChartBarIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline'
-import { format, subMonths, startOfMonth } from 'date-fns'
+import { format, subMonths, startOfMonth, parseISO } from 'date-fns'
 
 function fmt(n) {
   if (!n) return '$0'
@@ -37,6 +37,8 @@ export default function Analytics() {
   const [funnel, setFunnel] = useState(null)
   const [referrals, setReferrals] = useState([])
   const [pkgPerf, setPkgPerf] = useState([])
+  const [occupancy, setOccupancy] = useState(null)
+  const [occYear, setOccYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -55,6 +57,11 @@ export default function Analytics() {
       setPkgPerf(p.data)
     }).catch(console.error).finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    getAdminAxios().get(`/api/analytics/occupancy?year=${occYear}`)
+      .then(r => setOccupancy(r.data)).catch(console.error)
+  }, [occYear])
 
   // Build 12-month chart data
   const chartMonths = Array.from({ length: 12 }, (_, i) => {
@@ -97,6 +104,82 @@ export default function Analytics() {
         <StatCard label="Outstanding" value={fmt(summary?.revenue_outstanding)} icon={CurrencyDollarIcon} color={summary?.overdue_invoices > 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'} sub={summary?.overdue_invoices > 0 ? `${summary.overdue_invoices} overdue` : 'upcoming'} />
         <StatCard label="Avg Deal Size" value={fmt(summary?.avg_deal_size)} icon={ChartBarIcon} color="bg-violet-100 text-violet-600" sub={`${summary?.conversion_rate || 0}% close rate`} />
       </div>
+
+      {/* Season Occupancy */}
+      {occupancy && (
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-1">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">Season Occupancy</h2>
+              <p className="text-xs text-slate-400">One wedding per weekend · June–September</p>
+            </div>
+            <div className="flex items-center gap-1">
+              {[occYear - 1, occYear, occYear + 1].map(y => (
+                <button
+                  key={y}
+                  onClick={() => setOccYear(y)}
+                  className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${y === occYear ? 'bg-rose-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                >
+                  {y}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-5">
+            {/* Occupancy ring */}
+            <div className="flex items-center gap-5">
+              <div className="relative w-28 h-28 flex-shrink-0">
+                <svg className="w-28 h-28 -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f1f5f9" strokeWidth="3.5" />
+                  <circle
+                    cx="18" cy="18" r="15.9" fill="none" stroke="#e11d48" strokeWidth="3.5"
+                    strokeDasharray={`${occupancy.occupancy_rate} ${100 - occupancy.occupancy_rate}`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-bold text-slate-900">{occupancy.occupancy_rate}%</span>
+                  <span className="text-[10px] text-slate-400">booked</span>
+                </div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-slate-900">{occupancy.booked_weekends}<span className="text-lg text-slate-400 font-medium"> / {occupancy.total_weekends}</span></div>
+                <div className="text-sm text-slate-500">weekends booked</div>
+                <div className="text-xs text-emerald-600 font-medium mt-1">{occupancy.open_weekends} open weekend{occupancy.open_weekends === 1 ? '' : 's'} left</div>
+              </div>
+            </div>
+
+            {/* Revenue figures */}
+            <div className="flex flex-col justify-center gap-3">
+              <div>
+                <div className="text-xs text-slate-400">Season Revenue (booked)</div>
+                <div className="text-xl font-bold text-slate-900">{fmt(occupancy.season_revenue)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-400">Revenue per Available Weekend</div>
+                <div className="text-xl font-bold text-slate-900">{fmt(occupancy.revenue_per_available_weekend)}</div>
+              </div>
+            </div>
+
+            {/* Open weekends */}
+            <div>
+              <div className="text-xs text-slate-400 mb-2">Open weekends ({occYear})</div>
+              {occupancy.open_weekend_dates.length === 0 ? (
+                <p className="text-sm text-emerald-600 font-medium">Fully booked! 🎉</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {occupancy.open_weekend_dates.slice(0, 12).map(d => (
+                    <span key={d} className="text-xs bg-emerald-50 text-emerald-700 rounded-md px-2 py-1 font-medium">
+                      {format(parseISO(d), 'MMM d')}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Monthly Revenue Chart */}
       <div className="card p-6">

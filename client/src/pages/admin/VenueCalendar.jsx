@@ -18,6 +18,7 @@ export default function VenueCalendar() {
   const [current, setCurrent] = useState(new Date())
   const [booked, setBooked] = useState([])
   const [blocked, setBlocked] = useState([])
+  const [tours, setTours] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [blockReason, setBlockReason] = useState('')
@@ -27,6 +28,7 @@ export default function VenueCalendar() {
     const r = await getAdminAxios().get('/api/calendar')
     setBooked(r.data.booked)
     setBlocked(r.data.blocked)
+    setTours(r.data.tours || [])
   }
 
   useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
@@ -36,16 +38,29 @@ export default function VenueCalendar() {
     end:   endOfWeek(endOfMonth(current),   { weekStartsOn: 0 }),
   })
 
+  // A booking covers its full stay: check-in (event_date) through checkout (end_date).
   const getBookingForDay = (day) =>
-    booked.find(b => isSameDay(parseISO(b.event_date), day))
+    booked.find(b => {
+      const start = parseISO(b.event_date).getTime()
+      const end = (b.end_date ? parseISO(b.end_date) : parseISO(b.event_date)).getTime()
+      const t = day.getTime()
+      return t >= start && t <= end
+    })
+
+  const isBookingStart = (booking, day) =>
+    booking && isSameDay(parseISO(booking.event_date), day)
 
   const getBlockForDay = (day) =>
     blocked.find(b => isSameDay(parseISO(b.date), day))
 
+  const getTourForDay = (day) =>
+    tours.find(t => t.scheduled_at && isSameDay(parseISO(t.scheduled_at), day))
+
   const handleDayClick = (day) => {
     const booking = getBookingForDay(day)
     const block   = getBlockForDay(day)
-    setSelected({ day, booking, block })
+    const tour    = getTourForDay(day)
+    setSelected({ day, booking, block, tour })
     setShowBlockInput(false)
     setBlockReason(block?.reason || '')
   }
@@ -82,7 +97,7 @@ export default function VenueCalendar() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">Venue Calendar</h1>
-          <p className="page-subtitle">{booked.length} bookings · {blocked.length} blocked dates</p>
+          <p className="page-subtitle">{booked.length} bookings · {tours.length} tours · {blocked.length} blocked dates</p>
         </div>
       </div>
 
@@ -90,6 +105,7 @@ export default function VenueCalendar() {
       <div className="flex items-center gap-4 text-xs">
         {[
           { color: 'bg-rose-500', label: 'Booked' },
+          { color: 'bg-amber-500', label: 'Site Tour' },
           { color: 'bg-slate-400', label: 'Blocked / Unavailable' },
           { color: 'bg-emerald-400', label: 'Today' },
         ].map(({ color, label }) => (
@@ -128,14 +144,17 @@ export default function VenueCalendar() {
             <div className="grid grid-cols-7">
               {days.map((day, i) => {
                 const booking  = getBookingForDay(day)
+                const tour     = getTourForDay(day)
                 const block    = getBlockForDay(day)
                 const inMonth  = isSameMonth(day, current)
                 const today    = isToday(day)
                 const isSelected = selected && isSameDay(day, selected.day)
+                const bookingStart = isBookingStart(booking, day)
 
                 let bg = ''
                 if (booking) bg = 'bg-rose-50 hover:bg-rose-100'
                 else if (block) bg = 'bg-slate-100 hover:bg-slate-200'
+                else if (tour) bg = 'bg-amber-50 hover:bg-amber-100'
                 else if (today) bg = 'bg-emerald-50 hover:bg-emerald-100'
                 else bg = 'hover:bg-slate-50'
 
@@ -148,14 +167,27 @@ export default function VenueCalendar() {
                     <span className={`text-xs font-semibold ${today ? 'w-6 h-6 bg-emerald-500 text-white rounded-full flex items-center justify-center' : 'text-slate-500'}`}>
                       {format(day, 'd')}
                     </span>
-                    {booking && (
+                    {booking && bookingStart && (
                       <div className="mt-1">
                         <div className="text-[10px] bg-rose-500 text-white rounded px-1 py-0.5 leading-tight truncate">
                           {booking.partner1_name.split(' ')[0]} & {booking.partner2_name.split(' ')[0]}
                         </div>
+                        {booking.end_date && booking.end_date !== booking.event_date && (
+                          <div className="text-[9px] text-rose-500 mt-0.5 leading-none">multi-day →</div>
+                        )}
                       </div>
                     )}
-                    {block && !booking && (
+                    {booking && !bookingStart && (
+                      <div className="mt-1 h-1.5 bg-rose-300 rounded-full" title={`${booking.partner1_name} & ${booking.partner2_name}`} />
+                    )}
+                    {tour && !booking && (
+                      <div className="mt-1">
+                        <div className="text-[10px] bg-amber-500 text-white rounded px-1 py-0.5 leading-tight truncate">
+                          Tour: {tour.name.split(' ')[0]}
+                        </div>
+                      </div>
+                    )}
+                    {block && !booking && !tour && (
                       <div className="mt-1">
                         <div className="text-[10px] bg-slate-500 text-white rounded px-1 py-0.5 leading-tight truncate flex items-center gap-0.5">
                           <LockClosedIcon className="w-2.5 h-2.5 flex-shrink-0" />
@@ -197,6 +229,9 @@ export default function VenueCalendar() {
                         {selected.booking.partner1_name} & {selected.booking.partner2_name}
                       </Link>
                     </div>
+                    {selected.booking.end_date && selected.booking.end_date !== selected.booking.event_date && (
+                      <div><span className="text-xs text-slate-400">Stay</span><div className="font-medium">{format(parseISO(selected.booking.event_date), 'MMM d')} – {format(parseISO(selected.booking.end_date), 'MMM d, yyyy')}</div></div>
+                    )}
                     {selected.booking.package_name && (
                       <div><span className="text-xs text-slate-400">Package</span><div className="font-medium">{selected.booking.package_name}</div></div>
                     )}
@@ -206,6 +241,24 @@ export default function VenueCalendar() {
                     {(selected.booking.start_time || selected.booking.end_time) && (
                       <div><span className="text-xs text-slate-400">Hours</span><div className="font-medium">{selected.booking.start_time} – {selected.booking.end_time}</div></div>
                     )}
+                  </div>
+                </div>
+              ) : selected.tour ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg">
+                    <CalendarDaysIcon className="w-4 h-4" />
+                    SITE TOUR
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <div className="text-xs text-slate-400">Visitor</div>
+                      {selected.tour.couple_id ? (
+                        <Link to={`/clients/${selected.tour.couple_id}`} className="font-medium text-amber-700 hover:text-amber-800">{selected.tour.name}</Link>
+                      ) : (
+                        <div className="font-medium">{selected.tour.name}</div>
+                      )}
+                    </div>
+                    <Link to="/tours" className="text-xs text-amber-600 hover:text-amber-700 font-medium">Manage tours →</Link>
                   </div>
                 </div>
               ) : selected.block ? (

@@ -16,6 +16,7 @@ import {
   UserGroupIcon,
   MapPinIcon,
   CurrencyDollarIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid'
 import toast from 'react-hot-toast'
@@ -28,31 +29,40 @@ const statusStyle = {
   declined: 'bg-red-100 text-red-600',
 }
 
-const DEFAULT_TERMS = `1. VENUE RENTAL
-The Venue agrees to reserve the property exclusively for the Clients' event on the date and times specified above. The rental includes use of all designated event spaces, tables, chairs, and standard decor as outlined in the selected package.
+const DEFAULT_TERMS = `1. EXCLUSIVE USE & DURATION
+The entire Rustic Retreat property is reserved exclusively for the Clients during the full package period. Check-in is 8:00 AM on the first day; checkout is 8:00 PM on the final day. No other events will be hosted during this time.
 
 2. PAYMENT TERMS
-A non-refundable deposit of 25% of the total package price is required to secure the date. The remaining balance is due no later than 30 days prior to the event date. Payments may be made by check, credit card, or bank transfer.
+A non-refundable deposit of 25% of the total package price is required to secure the date. Remaining payments are scheduled per this agreement. The venue accepts e-transfer, credit card, or cheque.
 
 3. CANCELLATION POLICY
-Cancellations made more than 90 days before the event will forfeit the deposit only. Cancellations within 60–90 days will incur a charge of 50% of the total balance. Cancellations within 60 days of the event will incur a charge of 100% of the total balance.
+Cancellations more than 90 days before the event forfeit the deposit only. Cancellations within 60–90 days incur a charge of 50% of the total. Cancellations within 60 days incur 100% of the total balance.
 
-4. VENDOR ACCESS
-Clients may use approved outside vendors for catering, photography, florals, and music. All vendors must carry their own liability insurance and provide proof upon request. The Venue reserves the right to deny access to vendors who do not comply with facility policies.
+4. ALCOHOL & AGLC LICENSING
+Clients are responsible for obtaining an AGLC (Alberta Gaming, Liquor & Cannabis) Special Event Licence. All bar service must comply with Alberta liquor laws. Rustic Retreat staff may hold vehicle keys to prevent impaired driving. ID checks are required for anyone appearing under 25.
 
-5. DAMAGE & LIABILITY
-Clients are responsible for any damage to the Venue property caused by the Clients, their guests, or their vendors. The Venue's liability is limited to the total contract value. Clients are encouraged to obtain event liability insurance.
+5. QUIET HOURS
+Amplified music must be reduced to a minimal level at the property line by 11:00 PM Sunday through Thursday, and by midnight on Friday, Saturday, and the wedding night. All guest generators must be turned off by 10:00 PM, no exceptions.
 
-6. EVENT TIMELINE
-Events must conclude by the agreed end time. Extended hours may be arranged in advance at an additional charge of $500/hour. All vendors and guests must vacate the premises no later than 30 minutes after the event end time.
+6. OFF-GRID PROPERTY & POWER
+The property runs entirely on solar power. Clients must disclose all electrical requirements in advance. Generator rentals are available for additional power needs and must be arranged before the event.
 
-7. FORCE MAJEURE
-Neither party shall be held liable for failure to perform their obligations under this Agreement if such failure results from events beyond reasonable control, including but not limited to natural disasters, government restrictions, or pandemic orders.
+7. VENDORS & CATERING
+Clients may bring any licensed and insured vendors. There is no kitchen on-site — all food service must be self-contained. Vendors must carry their own liability insurance. All fireworks must be purchased and coordinated through Rustic Retreat.
 
-8. GOVERNING LAW
-This Agreement shall be governed by the laws of the state in which the Venue is located. Any disputes shall be resolved through binding arbitration before resorting to litigation.
+8. DÉCOR & PROPERTY CARE
+Nothing may be nailed, screwed, or stapled to any structure, tree, arch, or table. Loose glitter and confetti are prohibited. All borrowed décor items must be cleaned and returned to the décor shed before checkout.
 
-IN WITNESS WHEREOF, the Clients have read, understood, and agree to be legally bound by the terms of this Agreement, as evidenced by their electronic signature below.`
+9. PETS
+Well-behaved, pre-approved pets are welcome. Pets staying in the cabin incur a $50 cleaning fee. No pets in the Bridal Suite or Décor Shed.
+
+10. DAMAGE & LIABILITY
+Clients are responsible for all damage caused by Clients, their guests, or their vendors. Clients are encouraged to obtain event liability insurance.
+
+11. GOVERNING LAW
+This Agreement is governed by the laws of the Province of Alberta, Canada.
+
+IN WITNESS WHEREOF, the Clients confirm they have read and agree to be legally bound by the terms of this Agreement, as evidenced by their electronic signature below.`
 
 function fmtDate(v) {
   try { return v ? format(parseISO(v), 'MMMM d, yyyy') : '___________________' } catch { return '___________________' }
@@ -63,8 +73,8 @@ function fmtPrice(v) {
 function blank(v) { return v || '___________________' }
 
 function buildContent(coupleNames, f, terms) {
-  return `RUSTIC RETREAT WEDDING VENUE
-EVENT SERVICES AGREEMENT
+  return `RUSTIC RETREAT WEDDINGS
+EVENT SERVICES AGREEMENT — Alberta, Canada
 
 This Event Services Agreement ("Agreement") is entered into between Rustic Retreat Weddings ("Venue") and the clients identified below ("Clients").
 
@@ -205,6 +215,19 @@ export default function Contracts() {
 
   const openView = (c) => { setViewContract(c); setShowView(true) }
 
+  // Open a printable version of the contract (browser "Save as PDF").
+  const printContract = async (c) => {
+    try {
+      const r = await getAdminAxios().get(`/api/contracts/${c.id}/print`, { responseType: 'text' })
+      const w = window.open('', '_blank')
+      if (!w) { toast.error('Allow pop-ups to download the PDF'); return }
+      w.document.write(r.data)
+      w.document.close()
+    } catch {
+      toast.error('Failed to open contract')
+    }
+  }
+
   const stats = {
     total:  contracts.length,
     sent:   contracts.filter(c => c.status === 'sent').length,
@@ -318,6 +341,9 @@ export default function Contracts() {
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => openView(c)} className="btn-ghost py-1 px-2 text-xs">
                         <EyeIcon className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => printContract(c)} className="btn-ghost py-1 px-2 text-xs" title="Download / print PDF">
+                        <ArrowDownTrayIcon className="w-3.5 h-3.5" />
                       </button>
                       {c.status !== 'signed' && (
                         <button
@@ -501,9 +527,13 @@ export default function Contracts() {
               <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{viewContract.content}</pre>
             </div>
 
-            {viewContract.status !== 'signed' && (
-              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-                <button className="btn-secondary" onClick={() => setShowView(false)}>Close</button>
+            <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+              <button className="btn-secondary" onClick={() => setShowView(false)}>Close</button>
+              <button className="btn-secondary" onClick={() => printContract(viewContract)}>
+                <ArrowDownTrayIcon className="w-4 h-4" />
+                Download PDF
+              </button>
+              {viewContract.status !== 'signed' && (
                 <button
                   className="btn-primary"
                   onClick={async () => { await sendContract(viewContract.id); setShowView(false) }}
@@ -511,8 +541,8 @@ export default function Contracts() {
                   <PaperAirplaneIcon className="w-4 h-4" />
                   Send for Signature
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
       </Modal>

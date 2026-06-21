@@ -35,7 +35,7 @@ router.get('/couple/:coupleId', authenticateToken, (req, res) => {
 // Create booking
 router.post('/', authenticateToken, (req, res) => {
   const {
-    couple_id, event_date, start_time, end_time, package_name,
+    couple_id, event_date, end_date, start_time, end_time, package_name,
     guest_count, ceremony_location, reception_location, catering_type,
     special_requests, payment_status, deposit_paid, total_price, add_ons
   } = req.body;
@@ -45,11 +45,11 @@ router.post('/', authenticateToken, (req, res) => {
   }
 
   const result = db.prepare(`
-    INSERT INTO bookings (couple_id, event_date, start_time, end_time, package_name, guest_count,
+    INSERT INTO bookings (couple_id, event_date, end_date, start_time, end_time, package_name, guest_count,
       ceremony_location, reception_location, catering_type, special_requests,
       payment_status, deposit_paid, total_price, add_ons)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(couple_id, event_date, start_time || null, end_time || null, package_name || null,
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(couple_id, event_date, end_date || null, start_time || null, end_time || null, package_name || null,
     guest_count || null, ceremony_location || null, reception_location || null,
     catering_type || null, special_requests || null, payment_status || 'pending',
     deposit_paid || 0, total_price || 0, add_ons || null);
@@ -64,20 +64,21 @@ router.put('/:id', authenticateToken, (req, res) => {
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
   const {
-    event_date, start_time, end_time, package_name, guest_count,
+    event_date, end_date, start_time, end_time, package_name, guest_count,
     ceremony_location, reception_location, catering_type, special_requests,
     payment_status, deposit_paid, total_price, add_ons
   } = req.body;
 
   db.prepare(`
     UPDATE bookings SET
-      event_date = ?, start_time = ?, end_time = ?, package_name = ?,
+      event_date = ?, end_date = ?, start_time = ?, end_time = ?, package_name = ?,
       guest_count = ?, ceremony_location = ?, reception_location = ?,
       catering_type = ?, special_requests = ?, payment_status = ?,
       deposit_paid = ?, total_price = ?, add_ons = ?
     WHERE id = ?
   `).run(
     event_date || booking.event_date,
+    end_date !== undefined ? end_date : booking.end_date,
     start_time !== undefined ? start_time : booking.start_time,
     end_time !== undefined ? end_time : booking.end_time,
     package_name !== undefined ? package_name : booking.package_name,

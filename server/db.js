@@ -235,7 +235,28 @@ for (const col of [
   'ALTER TABLE invoices ADD COLUMN reminder_7d_sent INTEGER DEFAULT 0',
   'ALTER TABLE invoices ADD COLUMN reminder_1d_sent INTEGER DEFAULT 0',
   'ALTER TABLE bookings ADD COLUMN add_ons TEXT',
+  // Multi-day bookings: checkout / last day of the stay (event_date is check-in)
+  'ALTER TABLE bookings ADD COLUMN end_date DATE',
+  // Cold-lead nurture: track which automated follow-ups have gone out
+  'ALTER TABLE couples ADD COLUMN nurture_3d_sent INTEGER DEFAULT 0',
+  'ALTER TABLE couples ADD COLUMN nurture_7d_sent INTEGER DEFAULT 0',
 ]) { try { db.exec(col); } catch (_) {} }
+
+// Site tours — requested from the public inquiry form, scheduled by staff
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tours (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER REFERENCES couples(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    preferred_date DATE,
+    scheduled_at DATETIME,
+    status TEXT NOT NULL DEFAULT 'requested' CHECK(status IN ('requested', 'scheduled', 'completed', 'cancelled')),
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
 
 // Backfill sample referral sources for demo data
 try {
@@ -304,22 +325,22 @@ function seedDatabase() {
   `).run('Amanda Tremblay', 'Cole Girard', 'amanda.cole@example.com', '(825) 555-4567',
     null, 'lead', 'Submitted website inquiry. Planning June 2027 wedding. About 55 guests. Asked about fireworks.', 0, 'Instagram');
 
-  // Bookings
+  // Bookings (event_date = check-in / first day, end_date = checkout / last day)
   db.prepare(`
-    INSERT INTO bookings (couple_id, event_date, start_time, end_time, package_name, guest_count,
+    INSERT INTO bookings (couple_id, event_date, end_date, start_time, end_time, package_name, guest_count,
       ceremony_location, reception_location, catering_type, special_requests, payment_status, deposit_paid, total_price, add_ons)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(couple1.lastInsertRowid, '2026-09-19', 'Fri 8:00 AM', 'Sun 8:00 PM', '3-Day Weekend', 62,
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(couple1.lastInsertRowid, '2026-09-19', '2026-09-21', 'Fri 8:00 AM', 'Sun 8:00 PM', '3-Day Weekend', 62,
     'Forest Clearing', 'Clear-Top Gazebo',
     'Self-arranged: BBQ potluck Friday, food truck Saturday (The Wandering Fork YEG)',
     'Dog Maple attending ceremony. AGLC licence application submitted. 8 tent campers, 2 RVs.',
     'partial', 1625, 6500, 'Fireworks – $250, Pet cabin stay – $50');
 
   db.prepare(`
-    INSERT INTO bookings (couple_id, event_date, start_time, end_time, package_name, guest_count,
+    INSERT INTO bookings (couple_id, event_date, end_date, start_time, end_time, package_name, guest_count,
       ceremony_location, reception_location, catering_type, special_requests, payment_status, deposit_paid, total_price, add_ons)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(couple2.lastInsertRowid, '2026-08-07', 'Fri 8:00 AM', 'Mon 8:00 PM', '5-Day Experience', 45,
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(couple2.lastInsertRowid, '2026-08-07', '2026-08-11', 'Fri 8:00 AM', 'Mon 8:00 PM', '5-Day Experience', 45,
     'Poplar Grove', 'Clear-Top Gazebo',
     'Okonkwo Catering Edmonton (self-contained unit, no venue kitchen needed)',
     '12 tent campers, 6 RVs. Generator rental needed for caterer. AGLC licence obtained June 2026.',
@@ -410,6 +431,13 @@ function seedDatabase() {
     ['Update 2027 pricing guide', 'Create updated one-pager with 2027 package prices and inclusions to send to inquiries.', 'Kris Wemet', null, '2026-07-15', 'medium', 0],
     ['Schedule Kayla & Jordan second visit', 'They toured June 10 and loved it. Following up to book or close.', 'Sarah Mitchell', couple3.lastInsertRowid, '2026-07-10', 'medium', 0],
   ].forEach(t => insertTask.run(...t));
+
+  // Site tours
+  const insertTour = db.prepare(`INSERT INTO tours (couple_id, name, email, phone, preferred_date, scheduled_at, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  [
+    [couple3.lastInsertRowid, 'Kayla Park & Jordan Walsh', 'kayla.jordan@example.com', '(780) 555-3456', '2026-06-10', '2026-06-10', 'completed', 'Loved the Poplar Grove area. Comparing with one other venue.'],
+    [couple4.lastInsertRowid, 'Amanda Tremblay & Cole Girard', 'amanda.cole@example.com', '(825) 555-4567', '2026-07-04', null, 'requested', 'Requested a tour from the website. Planning June 2027, ~55 guests, asked about fireworks.'],
+  ].forEach(t => insertTour.run(...t));
 
   // Contracts (real Rustic Retreat Alberta terms)
   const sharedTerms = `1. EXCLUSIVE USE & DURATION

@@ -2,6 +2,18 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const email = require('../services/email');
+
+// Totals across a couple's invoices: contracted, paid, and outstanding balance.
+function coupleStatement(coupleId) {
+  const row = db.prepare(`
+    SELECT
+      COALESCE(SUM(amount), 0) AS total,
+      COALESCE(SUM(CASE WHEN paid = 1 THEN amount ELSE 0 END), 0) AS paid
+    FROM invoices WHERE couple_id = ?
+  `).get(coupleId);
+  return { total: row.total, paid: row.paid, balance: row.total - row.paid };
+}
 
 // ── Admin: get all invoices ──────────────────────────────────────────────────
 router.get('/', authenticateToken, (req, res) => {
@@ -40,6 +52,8 @@ router.patch('/:id/paid', authenticateToken, (req, res) => {
   const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id);
   if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
+  const wasUnpaid = !invoice.paid;
+
   db.prepare(`
     UPDATE invoices SET paid = ?, paid_at = ?, payment_method = ? WHERE id = ?
   `).run(
@@ -48,7 +62,30 @@ router.patch('/:id/paid', authenticateToken, (req, res) => {
     payment_method || invoice.payment_method,
     req.params.id,
   );
+
+  // Email a receipt when an invoice transitions from unpaid → paid
+  if (paid && wasUnpaid) {
+    const couple = db.prepare('SELECT partner1_name, partner2_name, email FROM couples WHERE id = ?').get(invoice.couple_id);
+    if (couple && couple.email) {
+      const { balance } = coupleStatement(invoice.couple_id);
+      email.sendPaymentReceipt({
+        to: couple.email,
+        coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
+        description: invoice.description,
+        amount: invoice.amount,
+        paymentMethod: payment_method || invoice.payment_method || 'E-Transfer',
+        paidDate: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        balance,
+      });
+    }
+  }
+
   res.json(db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id));
+});
+
+// ── Admin: running-balance statement for a couple ────────────────────────────
+router.get('/couple/:coupleId/statement', authenticateToken, (req, res) => {
+  res.json(coupleStatement(req.params.coupleId));
 });
 
 // ── Admin: update invoice ────────────────────────────────────────────────────

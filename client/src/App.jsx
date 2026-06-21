@@ -29,6 +29,7 @@ import PortalPayments from './pages/portal/Payments'
 import PortalSettings from './pages/portal/Settings'
 import Analytics from './pages/admin/Analytics'
 import Packages from './pages/admin/Packages'
+import Tours from './pages/admin/Tours'
 
 function App() {
   return (
@@ -68,6 +69,7 @@ function App() {
             <Route path="clients/:id" element={<ClientDetail />} />
             <Route path="calendar" element={<VenueCalendar />} />
             <Route path="bookings" element={<Bookings />} />
+            <Route path="tours" element={<Tours />} />
             <Route path="contracts" element={<Contracts />} />
             <Route path="payments" element={<Payments />} />
             <Route path="messages" element={<Messages />} />

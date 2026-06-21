@@ -73,6 +73,57 @@ router.get('/referrals', authenticateToken, (req, res) => {
   res.json(rows);
 });
 
+// Season occupancy — Rustic Retreat sells one wedding per weekend, June–Sept.
+router.get('/occupancy', authenticateToken, (req, res) => {
+  const year = parseInt(req.query.year) || new Date().getFullYear();
+
+  // Saturday of the weekend a given date belongs to (Fri/Sat/Sun → that Sat).
+  const weekendSaturday = (dateStr) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const diff = 6 - d.getDay(); // 6 = Saturday
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().slice(0, 10);
+  };
+
+  // Sellable inventory: every Saturday from June 1 to Sept 30 of the year.
+  const sellableWeekends = [];
+  const cursor = new Date(`${year}-06-01T00:00:00`);
+  const seasonEnd = new Date(`${year}-09-30T00:00:00`);
+  // advance to the first Saturday
+  while (cursor.getDay() !== 6) cursor.setDate(cursor.getDate() + 1);
+  while (cursor <= seasonEnd) {
+    sellableWeekends.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 7);
+  }
+
+  const bookings = db.prepare(`
+    SELECT event_date, total_price FROM bookings
+    WHERE event_date >= ? AND event_date <= ?
+  `).all(`${year}-06-01`, `${year}-09-30`);
+
+  const bookedWeekends = new Set();
+  let revenue = 0;
+  for (const b of bookings) {
+    bookedWeekends.add(weekendSaturday(b.event_date));
+    revenue += b.total_price || 0;
+  }
+
+  const totalWeekends = sellableWeekends.length;
+  const bookedCount = sellableWeekends.filter(w => bookedWeekends.has(w)).length;
+  const openWeekends = sellableWeekends.filter(w => !bookedWeekends.has(w));
+
+  res.json({
+    year,
+    total_weekends: totalWeekends,
+    booked_weekends: bookedCount,
+    open_weekends: openWeekends.length,
+    occupancy_rate: totalWeekends > 0 ? Math.round((bookedCount / totalWeekends) * 100) : 0,
+    season_revenue: revenue,
+    revenue_per_available_weekend: totalWeekends > 0 ? Math.round(revenue / totalWeekends) : 0,
+    open_weekend_dates: openWeekends,
+  });
+});
+
 router.get('/packages', authenticateToken, (req, res) => {
   const rows = db.prepare(`
     SELECT COALESCE(package_name, 'Unknown') as package_name,

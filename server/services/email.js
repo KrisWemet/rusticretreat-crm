@@ -126,6 +126,77 @@ async function sendPaymentReminder({ to, coupleNames, description, amount, dueDa
   });
 }
 
+// ── Payment receipt to couple ────────────────────────────────────────────────
+async function sendPaymentReceipt({ to, coupleNames, description, amount, paymentMethod, paidDate, balance }) {
+  const url = `${BASE_URL}/portal/payments`;
+  const balanceLine = balance > 0
+    ? `Remaining balance: $${balance.toLocaleString()} CAD`
+    : 'Your balance is paid in full — thank you!';
+  await send({
+    to,
+    subject: `Payment received — ${description} (Rustic Retreat)`,
+    text: `Hi ${coupleNames},\n\nThis confirms we've received your payment. Thank you!\n\nPayment: ${description}\nAmount: $${amount.toLocaleString()} CAD\nMethod: ${paymentMethod}\nDate: ${paidDate}\n\n${balanceLine}\n\nView your full payment schedule: ${url}\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
+<p>This confirms we've received your payment — thank you! 🎉</p>
+<table cellpadding="8" style="border-collapse:collapse;background:#f0fdf4;border-radius:8px;width:100%;max-width:420px;margin:16px 0">
+<tr><td style="color:#888">Payment:</td><td><strong>${description}</strong></td></tr>
+<tr><td style="color:#888">Amount:</td><td><strong style="color:#16a34a">$${amount.toLocaleString()} CAD</strong></td></tr>
+<tr><td style="color:#888">Method:</td><td>${paymentMethod}</td></tr>
+<tr><td style="color:#888">Date:</td><td>${paidDate}</td></tr>
+<tr><td style="color:#888">Balance:</td><td><strong>${balance > 0 ? '$' + balance.toLocaleString() + ' CAD' : 'Paid in full ✓'}</strong></td></tr>
+</table>
+<p style="margin:24px 0"><a href="${url}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">View Payment Portal</a></p>
+<p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
+// ── Site tour request — admin notification ───────────────────────────────────
+async function sendTourRequestAdmin({ coupleNames, email: coupleEmail, phone, preferredDate }) {
+  if (!ADMIN_EMAIL) return;
+  await send({
+    to: ADMIN_EMAIL,
+    subject: `Site tour requested — ${coupleNames}`,
+    text: `${coupleNames} requested a site tour.\n\nEmail: ${coupleEmail}\nPhone: ${phone || '—'}\nPreferred date: ${preferredDate || 'Flexible'}\n\nFollow up to confirm a time.`,
+    html: `<p><strong>${coupleNames}</strong> requested a site tour.</p>
+<table cellpadding="6" style="border-collapse:collapse">
+<tr><td style="color:#666">Email:</td><td>${coupleEmail}</td></tr>
+<tr><td style="color:#666">Phone:</td><td>${phone || '—'}</td></tr>
+<tr><td style="color:#666">Preferred date:</td><td>${preferredDate || 'Flexible'}</td></tr>
+</table>
+<p>Follow up to confirm a time.</p>`,
+  });
+}
+
+// ── Cold-lead nurture follow-up to couple ────────────────────────────────────
+async function sendLeadNurture({ to, coupleNames }) {
+  const url = `${BASE_URL}/inquire`;
+  await send({
+    to,
+    subject: `Still dreaming of a Rustic Retreat wedding?`,
+    text: `Hi ${coupleNames},\n\nWe wanted to follow up on your inquiry about hosting your wedding at Rustic Retreat. We'd love to answer any questions and check our availability for your dates — our June–September weekends book up quickly.\n\nJust reply to this email or reach out any time. We'd be honoured to host your celebration.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
+<p>We wanted to follow up on your inquiry about hosting your wedding at Rustic Retreat. We'd love to answer any questions and check availability for your dates — our June–September weekends book up quickly.</p>
+<p>Just reply to this email or reach out any time. We'd be honoured to host your celebration. 🌲</p>
+<p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
+// ── Cold-lead alert to admin (no response after a week) ──────────────────────
+async function sendColdLeadAdmin({ coupleNames, email: coupleEmail, phone, daysOld }) {
+  if (!ADMIN_EMAIL) return;
+  await send({
+    to: ADMIN_EMAIL,
+    subject: `Lead going cold — ${coupleNames} (${daysOld} days, no booking)`,
+    text: `${coupleNames} inquired ${daysOld} days ago and hasn't booked.\n\nEmail: ${coupleEmail}\nPhone: ${phone || '—'}\n\nConsider a personal call or message before this lead goes cold.`,
+    html: `<p><strong>${coupleNames}</strong> inquired <strong>${daysOld} days ago</strong> and hasn't booked yet.</p>
+<table cellpadding="6" style="border-collapse:collapse">
+<tr><td style="color:#666">Email:</td><td>${coupleEmail}</td></tr>
+<tr><td style="color:#666">Phone:</td><td>${phone || '—'}</td></tr>
+</table>
+<p>Consider a personal call or message before this lead goes cold.</p>`,
+  });
+}
+
 module.exports = {
   sendContractLink,
   sendContractSignedCouple,
@@ -133,4 +204,8 @@ module.exports = {
   sendNewMessageCouple,
   sendNewLeadAdmin,
   sendPaymentReminder,
+  sendPaymentReceipt,
+  sendTourRequestAdmin,
+  sendLeadNurture,
+  sendColdLeadAdmin,
 };

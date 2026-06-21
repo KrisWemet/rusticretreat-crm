@@ -112,6 +112,54 @@ router.delete('/:id', authenticateToken, (req, res) => {
   }
 });
 
+// ── Admin: printable contract (open in browser, Save as PDF) ─────────────────
+router.get('/:id/print', authenticateToken, (req, res) => {
+  const c = db.prepare(`
+    SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
+    FROM contracts c JOIN couples co ON co.id = c.couple_id
+    WHERE c.id = ?
+  `).get(req.params.id);
+  if (!c) return res.status(404).send('Contract not found');
+
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const signedBlock = c.status === 'signed' ? `
+    <div class="signed">
+      <h2>Signature</h2>
+      <p><strong>Signed by:</strong> ${esc(c.signer_name)}</p>
+      ${c.signed_at ? `<p><strong>Date:</strong> ${esc(new Date(c.signed_at).toLocaleString())}</p>` : ''}
+      ${c.signer_email ? `<p><strong>Email:</strong> ${esc(c.signer_email)}</p>` : ''}
+      ${c.signature_data && c.signature_data.startsWith('data:image')
+        ? `<img class="sig" src="${esc(c.signature_data)}" alt="signature" />`
+        : (c.signature_data ? `<p class="sig-text">${esc(c.signature_data)}</p>` : '')}
+      ${c.signer_ip ? `<p class="ip">Signed electronically · IP ${esc(c.signer_ip)}</p>` : ''}
+    </div>` : `<div class="unsigned">Status: ${esc(c.status)} — not yet signed.</div>`;
+
+  res.set('Content-Type', 'text/html').send(`<!doctype html>
+<html><head><meta charset="utf-8"><title>${esc(c.title)}</title>
+<style>
+  @media print { .noprint { display:none } @page { margin: 18mm } }
+  body { font-family: Georgia, 'Times New Roman', serif; color:#1e293b; max-width:760px; margin:32px auto; padding:0 24px; line-height:1.55 }
+  .bar { background:#e11d48; color:#fff; padding:10px 16px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; font-family:system-ui,sans-serif; margin-bottom:24px }
+  .bar button { background:#fff; color:#e11d48; border:0; padding:8px 16px; border-radius:6px; font-weight:700; cursor:pointer }
+  h1 { font-size:22px; margin:0 0 4px }
+  .content { white-space:pre-wrap; font-size:14px }
+  .signed { margin-top:32px; border-top:2px solid #e2e8f0; padding-top:16px }
+  .sig { max-height:90px; border-bottom:1px solid #94a3b8; margin-top:6px }
+  .sig-text { font-size:24px; font-family:'Brush Script MT', cursive; border-bottom:1px solid #94a3b8; display:inline-block; padding:4px 12px }
+  .ip { color:#94a3b8; font-size:12px; font-family:system-ui,sans-serif }
+  .unsigned { margin-top:32px; color:#b45309; font-style:italic }
+</style></head>
+<body>
+  <div class="bar noprint">
+    <span>Rustic Retreat Weddings — Contract</span>
+    <button onclick="window.print()">Save as PDF / Print</button>
+  </div>
+  <div class="content">${esc(c.content)}</div>
+  ${signedBlock}
+</body></html>`);
+});
+
 // ── Admin: send contract (generate signing link) ─────────────────────────────
 router.post('/:id/send', authenticateToken, (req, res) => {
   try {

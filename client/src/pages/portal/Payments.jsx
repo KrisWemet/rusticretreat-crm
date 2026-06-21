@@ -62,7 +62,7 @@ export default function Payments() {
             <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
                 <div className="text-xl font-bold text-slate-800">${total.toLocaleString()}</div>
-                <div className="text-xs text-slate-400 mt-0.5">Total</div>
+                <div className="text-xs text-slate-400 mt-0.5">Total (CAD)</div>
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-emerald-700">${collected.toLocaleString()}</div>
@@ -70,7 +70,7 @@ export default function Payments() {
               </div>
               <div className="text-center">
                 <div className="text-xl font-bold text-blue-700">${remaining.toLocaleString()}</div>
-                <div className="text-xs text-slate-400 mt-0.5">Remaining</div>
+                <div className="text-xs text-slate-400 mt-0.5">Balance Remaining</div>
               </div>
             </div>
 
@@ -134,6 +134,16 @@ export default function Payments() {
           </div>
         </>
       )}
+
+      {/* How to pay */}
+      <div className="card border-rose-100 bg-rose-50/40 p-4">
+        <p className="text-sm font-medium text-slate-700 mb-1">How to pay</p>
+        <p className="text-sm text-slate-500">
+          We accept Interac e-Transfer (preferred), credit card, or cheque. For e-Transfer, send to{' '}
+          <span className="font-medium text-slate-700">payments@rusticretreat.com</span> and include your names in the message.
+          A receipt is emailed automatically once each payment is recorded.
+        </p>
+      </div>
 
       {/* Help */}
       <div className="card border-slate-100 bg-slate-50/50 p-4">

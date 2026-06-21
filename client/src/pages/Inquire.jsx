@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
 import {
   HeartIcon,
   CheckCircleIcon,
+  XCircleIcon,
   CalendarDaysIcon,
   UserGroupIcon,
   ChatBubbleLeftRightIcon,
@@ -12,11 +13,32 @@ export default function Inquire() {
   const [form, setForm] = useState({
     partner1_name: '', partner2_name: '', email: '', phone: '',
     wedding_date: '', guest_count: '', heard_about: '', message: '',
+    request_tour: false, tour_date: '',
   })
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState(null)
+  const [avail, setAvail] = useState({ seasonMonths: [6, 7, 8, 9], unavailableDates: [] })
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
+
+  useEffect(() => {
+    axios.get('/api/inquire/availability')
+      .then(r => setAvail(r.data))
+      .catch(() => {})
+  }, [])
+
+  // Live availability feedback for the chosen wedding date.
+  const dateStatus = (() => {
+    if (!form.wedding_date) return null
+    const month = Number(form.wedding_date.slice(5, 7))
+    if (!avail.seasonMonths.includes(month)) {
+      return { ok: false, msg: 'We host weddings June through September. Pick a summer date — or reach out and we\'ll talk options.' }
+    }
+    if (avail.unavailableDates.includes(form.wedding_date)) {
+      return { ok: false, msg: 'That weekend is already booked. We\'d still love to hear from you about nearby open dates!' }
+    }
+    return { ok: true, msg: 'Good news — that date looks available! Send your inquiry to hold it.' }
+  })()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -84,9 +106,9 @@ export default function Inquire() {
         {/* Features row */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { icon: CalendarDaysIcon, label: 'Exclusive Date Hold', desc: 'We reserve your date while you decide' },
-            { icon: UserGroupIcon,    label: 'Up to 250 Guests',     desc: 'Multiple indoor & outdoor spaces' },
-            { icon: ChatBubbleLeftRightIcon, label: 'Dedicated Coordinator', desc: 'Personal support from day one' },
+            { icon: CalendarDaysIcon, label: 'Multi-Day Weekends', desc: '60 hours together, not 6' },
+            { icon: UserGroupIcon,    label: 'Up to 80 Guests',     desc: '65 private off-grid acres' },
+            { icon: ChatBubbleLeftRightIcon, label: 'One Wedding Per Weekend', desc: 'The whole property is yours' },
           ].map(({ icon: Icon, label, desc }) => (
             <div key={label} className="bg-white rounded-xl border border-slate-100 p-4 text-center">
               <Icon className="w-5 h-5 text-rose-500 mx-auto mb-2" />
@@ -128,10 +150,40 @@ export default function Inquire() {
                 <input type="date" value={form.wedding_date} onChange={f('wedding_date')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Guest Count</label>
-                <input type="number" min="1" value={form.guest_count} onChange={f('guest_count')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="e.g. 120" />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Guest Count <span className="text-slate-400 font-normal">(max 80)</span></label>
+                <input type="number" min="1" max="80" value={form.guest_count} onChange={f('guest_count')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="e.g. 60" />
               </div>
             </div>
+            {dateStatus && (
+              <div className={`mt-3 flex items-start gap-2 text-sm rounded-xl px-3 py-2.5 ${dateStatus.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                {dateStatus.ok
+                  ? <CheckCircleIcon className="w-5 h-5 flex-shrink-0" />
+                  : <XCircleIcon className="w-5 h-5 flex-shrink-0" />}
+                <span>{dateStatus.msg}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Site tour request */}
+          <div className="bg-rose-50/60 rounded-xl p-4 border border-rose-100">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.request_tour}
+                onChange={e => setForm(p => ({ ...p, request_tour: e.target.checked }))}
+                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+              />
+              <div>
+                <div className="text-sm font-medium text-slate-800">I'd like to book a site tour</div>
+                <div className="text-xs text-slate-500">Come walk the 65 acres and see the ceremony spaces in person.</div>
+              </div>
+            </label>
+            {form.request_tour && (
+              <div className="mt-3 pl-7">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Preferred tour date</label>
+                <input type="date" value={form.tour_date} onChange={f('tour_date')} className="w-full max-w-xs px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" />
+              </div>
+            )}
           </div>
 
           <div>

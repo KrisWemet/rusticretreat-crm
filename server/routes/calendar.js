@@ -6,7 +6,7 @@ const { authenticateToken } = require('../middleware/auth');
 // ── Get all booked dates + blocked dates ─────────────────────────────────────
 router.get('/', authenticateToken, (req, res) => {
   const booked = db.prepare(`
-    SELECT b.event_date, b.package_name, b.guest_count, b.start_time, b.end_time,
+    SELECT b.event_date, b.end_date, b.package_name, b.guest_count, b.start_time, b.end_time,
            c.partner1_name, c.partner2_name, c.id AS couple_id
     FROM bookings b JOIN couples c ON b.couple_id = c.id
     ORDER BY b.event_date ASC
@@ -16,7 +16,14 @@ router.get('/', authenticateToken, (req, res) => {
     SELECT * FROM blocked_dates ORDER BY date ASC
   `).all();
 
-  res.json({ booked, blocked });
+  const tours = db.prepare(`
+    SELECT id, couple_id, name, preferred_date, scheduled_at, status
+    FROM tours
+    WHERE status = 'scheduled' AND scheduled_at IS NOT NULL
+    ORDER BY scheduled_at ASC
+  `).all();
+
+  res.json({ booked, blocked, tours });
 });
 
 // ── Block a date ─────────────────────────────────────────────────────────────

@@ -14,11 +14,13 @@ import {
   CalendarIcon,
   ChartBarIcon,
   CubeIcon,
+  MapIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
   { to: '/dashboard',  icon: HomeIcon,                  label: 'Dashboard' },
   { to: '/clients',    icon: UsersIcon,                 label: 'Clients & Leads' },
+  { to: '/tours',      icon: MapIcon,                   label: 'Site Tours' },
   { to: '/calendar',   icon: CalendarIcon,              label: 'Venue Calendar' },
   { to: '/bookings',   icon: CalendarDaysIcon,          label: 'Bookings' },
   { to: '/contracts',  icon: DocumentTextIcon,          label: 'Contracts' },
