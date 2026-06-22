@@ -7,7 +7,9 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: process.env.NODE_ENV === 'production'
+    ? process.env.BASE_URL
+    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
   credentials: true
 }));
 // Stripe webhook needs the raw body for signature verification — mount it
@@ -51,6 +53,15 @@ app.use('/api/payments', require('./routes/payments'));
 // Start background schedulers
 require('./services/paymentReminder').startReminderScheduler();
 require('./services/leadNurture').startLeadNurtureScheduler();
+
+// Serve built React frontend in production
+if (process.env.NODE_ENV === 'production') {
+  const clientBuild = path.join(__dirname, '../client/dist');
+  app.use(express.static(clientBuild));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientBuild, 'index.html'));
+  });
+}
 
 // Health check
 app.get('/api/health', (req, res) => {
