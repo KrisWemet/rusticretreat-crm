@@ -11,7 +11,10 @@ const stripe = STRIPE_SECRET ? require('stripe')(STRIPE_SECRET) : null;
 
 // Is card payment available? The portal uses this to show/hide the Pay button.
 router.get('/config', (req, res) => {
-  res.json({ enabled: !!stripe });
+  res.json({
+    enabled: !!stripe,
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
+  });
 });
 
 // ── Couple: start a Stripe Checkout session for one of their invoices ─────────
