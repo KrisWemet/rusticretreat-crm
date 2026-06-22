@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   PlusIcon, TrashIcon, PaperAirplaneIcon, PencilIcon,
@@ -38,6 +39,8 @@ export default function Proposals() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
 
+  const [searchParams, setSearchParams] = useSearchParams()
+
   function load() {
     Promise.all([
       api.get('/api/proposals'),
@@ -49,6 +52,21 @@ export default function Proposals() {
     }).catch(() => toast.error('Failed to load proposals')).finally(() => setLoading(false))
   }
   useEffect(() => { load() }, [])
+
+  // Deep links from the client detail page: ?couple=ID&new=1 or ?open=ID
+  useEffect(() => {
+    if (loading) return
+    const openId = searchParams.get('open')
+    const newCouple = searchParams.get('new') && searchParams.get('couple')
+    if (openId) {
+      openEdit(Number(openId))
+      setSearchParams({}, { replace: true })
+    } else if (newCouple) {
+      setForm({ ...emptyForm, couple_id: Number(searchParams.get('couple')) })
+      setEditing('new')
+      setSearchParams({}, { replace: true })
+    }
+  }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const subtotal = form.items.reduce((s, it) => s + (Number(it.amount) || 0), 0)
   const tax = Math.round(subtotal * (Number(form.tax_rate) / 100) * 100) / 100

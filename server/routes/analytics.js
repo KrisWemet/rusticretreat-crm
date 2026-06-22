@@ -134,4 +134,27 @@ router.get('/packages', authenticateToken, (req, res) => {
   res.json(rows);
 });
 
+// Proposal conversion — how the BEO pipeline is performing.
+router.get('/proposals', authenticateToken, (req, res) => {
+  const rows = db.prepare(`SELECT status, COUNT(*) as count, COALESCE(SUM(total), 0) as value FROM proposals GROUP BY status`).all();
+  const byStatus = Object.fromEntries(rows.map(r => [r.status, r]));
+  const get = (s) => byStatus[s] || { count: 0, value: 0 };
+
+  const sent = get('sent'), accepted = get('accepted'), declined = get('declined'), expired = get('expired');
+  // Decided = anything that has left the "open" pool
+  const decided = accepted.count + declined.count + expired.count;
+  const winRate = decided > 0 ? Math.round((accepted.count / decided) * 100) : 0;
+
+  res.json({
+    total: rows.reduce((s, r) => s + r.count, 0),
+    open_count: sent.count,
+    open_value: sent.value,            // outstanding proposals awaiting a decision
+    accepted_count: accepted.count,
+    accepted_value: accepted.value,    // booked revenue won through proposals
+    declined_count: declined.count,
+    expired_count: expired.count,
+    win_rate: winRate,                 // accepted / (accepted + declined + expired)
+  });
+});
+
 module.exports = router;

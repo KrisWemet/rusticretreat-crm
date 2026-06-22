@@ -39,6 +39,7 @@ export default function Analytics() {
   const [pkgPerf, setPkgPerf] = useState([])
   const [occupancy, setOccupancy] = useState(null)
   const [occYear, setOccYear] = useState(new Date().getFullYear())
+  const [propStats, setPropStats] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -49,12 +50,14 @@ export default function Analytics() {
       api.get('/api/analytics/funnel'),
       api.get('/api/analytics/referrals'),
       api.get('/api/analytics/packages'),
-    ]).then(([s, r, f, ref, p]) => {
+      api.get('/api/analytics/proposals'),
+    ]).then(([s, r, f, ref, p, pr]) => {
       setSummary(s.data)
       setRevenue(r.data)
       setFunnel(f.data)
       setReferrals(ref.data)
       setPkgPerf(p.data)
+      setPropStats(pr.data)
     }).catch(console.error).finally(() => setLoading(false))
   }, [])
 
@@ -104,6 +107,39 @@ export default function Analytics() {
         <StatCard label="Outstanding" value={fmt(summary?.revenue_outstanding)} icon={CurrencyDollarIcon} color={summary?.overdue_invoices > 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'} sub={summary?.overdue_invoices > 0 ? `${summary.overdue_invoices} overdue` : 'upcoming'} />
         <StatCard label="Avg Deal Size" value={fmt(summary?.avg_deal_size)} icon={ChartBarIcon} color="bg-violet-100 text-violet-600" sub={`${summary?.conversion_rate || 0}% close rate`} />
       </div>
+
+      {/* Proposal conversion */}
+      {propStats && propStats.total > 0 && (
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">Proposal Conversion</h2>
+              <p className="text-xs text-slate-400">How quotes are turning into booked weddings</p>
+            </div>
+            <span className="text-2xl font-bold text-emerald-600">{propStats.win_rate}%<span className="text-xs font-medium text-slate-400 ml-1">win rate</span></span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-blue-50 rounded-xl p-4">
+              <div className="text-xl font-bold text-blue-700">{propStats.open_count}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Awaiting decision</div>
+              <div className="text-xs text-blue-600 font-medium mt-1">{fmt(propStats.open_value)} in play</div>
+            </div>
+            <div className="bg-emerald-50 rounded-xl p-4">
+              <div className="text-xl font-bold text-emerald-700">{propStats.accepted_count}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Accepted</div>
+              <div className="text-xs text-emerald-600 font-medium mt-1">{fmt(propStats.accepted_value)} won</div>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-4">
+              <div className="text-xl font-bold text-slate-600">{propStats.declined_count}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Declined</div>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-4">
+              <div className="text-xl font-bold text-amber-600">{propStats.expired_count}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Expired</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Season Occupancy */}
       {occupancy && (
