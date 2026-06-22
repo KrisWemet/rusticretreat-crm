@@ -14,6 +14,7 @@ import {
   ExclamationCircleIcon,
   ArrowTrendingUpIcon,
   HeartIcon,
+  BellAlertIcon,
 } from '@heroicons/react/24/outline'
 import { format, isToday, isTomorrow, parseISO, differenceInDays } from 'date-fns'
 
@@ -80,17 +81,19 @@ export default function Dashboard() {
   const [upcomingBookings, setUpcomingBookings] = useState([])
   const [recentMessages, setRecentMessages] = useState([])
   const [pendingTasks, setPendingTasks] = useState([])
+  const [attention, setAttention] = useState({ expiring_proposals: [], stalled_proposals: [], overdue_invoices: [] })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
       try {
         const headers = getAdminHeaders()
-        const [couplesRes, bookingsRes, msgsRes, tasksRes] = await Promise.all([
+        const [couplesRes, bookingsRes, msgsRes, tasksRes, attentionRes] = await Promise.all([
           axios.get('/api/couples', { headers }),
           axios.get('/api/bookings', { headers }),
           axios.get('/api/messages/all', { headers }),
           axios.get('/api/tasks', { headers }),
+          axios.get('/api/analytics/attention', { headers }),
         ])
 
         const couples = couplesRes.data
@@ -123,6 +126,7 @@ export default function Dashboard() {
         setUpcomingBookings(upcoming.slice(0, 5))
         setRecentMessages(messages.filter(m => m.sender_type === 'couple').slice(-4).reverse())
         setPendingTasks(dueTasks.slice(0, 5))
+        setAttention(attentionRes.data || { expiring_proposals: [], stalled_proposals: [], overdue_invoices: [] })
       } catch (e) {
         console.error(e)
       } finally {
@@ -179,6 +183,62 @@ export default function Dashboard() {
           sub={stats.overdueTasks > 0 ? `${stats.overdueTasks} overdue` : 'on track'}
         />
       </div>
+
+      {/* Needs Attention */}
+      {(attention.expiring_proposals.length > 0 || attention.stalled_proposals.length > 0 || attention.overdue_invoices.length > 0) && (
+        <div className="card border-l-4 border-amber-400 overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 bg-amber-50 border-b border-amber-100">
+            <BellAlertIcon className="w-4 h-4 text-amber-600" />
+            <span className="text-sm font-semibold text-amber-800">Needs Attention</span>
+            <span className="ml-auto text-xs text-amber-600">
+              {attention.expiring_proposals.length + attention.stalled_proposals.length + attention.overdue_invoices.length} item{(attention.expiring_proposals.length + attention.stalled_proposals.length + attention.overdue_invoices.length) !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {attention.expiring_proposals.map(p => (
+              <Link key={`ep-${p.id}`} to="/proposals" className="flex items-start gap-3 px-5 py-3 hover:bg-amber-50 transition-colors">
+                <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-slate-700">{p.partner1_name} &amp; {p.partner2_name}</div>
+                  <div className="text-xs text-slate-500 truncate">{p.title}</div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-xs font-medium text-amber-700">
+                    Expires {p.valid_until ? format(parseISO(p.valid_until), 'MMM d') : '—'}
+                  </div>
+                  <div className="text-xs text-slate-400">${Number(p.total).toLocaleString()}</div>
+                </div>
+              </Link>
+            ))}
+            {attention.stalled_proposals.map(p => (
+              <Link key={`sp-${p.id}`} to="/proposals" className="flex items-start gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
+                <div className="w-2 h-2 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-slate-700">{p.partner1_name} &amp; {p.partner2_name}</div>
+                  <div className="text-xs text-slate-500 truncate">{p.title}</div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-xs font-medium text-blue-700">No response</div>
+                  <div className="text-xs text-slate-400">sent {p.sent_at ? format(parseISO(p.sent_at), 'MMM d') : '—'}</div>
+                </div>
+              </Link>
+            ))}
+            {attention.overdue_invoices.map(inv => (
+              <Link key={`oi-${inv.id}`} to="/payments" className="flex items-start gap-3 px-5 py-3 hover:bg-red-50 transition-colors">
+                <div className="w-2 h-2 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-slate-700">{inv.partner1_name} &amp; {inv.partner2_name}</div>
+                  <div className="text-xs text-slate-500 truncate">{inv.description}</div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-xs font-medium text-red-700">Overdue</div>
+                  <div className="text-xs text-slate-400">${Number(inv.amount).toLocaleString()} · due {inv.due_date ? format(parseISO(inv.due_date), 'MMM d') : '—'}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Module Grid */}
       <div>

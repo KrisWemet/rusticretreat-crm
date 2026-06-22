@@ -5,8 +5,12 @@ import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Modal from '../../components/ui/Modal'
 import Input, { Select, Textarea } from '../../components/ui/Input'
-import { ArrowLeftIcon, PencilIcon, TrashIcon, PlusIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline'
+import {
+  ArrowLeftIcon, PencilIcon, TrashIcon, PlusIcon, DocumentDuplicateIcon,
+  PrinterIcon, DocumentCheckIcon,
+} from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
+import axios from 'axios'
 import { format, parseISO } from 'date-fns'
 
 const PROPOSAL_STATUS = {
@@ -59,6 +63,16 @@ export default function ClientDetail() {
       fetchData()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update')
+    }
+  }
+
+  const generateContract = async (proposalId) => {
+    try {
+      const api = getAdminAxios()
+      await api.post(`/api/contracts/from-proposal/${proposalId}`)
+      toast.success('Contract created — go to Contracts to send for signing')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to generate contract')
     }
   }
 
@@ -209,23 +223,40 @@ export default function ClientDetail() {
         ) : (
           <div className="divide-y divide-slate-50">
             {proposals.map(p => (
-              <Link
-                key={p.id}
-                to={`/proposals?open=${p.id}`}
-                className="flex items-center justify-between gap-3 py-3 hover:bg-slate-50 -mx-2 px-2 rounded-lg transition-colors"
-              >
-                <div className="min-w-0">
+              <div key={p.id} className="flex items-center justify-between gap-3 py-3">
+                <Link
+                  to={`/proposals?open=${p.id}`}
+                  className="flex-1 min-w-0 hover:bg-slate-50 -mx-2 px-2 py-1 rounded-lg transition-colors"
+                >
                   <div className="text-sm font-medium text-slate-800 truncate">{p.title}</div>
                   <div className="text-xs text-slate-400">
                     {p.event_date ? format(parseISO(p.event_date), 'MMM d, yyyy') : 'No date'}
                     {p.sent_at ? ` · sent ${format(parseISO(p.sent_at), 'MMM d')}` : ''}
                   </div>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                </Link>
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <span className="text-sm font-semibold text-slate-800">${Number(p.total).toLocaleString()}</span>
                   <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${PROPOSAL_STATUS[p.status]}`}>{p.status}</span>
+                  <a
+                    href={`/api/proposals/${p.id}/print`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
+                    title="Print / PDF"
+                  >
+                    <PrinterIcon className="w-4 h-4" />
+                  </a>
+                  {p.status === 'accepted' && (
+                    <button
+                      onClick={() => generateContract(p.id)}
+                      className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                      title="Generate Contract"
+                    >
+                      <DocumentCheckIcon className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

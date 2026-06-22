@@ -157,4 +157,37 @@ router.get('/proposals', authenticateToken, (req, res) => {
   });
 });
 
+// Dashboard "needs attention" — expiring/stalled proposals + overdue invoices.
+router.get('/attention', authenticateToken, (req, res) => {
+  const in7days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const ago14days = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+
+  const expiring = db.prepare(`
+    SELECT p.id, p.title, p.total, p.valid_until, p.sent_at,
+           c.id AS couple_id, c.partner1_name, c.partner2_name
+    FROM proposals p JOIN couples c ON c.id = p.couple_id
+    WHERE p.status = 'sent' AND p.valid_until IS NOT NULL AND p.valid_until <= ?
+    ORDER BY p.valid_until ASC
+  `).all(in7days);
+
+  const stalled = db.prepare(`
+    SELECT p.id, p.title, p.total, p.valid_until, p.sent_at,
+           c.id AS couple_id, c.partner1_name, c.partner2_name
+    FROM proposals p JOIN couples c ON c.id = p.couple_id
+    WHERE p.status = 'sent' AND (p.valid_until IS NULL OR p.valid_until > ?) AND p.sent_at <= ?
+    ORDER BY p.sent_at ASC
+  `).all(in7days, ago14days);
+
+  const overdue = db.prepare(`
+    SELECT i.id, i.description, i.amount, i.due_date,
+           c.id AS couple_id, c.partner1_name, c.partner2_name
+    FROM invoices i JOIN couples c ON c.id = i.couple_id
+    WHERE i.paid = 0 AND i.due_date < date('now')
+    ORDER BY i.due_date ASC
+    LIMIT 10
+  `).all();
+
+  res.json({ expiring_proposals: expiring, stalled_proposals: stalled, overdue_invoices: overdue });
+});
+
 module.exports = router;

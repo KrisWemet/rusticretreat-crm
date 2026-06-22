@@ -331,4 +331,181 @@ router.post('/sign/:token', signLimiter, (req, res) => {
   }
 });
 
+// ── Admin: generate contract pre-filled from an accepted proposal ─────────────
+router.post('/from-proposal/:proposalId', authenticateToken, (req, res) => {
+  try {
+    const proposal = db.prepare(`
+      SELECT p.*, c.partner1_name, c.partner2_name, c.email AS couple_email
+      FROM proposals p JOIN couples c ON c.id = p.couple_id WHERE p.id = ?
+    `).get(req.params.proposalId);
+    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+
+    const items = db.prepare(
+      'SELECT * FROM proposal_items WHERE proposal_id = ? ORDER BY order_index, id'
+    ).all(proposal.id);
+
+    const fmtCAD = (n) => `$${Number(n || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD`;
+    const fmtDate = (d) => d
+      ? new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+      : 'TBD';
+
+    const deposit = Math.round(proposal.total * (proposal.deposit_pct / 100) * 100) / 100;
+    const balance = Math.round((proposal.total - deposit) * 100) / 100;
+    const today = new Date();
+    const depositDue = new Date(today.getTime() + 7 * 86400000)
+      .toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+    const balanceDue = proposal.event_date
+      ? new Date(new Date(proposal.event_date + 'T00:00:00').getTime() - 30 * 86400000)
+          .toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
+      : new Date(today.getTime() + 60 * 86400000)
+          .toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    // Build itemized section
+    const byKind = { package: [], addon: [], custom: [], discount: [] };
+    for (const it of items) byKind[it.kind]?.push(it);
+
+    let itemLines = '';
+    if (byKind.package.length) {
+      itemLines += '\n   PACKAGE';
+      for (const it of byKind.package) {
+        itemLines += `\n   ${it.label}${it.description ? ' — ' + it.description : ''}: ${fmtCAD(it.amount)}`;
+      }
+    }
+    if (byKind.addon.length) {
+      itemLines += '\n\n   ADD-ONS';
+      for (const it of byKind.addon) {
+        itemLines += `\n   ${it.label}${it.quantity > 1 ? ' × ' + it.quantity : ''}: ${fmtCAD(it.amount)}`;
+      }
+    }
+    if (byKind.custom.length) {
+      itemLines += '\n\n   OTHER';
+      for (const it of byKind.custom) {
+        itemLines += `\n   ${it.label}: ${fmtCAD(it.amount)}`;
+      }
+    }
+    if (byKind.discount.length) {
+      itemLines += '\n\n   DISCOUNTS';
+      for (const it of byKind.discount) {
+        itemLines += `\n   ${it.label}: -${fmtCAD(Math.abs(it.amount))}`;
+      }
+    }
+
+    const endDateLine = proposal.end_date && proposal.end_date !== proposal.event_date
+      ? `\n   Check-Out:     ${fmtDate(proposal.end_date)}` : '';
+
+    const contractContent = `VENUE SERVICES AGREEMENT
+Rustic Retreat Weddings & Events
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PARTIES
+
+Venue Provider: Rustic Retreat Weddings & Events ("the Venue")
+  Location: Alberta, Canada
+
+Clients: ${proposal.partner1_name} and ${proposal.partner2_name} ("the Clients")
+  Email: ${proposal.couple_email || ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. EVENT DETAILS
+
+   Check-In:      ${fmtDate(proposal.event_date)}${endDateLine}
+   Package:       ${proposal.package_name || 'As quoted'}
+   Guest Count:   ${proposal.guest_count ? proposal.guest_count + ' guests (maximum 80 permitted)' : 'TBD (maximum 80 permitted)'}
+   Venue:         Rustic Retreat — 65-acre off-grid solar property, Alberta
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2. SERVICES AND PRICING
+${itemLines}
+
+   ─────────────────────────────────────────
+   Subtotal:      ${fmtCAD(proposal.subtotal)}
+   GST (5%):      ${fmtCAD(proposal.tax)}
+   ─────────────────────────────────────────
+   TOTAL:         ${fmtCAD(proposal.total)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3. PAYMENT SCHEDULE
+
+   Deposit (${proposal.deposit_pct}%):  ${fmtCAD(deposit)} — due by ${depositDue}
+   Final Balance:  ${fmtCAD(balance)} — due by ${balanceDue}
+
+   Payments accepted by e-transfer to info@rusticretreat.com or online through the client portal.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4. CANCELLATION POLICY
+
+   a) More than 180 days before event: deposit is forfeited, no further charges.
+   b) 91–180 days before event: 50% of the total contract value is forfeited.
+   c) 90 days or fewer before event: 100% of the total contract value is forfeited.
+   d) Venue Cancellation: All payments refunded in full within 14 business days.
+   e) Force Majeure: If the event cannot proceed due to wildfire evacuation orders, extreme weather making the venue inaccessible, or provincial emergency orders, the Venue will reschedule to a mutually agreeable date at no additional fee.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+5. VENUE POLICIES
+
+   a) Guest Limit — Maximum 80 guests including the wedding party. Any increase requires written approval and may incur additional fees.
+
+   b) Exclusive Use — The full 65-acre property is reserved exclusively for the Clients during the booked package period. No other events will be hosted.
+
+   c) Noise & Quiet Hours — Amplified music must end by midnight on the wedding night. All other nights: 11 PM cutoff. Acoustic music may continue at a reasonable outdoor volume.
+
+   d) Off-Grid Solar Power — Rustic Retreat operates entirely on solar power. Clients must disclose all electrical requirements in advance. Generator rentals are available as an add-on and must be arranged before the event.
+
+   e) Alcohol (AGLC) — Clients are responsible for obtaining an Alberta Gaming, Liquor & Cannabis (AGLC) Special Event Licence where required. All bar service must comply with Alberta liquor laws.
+
+   f) Fireworks & Open Flame — Fireworks, fire pits, and similar open flames are permitted only with written approval and must comply with current Alberta fire restrictions. Fireworks must be coordinated through the Venue.
+
+   g) Pets — Well-behaved dogs are welcome with advance written notice and the Pet Cabin add-on. No other animals without written approval. Pets are not permitted in the Bridal Suite.
+
+   h) Vendors — Clients may bring licensed and insured vendors. All vendors must comply with Venue policies and carry their own liability insurance. There is no commercial kitchen on-site.
+
+   i) Décor — Nothing may be nailed, screwed, or stapled to any structure. Loose glitter and confetti are prohibited. All items must be cleared from the property by checkout.
+
+   j) Damage — The Clients are responsible for damage caused by Clients, guests, or vendors beyond normal wear and tear. A pre-event walk-through will be completed to document existing conditions.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+6. GENERAL TERMS
+
+   a) Governing Law — This Agreement is governed by the laws of the Province of Alberta, Canada, and the parties attorn to the exclusive jurisdiction of the Alberta courts.
+
+   b) Amendments — Any changes to this Agreement must be in writing and agreed to by both parties.
+
+   c) Entire Agreement — This Agreement, together with the accepted Proposal #${proposal.id} (${proposal.title}), constitutes the entire agreement between the parties and supersedes all prior discussions.
+
+   d) Electronic Signature — An electronic signature applied through the Venue's online portal is legally binding under Alberta's Electronic Transactions Act, SA 2001, c E-5.5.
+
+   e) Severability — If any provision is found unenforceable, it will be severed and the remaining provisions will continue in full effect.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+By signing below, the Clients agree to the full terms of this Agreement.`;
+
+    const title = `Event Services Agreement — ${proposal.partner1_name} & ${proposal.partner2_name}${proposal.event_date ? ' · ' + proposal.event_date : ''}`;
+
+    const result = db.prepare(`
+      INSERT INTO contracts (couple_id, title, content, wedding_date, package_name, guest_count, total_price)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      proposal.couple_id, title, contractContent,
+      proposal.event_date || null, proposal.package_name || null,
+      proposal.guest_count || null, proposal.total || null,
+    );
+
+    const contract = db.prepare(`
+      SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
+      FROM contracts c JOIN couples co ON co.id = c.couple_id WHERE c.id = ?
+    `).get(result.lastInsertRowid);
+    res.status(201).json(contract);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

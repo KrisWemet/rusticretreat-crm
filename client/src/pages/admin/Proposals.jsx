@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   PlusIcon, TrashIcon, PaperAirplaneIcon, PencilIcon,
-  DocumentDuplicateIcon, LinkIcon, CheckCircleIcon,
+  DocumentDuplicateIcon, LinkIcon, CheckCircleIcon, PrinterIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
@@ -212,6 +212,7 @@ export default function Proposals() {
                         <button onClick={() => send(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg" title="Send to couple"><PaperAirplaneIcon className="w-4 h-4" /></button>
                       )}
                       <button onClick={() => copyLink(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Copy link"><LinkIcon className="w-4 h-4" /></button>
+                      <a href={`/api/proposals/${p.id}/print`} target="_blank" rel="noreferrer" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Print / PDF"><PrinterIcon className="w-4 h-4" /></a>
                       <button onClick={() => del(p)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><TrashIcon className="w-4 h-4" /></button>
                     </div>
                   </td>
