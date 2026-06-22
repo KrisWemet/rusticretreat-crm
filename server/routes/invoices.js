@@ -46,24 +46,20 @@ router.post('/', authenticateToken, (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM invoices WHERE id = ?').get(result.lastInsertRowid));
 });
 
-// ── Admin: mark invoice paid / unpaid ────────────────────────────────────────
-router.patch('/:id/paid', authenticateToken, (req, res) => {
-  const { paid, payment_method } = req.body;
-  const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id);
-  if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
-
+// Mark an invoice paid/unpaid and email a receipt on the unpaid→paid transition.
+// Shared by the admin route and the Stripe webhook.
+function markInvoicePaid(invoiceId, paid, paymentMethod) {
+  const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
+  if (!invoice) return null;
   const wasUnpaid = !invoice.paid;
 
-  db.prepare(`
-    UPDATE invoices SET paid = ?, paid_at = ?, payment_method = ? WHERE id = ?
-  `).run(
+  db.prepare(`UPDATE invoices SET paid = ?, paid_at = ?, payment_method = ? WHERE id = ?`).run(
     paid ? 1 : 0,
     paid ? new Date().toISOString() : null,
-    payment_method || invoice.payment_method,
-    req.params.id,
+    paymentMethod || invoice.payment_method,
+    invoiceId,
   );
 
-  // Email a receipt when an invoice transitions from unpaid → paid
   if (paid && wasUnpaid) {
     const couple = db.prepare('SELECT partner1_name, partner2_name, email FROM couples WHERE id = ?').get(invoice.couple_id);
     if (couple && couple.email) {
@@ -73,14 +69,21 @@ router.patch('/:id/paid', authenticateToken, (req, res) => {
         coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
         description: invoice.description,
         amount: invoice.amount,
-        paymentMethod: payment_method || invoice.payment_method || 'E-Transfer',
+        paymentMethod: paymentMethod || invoice.payment_method || 'E-Transfer',
         paidDate: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         balance,
       });
     }
   }
+  return db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
+}
 
-  res.json(db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id));
+// ── Admin: mark invoice paid / unpaid ────────────────────────────────────────
+router.patch('/:id/paid', authenticateToken, (req, res) => {
+  const { paid, payment_method } = req.body;
+  const updated = markInvoicePaid(req.params.id, paid, payment_method);
+  if (!updated) return res.status(404).json({ error: 'Invoice not found' });
+  res.json(updated);
 });
 
 // ── Admin: running-balance statement for a couple ────────────────────────────
@@ -147,3 +150,5 @@ router.post('/schedule/:coupleId', authenticateToken, (req, res) => {
 });
 
 module.exports = router;
+module.exports.markInvoicePaid = markInvoicePaid;
+module.exports.coupleStatement = coupleStatement;

@@ -13,6 +13,7 @@ import {
   ArrowRightOnRectangleIcon,
   HeartIcon,
   Cog6ToothIcon,
+  PencilSquareIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
@@ -21,6 +22,7 @@ const navItems = [
   { to: '/portal/guests', icon: UserGroupIcon, label: 'Guest List' },
   { to: '/portal/budget', icon: CurrencyDollarIcon, label: 'Budget Tracker' },
   { to: '/portal/payments', icon: BanknotesIcon, label: 'Payments' },
+  { to: '/portal/forms', icon: PencilSquareIcon, label: 'Forms' },
   { to: '/portal/vendors', icon: BuildingStorefrontIcon, label: 'Vendors' },
   { to: '/portal/timeline', icon: ClockIcon, label: 'Day-Of Timeline' },
   { to: '/portal/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages' },

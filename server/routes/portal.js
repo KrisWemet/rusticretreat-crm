@@ -132,4 +132,56 @@ router.get('/contracts', authenticateCouple, (req, res) => {
   res.json(contracts);
 });
 
+// Couple: list forms assigned to them (with status)
+router.get('/forms', authenticateCouple, (req, res) => {
+  const rows = db.prepare(`
+    SELECT fa.id AS assignment_id, fa.status, fa.submitted_at,
+           f.id AS form_id, f.title, f.description
+    FROM form_assignments fa JOIN forms f ON f.id = fa.form_id
+    WHERE fa.couple_id = ? ORDER BY fa.status, fa.created_at DESC
+  `).all(req.couple.coupleId);
+  res.json(rows);
+});
+
+// Couple: get a single assigned form with its fields and any saved answers
+router.get('/forms/:assignmentId', authenticateCouple, (req, res) => {
+  const assignment = db.prepare('SELECT * FROM form_assignments WHERE id = ? AND couple_id = ?')
+    .get(req.params.assignmentId, req.couple.coupleId);
+  if (!assignment) return res.status(404).json({ error: 'Form not found' });
+
+  const form = db.prepare('SELECT * FROM forms WHERE id = ?').get(assignment.form_id);
+  const fields = db.prepare(`
+    SELECT ff.*, r.value
+    FROM form_fields ff
+    LEFT JOIN form_responses r ON r.field_id = ff.id AND r.assignment_id = ?
+    WHERE ff.form_id = ?
+    ORDER BY ff.order_index, ff.id
+  `).all(assignment.id, assignment.form_id);
+  res.json({ assignment, form, fields });
+});
+
+// Couple: submit/save answers to an assigned form
+router.post('/forms/:assignmentId', authenticateCouple, (req, res) => {
+  const assignment = db.prepare('SELECT * FROM form_assignments WHERE id = ? AND couple_id = ?')
+    .get(req.params.assignmentId, req.couple.coupleId);
+  if (!assignment) return res.status(404).json({ error: 'Form not found' });
+
+  const answers = req.body.answers || {}; // { field_id: value }
+  const validFieldIds = new Set(
+    db.prepare('SELECT id FROM form_fields WHERE form_id = ?').all(assignment.form_id).map(f => f.id)
+  );
+
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM form_responses WHERE assignment_id = ?').run(assignment.id);
+    const insert = db.prepare('INSERT INTO form_responses (assignment_id, field_id, value) VALUES (?, ?, ?)');
+    for (const [fieldId, value] of Object.entries(answers)) {
+      if (!validFieldIds.has(Number(fieldId))) continue;
+      insert.run(assignment.id, Number(fieldId), value == null ? null : String(value));
+    }
+    db.prepare(`UPDATE form_assignments SET status = 'completed', submitted_at = datetime('now') WHERE id = ?`).run(assignment.id);
+  });
+  tx();
+  res.json({ success: true });
+});
+
 module.exports = router;

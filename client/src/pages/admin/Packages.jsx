@@ -4,25 +4,50 @@ import { PlusIcon, PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon } from '@
 import toast from 'react-hot-toast'
 
 const EMPTY = { name: '', description: '', price: '', max_guests: '', includes: '', is_active: true }
+const EMPTY_ADDON = { name: '', description: '', price: '', unit: 'flat' }
+const UNIT_LABEL = { flat: 'flat', per_guest: 'per guest', per_night: 'per night' }
 
 export default function Packages() {
   const { getAdminAxios } = useAuth()
   const [packages, setPackages] = useState([])
+  const [addons, setAddons] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // null | 'add' | package obj
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [addonModal, setAddonModal] = useState(null) // null | 'add' | addon obj
+  const [addonForm, setAddonForm] = useState(EMPTY_ADDON)
 
   const api = getAdminAxios()
 
   function load() {
-    api.get('/api/packages')
-      .then(r => setPackages(r.data))
+    Promise.all([api.get('/api/packages'), api.get('/api/addons')])
+      .then(([p, a]) => { setPackages(p.data); setAddons(a.data) })
       .catch(() => toast.error('Failed to load packages'))
       .finally(() => setLoading(false))
   }
 
   useEffect(() => { load() }, [])
+
+  function openAddonAdd() { setAddonForm(EMPTY_ADDON); setAddonModal('add') }
+  function openAddonEdit(a) {
+    setAddonForm({ name: a.name, description: a.description || '', price: a.price, unit: a.unit })
+    setAddonModal(a)
+  }
+  async function saveAddon() {
+    if (!addonForm.name || addonForm.price === '') return toast.error('Name and price are required')
+    try {
+      const payload = { name: addonForm.name, description: addonForm.description || null, price: parseFloat(addonForm.price), unit: addonForm.unit }
+      if (addonModal === 'add') { await api.post('/api/addons', payload); toast.success('Add-on created') }
+      else { await api.put(`/api/addons/${addonModal.id}`, payload); toast.success('Add-on updated') }
+      setAddonModal(null); load()
+    } catch { toast.error('Failed to save add-on') }
+  }
+  async function delAddon(a) {
+    if (!confirm(`Delete add-on "${a.name}"?`)) return
+    try { await api.delete(`/api/addons/${a.id}`); toast.success('Add-on deleted'); load() }
+    catch { toast.error('Failed to delete add-on') }
+  }
 
   function openAdd() { setForm(EMPTY); setModal('add') }
   function openEdit(pkg) {
@@ -89,8 +114,8 @@ export default function Packages() {
     <div className="p-6 space-y-5 max-w-5xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="page-title">Venue Packages</h1>
-          <p className="page-subtitle">{packages.filter(p => p.is_active).length} active packages</p>
+          <h1 className="page-title">Packages & Add-Ons</h1>
+          <p className="page-subtitle">{packages.filter(p => p.is_active).length} active packages · {addons.length} add-ons</p>
         </div>
         <button onClick={openAdd} className="btn-primary">
           <PlusIcon className="w-4 h-4" />
@@ -154,6 +179,79 @@ export default function Packages() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Add-on catalog */}
+      <div className="flex items-center justify-between pt-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800">Add-On Catalog</h2>
+          <p className="text-sm text-slate-400">À-la-carte items you can drop into any proposal</p>
+        </div>
+        <button onClick={openAddonAdd} className="btn-secondary"><PlusIcon className="w-4 h-4" /> Add Item</button>
+      </div>
+
+      {addons.length === 0 ? (
+        <div className="card py-10 text-center">
+          <p className="text-slate-400 text-sm">No add-ons yet. Create items like extra nights, fireworks, or per-guest fees.</p>
+        </div>
+      ) : (
+        <div className="card divide-y divide-slate-50">
+          {addons.map(a => (
+            <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-slate-800 text-sm">{a.name}</span>
+                  <span className="text-xs text-slate-400">${Number(a.price).toLocaleString()} {UNIT_LABEL[a.unit]}</span>
+                </div>
+                {a.description && <p className="text-xs text-slate-400 truncate">{a.description}</p>}
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => openAddonEdit(a)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"><PencilIcon className="w-4 h-4" /></button>
+                <button onClick={() => delAddon(a)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><TrashIcon className="w-4 h-4" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add-on Modal */}
+      {addonModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-800">{addonModal === 'add' ? 'New Add-On' : 'Edit Add-On'}</h2>
+              <button onClick={() => setAddonModal(null)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="label">Name</label>
+                <input className="input" value={addonForm.name} onChange={e => setAddonForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Extra Night" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Price (CAD $)</label>
+                  <input className="input" type="number" min="0" value={addonForm.price} onChange={e => setAddonForm(f => ({ ...f, price: e.target.value }))} placeholder="750" />
+                </div>
+                <div>
+                  <label className="label">Charged</label>
+                  <select className="input" value={addonForm.unit} onChange={e => setAddonForm(f => ({ ...f, unit: e.target.value }))}>
+                    <option value="flat">Flat fee</option>
+                    <option value="per_guest">Per guest (over 60)</option>
+                    <option value="per_night">Per night</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="label">Description</label>
+                <textarea className="input" rows={2} value={addonForm.description} onChange={e => setAddonForm(f => ({ ...f, description: e.target.value }))} placeholder="Shown to couples on the proposal…" />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button onClick={() => setAddonModal(null)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={saveAddon} className="btn-primary flex-1">{addonModal === 'add' ? 'Create' : 'Save'}</button>
+            </div>
+          </div>
         </div>
       )}
 

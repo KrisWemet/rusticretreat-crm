@@ -197,7 +197,41 @@ async function sendColdLeadAdmin({ coupleNames, email: coupleEmail, phone, daysO
   });
 }
 
+// ── Proposal sent to couple (online accept link) ─────────────────────────────
+async function sendProposal({ to, coupleNames, title, total, token }) {
+  const url = `${BASE_URL}/proposal/${token}`;
+  await send({
+    to,
+    subject: `Your proposal from Rustic Retreat — ${title}`,
+    text: `Hi ${coupleNames},\n\nYour personalized proposal "${title}" is ready to review.\n\nTotal: $${total.toLocaleString()} CAD (incl. GST)\n\nReview and accept online here: ${url}\n\nQuestions? Just reply to this email.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
+<p>Your personalized proposal <strong>"${title}"</strong> is ready to review.</p>
+<table cellpadding="8" style="border-collapse:collapse;background:#fdf2f8;border-radius:8px;width:100%;max-width:400px;margin:16px 0">
+<tr><td style="color:#888">Total (incl. GST):</td><td><strong style="color:#e11d48">$${total.toLocaleString()} CAD</strong></td></tr>
+</table>
+<p style="margin:24px 0"><a href="${url}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Review &amp; Accept Proposal</a></p>
+<p>Or copy this link: <a href="${url}">${url}</a></p>
+<p>Questions? Just reply to this email.</p>
+<p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
+// ── Proposal accepted — admin notification ───────────────────────────────────
+async function sendProposalAcceptedAdmin({ coupleNames, title, total, acceptedName }) {
+  if (!ADMIN_EMAIL) return;
+  await send({
+    to: ADMIN_EMAIL,
+    subject: `🎉 Proposal accepted — ${coupleNames}`,
+    text: `${acceptedName} accepted "${title}" for ${coupleNames}.\n\nTotal: $${total.toLocaleString()} CAD\n\nA booking and deposit invoice have been created automatically.`,
+    html: `<p><strong>${acceptedName}</strong> accepted <strong>"${title}"</strong> for ${coupleNames}! 🎉</p>
+<p>Total: <strong>$${total.toLocaleString()} CAD</strong></p>
+<p>A booking and deposit invoice have been created automatically.</p>`,
+  });
+}
+
 module.exports = {
+  sendProposal,
+  sendProposalAcceptedAdmin,
   sendContractLink,
   sendContractSignedCouple,
   sendContractSignedAdmin,

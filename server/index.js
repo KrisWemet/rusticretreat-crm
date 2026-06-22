@@ -10,6 +10,11 @@ app.use(cors({
   origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
   credentials: true
 }));
+// Stripe webhook needs the raw body for signature verification — mount it
+// BEFORE the JSON body parser.
+const { webhookHandler } = require('./routes/payments');
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), webhookHandler);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -38,6 +43,10 @@ app.use('/api/inquire', require('./routes/inquire'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/packages', require('./routes/packages'));
 app.use('/api/tours', require('./routes/tours'));
+app.use('/api/addons', require('./routes/addons'));
+app.use('/api/proposals', require('./routes/proposals'));
+app.use('/api/forms', require('./routes/forms'));
+app.use('/api/payments', require('./routes/payments'));
 
 // Start background schedulers
 require('./services/paymentReminder').startReminderScheduler();

@@ -30,6 +30,11 @@ import PortalSettings from './pages/portal/Settings'
 import Analytics from './pages/admin/Analytics'
 import Packages from './pages/admin/Packages'
 import Tours from './pages/admin/Tours'
+import Pipeline from './pages/admin/Pipeline'
+import Proposals from './pages/admin/Proposals'
+import FormsAdmin from './pages/admin/Forms'
+import PublicProposal from './pages/PublicProposal'
+import PortalForms from './pages/portal/Forms'
 
 function App() {
   return (
@@ -58,6 +63,7 @@ function App() {
         <Routes>
           {/* Public: no auth needed */}
           <Route path="/sign/:token" element={<SignContract />} />
+          <Route path="/proposal/:token" element={<PublicProposal />} />
           <Route path="/inquire" element={<Inquire />} />
 
           {/* Admin/Staff routes */}
@@ -67,9 +73,12 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="clients" element={<Clients />} />
             <Route path="clients/:id" element={<ClientDetail />} />
+            <Route path="pipeline" element={<Pipeline />} />
             <Route path="calendar" element={<VenueCalendar />} />
             <Route path="bookings" element={<Bookings />} />
             <Route path="tours" element={<Tours />} />
+            <Route path="proposals" element={<Proposals />} />
+            <Route path="forms" element={<FormsAdmin />} />
             <Route path="contracts" element={<Contracts />} />
             <Route path="payments" element={<Payments />} />
             <Route path="messages" element={<Messages />} />
@@ -88,6 +97,7 @@ function App() {
             <Route path="guests" element={<GuestList />} />
             <Route path="budget" element={<Budget />} />
             <Route path="payments" element={<PortalPayments />} />
+            <Route path="forms" element={<PortalForms />} />
             <Route path="vendors" element={<VendorList />} />
             <Route path="timeline" element={<Timeline />} />
             <Route path="messages" element={<PortalMessages />} />

@@ -15,16 +15,22 @@ import {
   ChartBarIcon,
   CubeIcon,
   MapIcon,
+  ViewColumnsIcon,
+  DocumentDuplicateIcon,
+  ClipboardDocumentCheckIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
   { to: '/dashboard',  icon: HomeIcon,                  label: 'Dashboard' },
   { to: '/clients',    icon: UsersIcon,                 label: 'Clients & Leads' },
+  { to: '/pipeline',   icon: ViewColumnsIcon,           label: 'Sales Pipeline' },
   { to: '/tours',      icon: MapIcon,                   label: 'Site Tours' },
+  { to: '/proposals',  icon: DocumentDuplicateIcon,     label: 'Proposals' },
   { to: '/calendar',   icon: CalendarIcon,              label: 'Venue Calendar' },
   { to: '/bookings',   icon: CalendarDaysIcon,          label: 'Bookings' },
   { to: '/contracts',  icon: DocumentTextIcon,          label: 'Contracts' },
   { to: '/payments',   icon: BanknotesIcon,             label: 'Payments' },
+  { to: '/forms',      icon: ClipboardDocumentCheckIcon, label: 'Forms' },
   { to: '/messages',   icon: ChatBubbleLeftRightIcon,   label: 'Messages', badge: 'messages' },
   { to: '/tasks',      icon: ClipboardDocumentListIcon, label: 'Tasks', badge: 'tasks' },
   { to: '/vendors',    icon: BuildingStorefrontIcon,    label: 'Vendors' },

@@ -258,12 +258,158 @@ db.exec(`
   );
 `);
 
+// ── Add-on catalog: à-la-carte items staff can add to proposals ───────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS addons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    price REAL NOT NULL DEFAULT 0,
+    unit TEXT NOT NULL DEFAULT 'flat' CHECK(unit IN ('flat', 'per_guest', 'per_night')),
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// ── Proposals (BEO): itemized quote a couple can accept online ────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    package_name TEXT,
+    event_date DATE,
+    end_date DATE,
+    guest_count INTEGER,
+    subtotal REAL NOT NULL DEFAULT 0,
+    tax_rate REAL NOT NULL DEFAULT 5,
+    tax REAL NOT NULL DEFAULT 0,
+    total REAL NOT NULL DEFAULT 0,
+    deposit_pct REAL NOT NULL DEFAULT 25,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'sent', 'accepted', 'declined', 'expired')),
+    valid_until DATE,
+    notes TEXT,
+    public_token TEXT UNIQUE,
+    sent_at DATETIME,
+    accepted_at DATETIME,
+    accepted_name TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS proposal_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposal_id INTEGER NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    description TEXT,
+    quantity REAL NOT NULL DEFAULT 1,
+    unit_price REAL NOT NULL DEFAULT 0,
+    amount REAL NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL DEFAULT 'addon' CHECK(kind IN ('package', 'addon', 'custom', 'discount')),
+    order_index INTEGER DEFAULT 0
+  );
+`);
+
+// ── Custom forms / questionnaires ─────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS forms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS form_fields (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    field_type TEXT NOT NULL DEFAULT 'text' CHECK(field_type IN ('text', 'textarea', 'number', 'date', 'select', 'checkbox')),
+    options TEXT,
+    required INTEGER DEFAULT 0,
+    order_index INTEGER DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS form_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
+    submitted_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS form_responses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignment_id INTEGER NOT NULL REFERENCES form_assignments(id) ON DELETE CASCADE,
+    field_id INTEGER NOT NULL REFERENCES form_fields(id) ON DELETE CASCADE,
+    value TEXT
+  );
+`);
+
+// Pipeline stage for the visual sales board + Stripe payment columns on invoices
+for (const col of [
+  "ALTER TABLE couples ADD COLUMN pipeline_stage TEXT DEFAULT 'inquiry'",
+  'ALTER TABLE couples ADD COLUMN stage_order INTEGER DEFAULT 0',
+  'ALTER TABLE invoices ADD COLUMN stripe_session_id TEXT',
+]) { try { db.exec(col); } catch (_) {} }
+
 // Backfill sample referral sources for demo data
 try {
   db.prepare(`UPDATE couples SET referral_source = 'Friend Referral' WHERE id = 1 AND referral_source IS NULL`).run();
   db.prepare(`UPDATE couples SET referral_source = 'Wedding Wire' WHERE id = 2 AND referral_source IS NULL`).run();
   db.prepare(`UPDATE couples SET referral_source = 'Google Search' WHERE id = 3 AND referral_source IS NULL`).run();
   db.prepare(`UPDATE couples SET referral_source = 'Instagram' WHERE id = 4 AND referral_source IS NULL`).run();
+} catch (_) {}
+
+// Backfill pipeline stage from each couple's status (one-time, only when unset)
+try {
+  const stageFor = { booked: 'booked', completed: 'booked', cancelled: 'lost', inquiry: 'tour', lead: 'inquiry' };
+  for (const c of db.prepare('SELECT id, status, pipeline_stage FROM couples').all()) {
+    if (!c.pipeline_stage || c.pipeline_stage === 'inquiry') {
+      const stage = stageFor[c.status] || 'inquiry';
+      db.prepare('UPDATE couples SET pipeline_stage = ? WHERE id = ?').run(stage, c.id);
+    }
+  }
+} catch (_) {}
+
+// Seed the add-on catalog (real Rustic Retreat à-la-carte items)
+try {
+  const addonCount = db.prepare('SELECT COUNT(*) AS c FROM addons').get();
+  if (addonCount.c === 0) {
+    [
+      ['Extra Night', 'Add an additional night of exclusive property access before or after your package.', 750, 'per_night'],
+      ['Pet Cabin Stay', 'Bring your dog and have them stay in the cabin. One-time cleaning fee.', 50, 'flat'],
+      ['Fireworks Display', 'Venue-coordinated fireworks display (must be booked through Rustic Retreat).', 250, 'flat'],
+      ['Generator Rental', 'Diesel generator rental for caterers or extra power needs (off-grid property).', 200, 'flat'],
+      ['Extra Guest (over 60)', 'Per-guest fee for celebrations between 61 and 80 guests.', 25, 'per_guest'],
+      ['Rehearsal Dinner Setup', 'Tables, lighting, and firewood set up for a Friday rehearsal dinner.', 350, 'flat'],
+      ['Day-of Coordination', 'On-site Rustic Retreat coordinator for your ceremony day.', 600, 'flat'],
+      ['Late Checkout', 'Extend your final-day checkout to noon the following day.', 150, 'flat'],
+    ].forEach(([name, description, price, unit]) =>
+      db.prepare('INSERT INTO addons (name, description, price, unit) VALUES (?, ?, ?, ?)').run(name, description, price, unit));
+  }
+} catch (_) {}
+
+// Seed a default intake questionnaire
+try {
+  const formCount = db.prepare('SELECT COUNT(*) AS c FROM forms').get();
+  if (formCount.c === 0) {
+    const formId = db.prepare('INSERT INTO forms (title, description) VALUES (?, ?)').run(
+      'Event Details Questionnaire',
+      'Help us prepare for your weekend. Please complete this at least 30 days before your event.'
+    ).lastInsertRowid;
+    const insertField = db.prepare('INSERT INTO form_fields (form_id, label, field_type, options, required, order_index) VALUES (?, ?, ?, ?, ?, ?)');
+    [
+      ['Final guest count', 'number', null, 1, 1],
+      ['Number of overnight campers (tents)', 'number', null, 0, 2],
+      ['Number of RVs', 'number', null, 0, 3],
+      ['Ceremony location preference', 'select', JSON.stringify(['Forest Clearing', 'Poplar Grove', 'Meadow', 'Undecided']), 1, 4],
+      ['AGLC Special Event Licence status', 'select', JSON.stringify(['Not started', 'Application submitted', 'Approved']), 1, 5],
+      ['Caterer name & contact', 'text', null, 0, 6],
+      ['Will you need a generator rental?', 'checkbox', null, 0, 7],
+      ['Anything else we should know?', 'textarea', null, 0, 8],
+    ].forEach(([label, type, options, required, order]) => insertField.run(formId, label, type, options, required, order));
+  }
 } catch (_) {}
 
 // Replace generic packages with real Rustic Retreat packages
@@ -324,6 +470,13 @@ function seedDatabase() {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run('Amanda Tremblay', 'Cole Girard', 'amanda.cole@example.com', '(825) 555-4567',
     null, 'lead', 'Submitted website inquiry. Planning June 2027 wedding. About 55 guests. Asked about fireworks.', 0, 'Instagram');
+
+  // Seed pipeline stages for the sales board
+  const setStage = db.prepare('UPDATE couples SET pipeline_stage = ? WHERE id = ?');
+  setStage.run('booked', couple1.lastInsertRowid);    // Sarah & Jake — booked
+  setStage.run('booked', couple2.lastInsertRowid);    // Megan & Ryan — booked
+  setStage.run('proposal', couple3.lastInsertRowid);  // Kayla & Jordan — proposal sent
+  setStage.run('inquiry', couple4.lastInsertRowid);   // Amanda & Cole — new lead
 
   // Bookings (event_date = check-in / first day, end_date = checkout / last day)
   db.prepare(`
@@ -522,6 +675,31 @@ IN WITNESS WHEREOF, the Clients confirm they have read and agree to be legally b
       ['5-Day Experience', 'Wednesday/Thursday through Sunday/Monday. The full immersive experience — guests arrive gradually, activities unfold naturally, no one is rushed.', 7500, 80, '65 acres exclusive use, Ceremony forest spaces, Clear-Top Gazebo, Newlywed cabin, Camping for guests, Sound system & wireless mics, Décor collection, Multiple evenings of campfire gatherings, Lawn games & activities, Firewood & propane BBQ'],
     ].forEach(p => db.prepare(`INSERT INTO packages (name, description, price, max_guests, includes) VALUES (?, ?, ?, ?, ?)`).run(...p));
   }
+
+  // Sample proposal for Kayla & Jordan (inquiry — toured, deciding)
+  const propTotal = db.prepare(`
+    INSERT INTO proposals (couple_id, title, package_name, event_date, end_date, guest_count,
+      subtotal, tax_rate, tax, total, deposit_pct, status, valid_until, notes, public_token, sent_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?, ?, ?, datetime('now', '-3 days'))
+  `).run(couple3.lastInsertRowid, '3-Day Weekend Proposal — July 2027', '3-Day Weekend',
+    '2027-07-09', '2027-07-11', 64, 7000, 5, 350, 7350, 25, '2026-08-15',
+    'Includes the Poplar Grove ceremony spot you loved. Pricing held through Aug 15.',
+    'prop_kayla_jordan_demo');
+  const propId = propTotal.lastInsertRowid;
+  const insertPropItem = db.prepare(`INSERT INTO proposal_items (proposal_id, label, description, quantity, unit_price, amount, kind, order_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  insertPropItem.run(propId, '3-Day Weekend Package', 'Fri–Sun exclusive property access', 1, 6500, 6500, 'package', 0);
+  insertPropItem.run(propId, 'Extra Guest (over 60)', '4 guests over 60 @ $25', 4, 25, 100, 'addon', 1);
+  insertPropItem.run(propId, 'Pet Cabin Stay', 'Dog staying in the cabin', 1, 50, 50, 'addon', 2);
+  insertPropItem.run(propId, 'Rehearsal Dinner Setup', 'Friday evening rehearsal dinner', 1, 350, 350, 'addon', 3);
+
+  // Assign the intake questionnaire to the two booked couples
+  try {
+    const form = db.prepare('SELECT id FROM forms LIMIT 1').get();
+    if (form) {
+      db.prepare('INSERT INTO form_assignments (form_id, couple_id, status) VALUES (?, ?, ?)').run(form.id, couple1.lastInsertRowid, 'pending');
+      db.prepare('INSERT INTO form_assignments (form_id, couple_id, status, submitted_at) VALUES (?, ?, ?, datetime(\'now\', \'-10 days\'))').run(form.id, couple2.lastInsertRowid, 'completed');
+    }
+  } catch (_) {}
 
   console.log('Database seeded successfully!');
 }

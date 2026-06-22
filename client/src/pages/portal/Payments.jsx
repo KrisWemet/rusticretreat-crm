@@ -6,6 +6,7 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   ChatBubbleLeftRightIcon,
+  CreditCardIcon,
 } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid'
 import { format, parseISO, isPast, isToday, differenceInDays } from 'date-fns'
@@ -14,13 +15,29 @@ export default function Payments() {
   const { getCoupleAxios } = useAuth()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
+  const [cardEnabled, setCardEnabled] = useState(false)
+  const [paying, setPaying] = useState(null)
 
   useEffect(() => {
     getCoupleAxios().get('/api/portal/invoices')
       .then(r => setInvoices(r.data))
       .catch(() => {})
       .finally(() => setLoading(false))
+    getCoupleAxios().get('/api/payments/config')
+      .then(r => setCardEnabled(r.data.enabled))
+      .catch(() => {})
   }, [])
+
+  async function payByCard(inv) {
+    setPaying(inv.id)
+    try {
+      const { data } = await getCoupleAxios().post(`/api/payments/checkout/${inv.id}`)
+      if (data.url) window.location.href = data.url
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not start payment.')
+      setPaying(null)
+    }
+  }
 
   const paid   = invoices.filter(i => i.paid)
   const unpaid = invoices.filter(i => !i.paid)
@@ -126,6 +143,18 @@ export default function Payments() {
                           </span>
                         </div>
                       </div>
+                      {!inv.paid && cardEnabled && (
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            onClick={() => payByCard(inv)}
+                            disabled={paying === inv.id}
+                            className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+                          >
+                            <CreditCardIcon className="w-4 h-4" />
+                            {paying === inv.id ? 'Redirecting…' : 'Pay by card'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

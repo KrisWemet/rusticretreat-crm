@@ -104,6 +104,31 @@ router.put('/:id', authenticateToken, (req, res) => {
   }
 });
 
+// Update a couple's pipeline stage (used by the sales-board drag & drop)
+const PIPELINE_STAGES = ['inquiry', 'tour', 'proposal', 'booked', 'lost'];
+router.patch('/:id/stage', authenticateToken, (req, res) => {
+  const { pipeline_stage, stage_order } = req.body;
+  const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id);
+  if (!couple) return res.status(404).json({ error: 'Couple not found' });
+  if (pipeline_stage && !PIPELINE_STAGES.includes(pipeline_stage)) {
+    return res.status(400).json({ error: 'Invalid pipeline stage' });
+  }
+
+  // Keep the coarse status in sync so the rest of the app stays consistent.
+  const stageToStatus = { inquiry: 'lead', tour: 'inquiry', proposal: 'inquiry', booked: 'booked', lost: 'cancelled' };
+  const newStage = pipeline_stage || couple.pipeline_stage;
+  // Don't downgrade a completed couple back to booked.
+  const newStatus = couple.status === 'completed' ? 'completed' : (stageToStatus[newStage] || couple.status);
+
+  db.prepare('UPDATE couples SET pipeline_stage = ?, stage_order = ?, status = ? WHERE id = ?').run(
+    newStage,
+    stage_order != null ? stage_order : couple.stage_order,
+    newStatus,
+    req.params.id
+  );
+  res.json(db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id));
+});
+
 // Delete couple
 router.delete('/:id', authenticateToken, (req, res) => {
   const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id);
