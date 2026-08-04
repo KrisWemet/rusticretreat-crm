@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import axios from 'axios'
+import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   UsersIcon,
@@ -75,7 +75,7 @@ function statusColor(status) {
 }
 
 export default function Dashboard() {
-  const { user, getAdminHeaders } = useAuth()
+  const { user, getAdminAxios } = useAuth()
   const [stats, setStats] = useState({})
   const [recentClients, setRecentClients] = useState([])
   const [upcomingBookings, setUpcomingBookings] = useState([])
@@ -87,13 +87,13 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const headers = getAdminHeaders()
+        const api = getAdminAxios()
         const [couplesRes, bookingsRes, msgsRes, tasksRes, attentionRes] = await Promise.all([
-          axios.get('/api/couples', { headers }),
-          axios.get('/api/bookings', { headers }),
-          axios.get('/api/messages/all', { headers }),
-          axios.get('/api/tasks', { headers }),
-          axios.get('/api/analytics/attention', { headers }),
+          api.get('/api/couples'),
+          api.get('/api/bookings'),
+          api.get('/api/messages/all'),
+          api.get('/api/tasks'),
+          api.get('/api/analytics/attention'),
         ])
 
         const couples = couplesRes.data
@@ -128,7 +128,10 @@ export default function Dashboard() {
         setPendingTasks(dueTasks.slice(0, 5))
         setAttention(attentionRes.data || { expiring_proposals: [], stalled_proposals: [], overdue_invoices: [] })
       } catch (e) {
+        // Surface this. A bare console.error here hid a broken dashboard for
+        // weeks: every stat silently fell back to a dash and looked plausible.
         console.error(e)
+        toast.error('Could not load the dashboard. Try refreshing.')
       } finally {
         setLoading(false)
       }

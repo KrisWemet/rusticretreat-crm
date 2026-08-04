@@ -38,7 +38,7 @@ const navItems = [
   { to: '/packages',   icon: CubeIcon,                  label: 'Packages' },
 ]
 
-export default function Sidebar({ unreadMessages = 0, pendingTasks = 0 }) {
+export default function Sidebar({ unreadMessages = 0, pendingTasks = 0, open = false, onClose = () => {} }) {
   const { user, logoutAdmin } = useAuth()
   const location = useLocation()
 
@@ -49,7 +49,7 @@ export default function Sidebar({ unreadMessages = 0, pendingTasks = 0 }) {
   }
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 w-60 bg-slate-900 flex flex-col">
+    <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-slate-900 flex flex-col transition-transform duration-200 lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* Logo */}
       <div className="px-5 py-5 border-b border-slate-800">
         <div className="flex items-center gap-3">
@@ -73,6 +73,7 @@ export default function Sidebar({ unreadMessages = 0, pendingTasks = 0 }) {
             <NavLink
               key={to}
               to={to}
+              onClick={onClose}
               className={`nav-item ${isActive ? 'nav-item-active' : 'nav-item-inactive'}`}
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
