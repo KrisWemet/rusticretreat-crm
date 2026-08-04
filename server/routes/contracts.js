@@ -19,7 +19,11 @@ function generateToken() {
 
 function generatePassword(len = 10) {
   const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  // crypto.randomBytes, not Math.random — this is a real portal credential.
+  // V8's Math.random is a single predictable stream per process, so passwords
+  // issued to successive couples would be recoverable from one another.
+  const buf = crypto.randomBytes(len);
+  return Array.from(buf, b => chars[b % chars.length]).join('');
 }
 
 // ── Admin: list all contracts ────────────────────────────────────────────────

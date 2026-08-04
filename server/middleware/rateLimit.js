@@ -4,9 +4,21 @@
 
 const buckets = new Map();
 
-function rateLimit({ windowMs = 60000, max = 10 } = {}) {
+// Each rateLimit() call gets its own namespace. Keying on req.baseUrl instead
+// would make two limiters mounted on the same router share one bucket while
+// comparing it against different maxes — e.g. the 60/min availability check and
+// the 5/hour inquiry POST both key on '/api/inquire', so page loads would burn
+// the submission budget and 429 the first real inquiry.
+let limiterCount = 0;
+
+function rateLimit({ windowMs = 60000, max = 10, name } = {}) {
+  const namespace = name || `rl${++limiterCount}`;
   return (req, res, next) => {
-    const key = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown') + ':' + req.baseUrl;
+    // req.ip respects the `trust proxy` setting, so it resolves to the real
+    // client rather than whatever a caller puts in X-Forwarded-For. Keying on
+    // the raw header makes the limit bypassable by rotating a spoofed value.
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const key = ip + ':' + namespace;
     const now = Date.now();
     let bucket = buckets.get(key);
 

@@ -66,6 +66,20 @@ export default function ClientDetail() {
     }
   }
 
+  // Via axios, not a bare <a href> — a navigation sends cookies but not the
+  // Authorization header, so linking directly would 401 in a blank tab.
+  const printProposal = async (proposalId) => {
+    try {
+      const r = await getAdminAxios().get(`/api/proposals/${proposalId}/print`, { responseType: 'text' })
+      const w = window.open('', '_blank')
+      if (!w) { toast.error('Allow pop-ups to download the PDF'); return }
+      w.document.write(r.data)
+      w.document.close()
+    } catch {
+      toast.error('Failed to open proposal')
+    }
+  }
+
   const generateContract = async (proposalId) => {
     try {
       const api = getAdminAxios()
@@ -237,15 +251,13 @@ export default function ClientDetail() {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span className="text-sm font-semibold text-slate-800">${Number(p.total).toLocaleString()}</span>
                   <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${PROPOSAL_STATUS[p.status]}`}>{p.status}</span>
-                  <a
-                    href={`/api/proposals/${p.id}/print`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    onClick={() => printProposal(p.id)}
                     className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"
                     title="Print / PDF"
                   >
                     <PrinterIcon className="w-4 h-4" />
-                  </a>
+                  </button>
                   {p.status === 'accepted' && (
                     <button
                       onClick={() => generateContract(p.id)}

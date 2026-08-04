@@ -1,8 +1,13 @@
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const fs = require('fs');
 
-const DB_PATH = path.join(__dirname, 'rusticretreat.db');
+// Hosted containers replace the app directory on every deploy, so in production
+// this must point at a mounted volume (e.g. DB_PATH=/data/rusticretreat.db) or
+// every record is destroyed on each push. The fallback keeps local dev identical.
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'rusticretreat.db');
+fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new Database(DB_PATH);
 

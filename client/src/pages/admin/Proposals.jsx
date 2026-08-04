@@ -158,6 +158,21 @@ export default function Proposals() {
     } catch { toast.error('Failed to send') }
   }
 
+  // Fetch the HTML through axios rather than linking straight to the endpoint:
+  // a plain <a href> is a browser navigation, which carries cookies but never
+  // the Authorization header, so the print route would 401 in a blank tab.
+  async function printProposal(p) {
+    try {
+      const r = await api.get(`/api/proposals/${p.id}/print`, { responseType: 'text' })
+      const w = window.open('', '_blank')
+      if (!w) { toast.error('Allow pop-ups to download the PDF'); return }
+      w.document.write(r.data)
+      w.document.close()
+    } catch {
+      toast.error('Failed to open proposal')
+    }
+  }
+
   function copyLink(p) {
     if (!p.public_token) return toast.error('Send the proposal first to generate a link')
     const url = `${window.location.origin}/proposal/${p.public_token}`
@@ -212,7 +227,7 @@ export default function Proposals() {
                         <button onClick={() => send(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg" title="Send to couple"><PaperAirplaneIcon className="w-4 h-4" /></button>
                       )}
                       <button onClick={() => copyLink(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Copy link"><LinkIcon className="w-4 h-4" /></button>
-                      <a href={`/api/proposals/${p.id}/print`} target="_blank" rel="noreferrer" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Print / PDF"><PrinterIcon className="w-4 h-4" /></a>
+                      <button onClick={() => printProposal(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Print / PDF"><PrinterIcon className="w-4 h-4" /></button>
                       <button onClick={() => del(p)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><TrashIcon className="w-4 h-4" /></button>
                     </div>
                   </td>

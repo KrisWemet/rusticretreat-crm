@@ -56,18 +56,22 @@ router.post('/checkout/:invoiceId', authenticateCouple, async (req, res) => {
 function webhookHandler(req, res) {
   if (!stripe) return res.status(503).end();
 
-  let event = req.body;
-  if (STRIPE_WEBHOOK_SECRET) {
-    const sig = req.headers['stripe-signature'];
-    try {
-      event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
-    } catch (err) {
-      console.error('[stripe webhook signature]', err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-  } else {
-    // No signing secret configured — parse the raw body best-effort (dev only).
-    try { event = JSON.parse(req.body.toString()); } catch (_) {}
+  // This endpoint is necessarily public (Stripe cannot present a cookie or a
+  // JWT), and it marks invoices paid — so an unsigned body is never trusted.
+  // Without a signing secret anyone could POST a forged checkout.session.completed
+  // and zero out a real invoice, so fail closed instead of best-effort parsing.
+  if (!STRIPE_WEBHOOK_SECRET) {
+    console.error('[stripe webhook] rejected: STRIPE_WEBHOOK_SECRET is not set');
+    return res.status(503).end();
+  }
+
+  let event;
+  const sig = req.headers['stripe-signature'];
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('[stripe webhook signature]', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   if (event.type === 'checkout.session.completed') {

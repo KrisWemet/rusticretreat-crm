@@ -4,9 +4,16 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { JWT_SECRET, authenticateToken } = require('../middleware/auth');
+const rateLimit = require('../middleware/rateLimit');
+
+// Both login endpoints were unlimited while the public inquiry and contract
+// routes were limited — an omission, not a policy. bcrypt throttles throughput
+// but nothing capped attempts, so a known email could be guessed indefinitely.
+const loginLimiter = rateLimit({ windowMs: 900000, max: 10, name: 'staff-login' });
+const coupleLoginLimiter = rateLimit({ windowMs: 900000, max: 10, name: 'couple-login' });
 
 // Staff/Admin login
-router.post('/login', (req, res) => {
+router.post('/login', loginLimiter, (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -42,7 +49,7 @@ router.post('/login', (req, res) => {
 });
 
 // Couple portal login
-router.post('/couple-login', (req, res) => {
+router.post('/couple-login', coupleLoginLimiter, (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {

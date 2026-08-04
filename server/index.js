@@ -5,6 +5,62 @@ require('dotenv').config();
 
 const app = express();
 
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+// Trust exactly one proxy hop (Railway/Vercel/Fly all sit in front of us) so
+// req.ip is the proxy-validated client address rather than a client-supplied
+// X-Forwarded-For value. The rate limiters key on req.ip.
+app.set('trust proxy', 1);
+
+// ── Preview gate ─────────────────────────────────────────────────────────────
+// While the CRM is deployed for private testing, CRM_GATE_KEY puts a shared
+// secret in front of the whole app: without the cookie every path 404s, so the
+// host looks empty to a scanner and nothing — not the login page, not the JS
+// bundle, not any /api route — is reachable.
+//
+// This FAILS CLOSED. An unset key in production is a hard boot error rather
+// than an open door, because the ordinary ways a variable goes missing (a new
+// environment, a preview deploy, a renamed service, a typo) would otherwise
+// silently publish an app whose seeded admin password is in public git history.
+if (IS_PROD && !process.env.CRM_GATE_KEY && process.env.CRM_PUBLIC === '1') {
+  console.warn('[gate] CRM_PUBLIC=1 — preview gate disabled, app is publicly reachable');
+} else if (IS_PROD && !process.env.CRM_GATE_KEY) {
+  throw new Error(
+    'CRM_GATE_KEY is required in production. Set it to a random secret ' +
+    '(openssl rand -hex 24), or set CRM_PUBLIC=1 to intentionally go public.'
+  );
+}
+
+const GATE_KEY = process.env.CRM_GATE_KEY;
+if (GATE_KEY && GATE_KEY.length < 16) {
+  throw new Error('CRM_GATE_KEY must be at least 16 characters');
+}
+if (GATE_KEY && /[$][{(]/.test(GATE_KEY)) {
+  throw new Error('CRM_GATE_KEY looks like an un-evaluated shell expression — paste the generated value, not the command');
+}
+
+app.use((req, res, next) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  if (!GATE_KEY) return next();
+
+  // Exempt the platform healthcheck (probers send no cookies; a 404 here would
+  // fail the deploy) and the Stripe webhook (Stripe cannot present a cookie —
+  // it authenticates by signature, which payments.js now requires).
+  if (req.path === '/api/health' || req.path === '/api/payments/webhook') return next();
+
+  const cookies = req.headers.cookie || '';
+  if (cookies.split(';').some(c => c.trim() === 'crm_gate=' + GATE_KEY)) return next();
+
+  if (req.query.gate === GATE_KEY) {
+    res.setHeader('Set-Cookie',
+      `crm_gate=${GATE_KEY}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`);
+    // Normalise before redirecting: req.path preserves a leading '//', and a
+    // protocol-relative Location would send the browser to another site.
+    return res.redirect('/' + req.path.replace(/^\/+/, ''));
+  }
+  return res.status(404).send('Not found');
+});
+
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
@@ -54,19 +110,29 @@ app.use('/api/payments', require('./routes/payments'));
 require('./services/paymentReminder').startReminderScheduler();
 require('./services/leadNurture').startLeadNurtureScheduler();
 
+// Health check. Must be registered BEFORE the production SPA catch-all below —
+// Express matches in registration order, so app.get('*') would otherwise shadow
+// it and return index.html with a 200, making the platform healthcheck pass even
+// when every API router is broken.
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Unmatched /api paths must 404 as JSON. Without this the SPA catch-all answers
+// them with the HTML shell and a 200, so a typo'd endpoint surfaces as a JSON
+// parse error in the client instead of an honest 404.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // Serve built React frontend in production
-if (process.env.NODE_ENV === 'production') {
+if (IS_PROD) {
   const clientBuild = path.join(__dirname, '../client/dist');
   app.use(express.static(clientBuild));
   app.get('*', (req, res) => {
     res.sendFile(path.join(clientBuild, 'index.html'));
   });
 }
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 // Error handler
 app.use((err, req, res, next) => {
