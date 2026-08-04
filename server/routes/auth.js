@@ -26,6 +26,12 @@ router.post('/login', loginLimiter, (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
+  // A null hash means the account was disabled (see the credential bootstrap in
+  // db.js). bcrypt.compareSync would throw on null rather than return false.
+  if (!user.password_hash) {
+    return res.status(401).json({ error: 'This account has been disabled. Contact an administrator.' });
+  }
+
   const validPassword = bcrypt.compareSync(password, user.password_hash);
   if (!validPassword) {
     return res.status(401).json({ error: 'Invalid credentials' });

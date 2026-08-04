@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 // Hosted containers replace the app directory on every deploy, so in production
 // this must point at a mounted volume (e.g. DB_PATH=/data/rusticretreat.db) or
@@ -710,5 +711,45 @@ IN WITNESS WHEREOF, the Clients confirm they have read and agree to be legally b
 }
 
 seedDatabase();
+
+// ── Credential bootstrap ─────────────────────────────────────────────────────
+// The seeded staff logins (admin123 / staff123) are published in this repo's
+// history, and there is no in-app password-change endpoint for staff — only
+// couples can rotate their own. So rotation has to be possible from the
+// environment, or a hosted deployment is stuck with a known admin password.
+//
+// Set ADMIN_BOOTSTRAP_PASSWORD to reset the admin account on the next boot.
+// It applies every boot while set, so unset it once you are in.
+function applyCredentialBootstrap() {
+  const pw = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+  if (!pw) return;
+  if (pw.length < 12) {
+    throw new Error('ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters');
+  }
+  const email = process.env.ADMIN_EMAIL_LOGIN || 'admin@rusticretreat.com';
+  const result = db.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
+    .run(bcrypt.hashSync(pw, 10), email);
+  if (result.changes > 0) {
+    console.log(`[bootstrap] Reset password for ${email}. Unset ADMIN_BOOTSTRAP_PASSWORD now.`);
+  } else {
+    console.warn(`[bootstrap] No user matched ${email} — password NOT changed.`);
+  }
+
+  // The other seeded staff account and the seeded couple portal logins share
+  // published passwords too. users.password_hash is NOT NULL, so that account is
+  // disabled by overwriting it with a hash of random bytes nobody holds;
+  // couples.password_hash is nullable and auth.js already rejects a null there.
+  const unusable = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
+  const staff = db.prepare(
+    `UPDATE users SET password_hash = ? WHERE email = 'sarah@rusticretreat.com' AND email != ?`
+  ).run(unusable, email);
+  if (staff.changes > 0) console.log('[bootstrap] Disabled seeded staff login sarah@rusticretreat.com.');
+
+  const couples = db.prepare('UPDATE couples SET password_hash = NULL WHERE password_hash IS NOT NULL').run();
+  if (couples.changes > 0) {
+    console.log(`[bootstrap] Disabled ${couples.changes} seeded portal login(s).`);
+  }
+}
+applyCredentialBootstrap();
 
 module.exports = db;
