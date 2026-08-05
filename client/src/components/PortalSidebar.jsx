@@ -30,12 +30,12 @@ const navItems = [
   { to: '/portal/settings', icon: Cog6ToothIcon, label: 'Settings' },
 ]
 
-export default function PortalSidebar() {
+export default function PortalSidebar({ open = false, onClose = () => {} }) {
   const { couple, logoutCouple } = useAuth()
   const location = useLocation()
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 w-60 bg-white border-r border-rose-100 flex flex-col">
+    <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-white border-r border-rose-100 flex flex-col transition-transform duration-200 lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* Logo */}
       <div className="px-5 py-5 border-b border-rose-100">
         <div className="flex items-center gap-3">
@@ -70,6 +70,7 @@ export default function PortalSidebar() {
             <NavLink
               key={to}
               to={to}
+              onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
                 isActive
                   ? 'bg-rose-600 text-white'
