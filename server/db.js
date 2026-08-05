@@ -38,6 +38,10 @@ db.exec(`
     venue_package TEXT,
     status TEXT NOT NULL DEFAULT 'lead' CHECK(status IN ('lead', 'inquiry', 'booked', 'completed', 'cancelled')),
     notes TEXT,
+    -- The couple's WHOLE wedding budget, not what they pay this venue. The
+    -- portal shows their budget_items spend against it, and those items cover
+    -- flowers, catering, photography and so on — so setting this to the venue
+    -- package price makes every couple read as massively over budget.
     budget_total REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -452,7 +456,7 @@ function seedDatabase() {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run('Sarah Larsson', 'Jake Novak', 'sarah.jake@example.com', '(780) 555-1234', coupleHash,
     '2026-09-19', '3-Day Weekend', 'booked',
-    'Forest ceremony preferred. Dog (Maple) attending — $50 pet fee paid. AGLC licence in progress. Vegetarian options needed for ~10 guests.', 6500, 'Friend Referral');
+    'Forest ceremony preferred. Dog (Maple) attending — $50 pet fee paid. AGLC licence in progress. Vegetarian options needed for ~10 guests.', 24000, 'Friend Referral');
 
   // Couple 2: Megan & Ryan — Booked, 5-Day Experience, August 2026
   const couple2 = db.prepare(`
@@ -460,7 +464,7 @@ function seedDatabase() {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run('Megan Sinclair', "Ryan O'Brien", 'megan.ryan@example.com', '(780) 555-2345', coupleHash,
     '2026-08-07', '5-Day Experience', 'booked',
-    "Extended family gathering vibe. 12 tent campers, 6 RVs confirmed. Caterer: Okonkwo Catering (Edmonton). Generator rental needed. AGLC licence obtained.", 7500, 'Wedding Wire');
+    "Extended family gathering vibe. 12 tent campers, 6 RVs confirmed. Caterer: Okonkwo Catering (Edmonton). Generator rental needed. AGLC licence obtained.", 28000, 'Wedding Wire');
 
   // Couple 3: Kayla & Jordan — Inquiry, 3-Day Weekend Summer 2027
   const couple3 = db.prepare(`
@@ -468,7 +472,7 @@ function seedDatabase() {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run('Kayla Park', 'Jordan Walsh', 'kayla.jordan@example.com', '(780) 555-3456', coupleHash,
     '2027-07-09', '3-Day Weekend', 'inquiry',
-    'Toured property June 10 — loved the Poplar Grove area. Comparing with one other venue. Following up mid-July.', 6500, 'Google Search');
+    'Toured property June 10 — loved the Poplar Grove area. Comparing with one other venue. Following up mid-July.', 22000, 'Google Search');
 
   // Couple 4: Amanda & Cole — Lead, no portal account yet
   const couple4 = db.prepare(`
