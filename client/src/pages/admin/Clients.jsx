@@ -18,7 +18,7 @@ const statusStyle = {
 }
 
 const emptyForm = {
-  partner1_name: '', partner2_name: '', email: '', phone: '',
+  partner1_name: '', partner2_name: '', email: '', partner2_email: '', phone: '',
   wedding_date: '', venue_package: '', status: 'lead', notes: '', budget_total: ''
 }
 
@@ -175,12 +175,26 @@ export default function Clients() {
             <Input label="Partner 2 Name" value={form.partner2_name} onChange={f('partner2_name')} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Email" type="email" value={form.email} onChange={f('email')} required />
+            <Input label="Partner 1 Email" type="email" value={form.email} onChange={f('email')} required />
+            <Input
+              label="Partner 2 Email"
+              type="email"
+              value={form.partner2_email}
+              onChange={f('partner2_email')}
+              placeholder="Optional — leave blank if they share an inbox"
+            />
+          </div>
+          <p className="-mt-2 text-xs text-slate-400">
+            Each partner signs the contract separately and gets their own link. If partner 2 has no
+            address of their own, both links go to partner 1 to pass on. Partner 1's email is also
+            the couple's portal login.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
             <Input label="Phone" value={form.phone} onChange={f('phone')} />
+            <Input label="Venue Package" value={form.venue_package} onChange={f('venue_package')} placeholder="e.g. Grand Estate" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Wedding Date" type="date" value={form.wedding_date} onChange={f('wedding_date')} />
-            <Input label="Venue Package" value={form.venue_package} onChange={f('venue_package')} placeholder="e.g. Grand Estate" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Select label="Status" value={form.status} onChange={f('status')}>

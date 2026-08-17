@@ -32,14 +32,20 @@ async function send({ to, subject, html, text }) {
 }
 
 // ── Contract sent to couple ──────────────────────────────────────────────────
-async function sendContractLink({ to, coupleNames, contractTitle, signingUrl }) {
+async function sendContractLink({ to, coupleNames, contractTitle, signingUrl, signerName }) {
   const fullUrl = `${BASE_URL}/sign/${signingUrl.replace('/sign/', '')}`;
+  // Each partner signs separately and gets their own link, so address the person
+  // whose turn it is. A mail headed with both names reads as already handled by
+  // the other partner, and the second signature never arrives.
+  const greeting = signerName || coupleNames;
+  const note = 'This link is for you personally — your partner receives their own once you have signed.';
   await send({
     to,
     subject: `Your contract is ready to sign — ${contractTitle}`,
-    text: `Hi ${coupleNames},\n\nYour contract "${contractTitle}" from Rustic Retreat is ready for your review and digital signature.\n\nSign here: ${fullUrl}\n\nIf you have any questions, please reply to this email.\n\nWarm regards,\nRustic Retreat`,
-    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
+    text: `Hi ${greeting},\n\nYour contract "${contractTitle}" from Rustic Retreat is ready for your review and digital signature.\n\nSign here: ${fullUrl}\n\n${note}\n\nIf you have any questions, please reply to this email.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${greeting}</strong>,</p>
 <p>Your contract <strong>"${contractTitle}"</strong> from Rustic Retreat is ready for your review and digital signature.</p>
+<p style="color:#64748b;font-size:14px">${note}</p>
 <p style="margin:24px 0"><a href="${fullUrl}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Review & Sign Contract</a></p>
 <p>Or copy this link: <a href="${fullUrl}">${fullUrl}</a></p>
 <p>If you have any questions, just reply to this email.</p>

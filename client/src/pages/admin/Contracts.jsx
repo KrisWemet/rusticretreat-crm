@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
 import Input, { Select } from '../../components/ui/Input'
+import SignaturePad from '../../components/SignaturePad'
 import {
   PlusIcon,
   DocumentTextIcon,
@@ -110,6 +111,11 @@ export default function Contracts() {
   const [showView, setShowView] = useState(false)
   const [viewContract, setViewContract] = useState(null)
   const [signingLink, setSigningLink] = useState(null)
+  const [venueSignContract, setVenueSignContract] = useState(null)
+  const [venueSig, setVenueSig] = useState(null)
+  const [venueAgreed, setVenueAgreed] = useState(false)
+  const [venueSigning, setVenueSigning] = useState(false)
+  const [signers, setSigners] = useState({})
   const [form, setForm] = useState(EMPTY_FORM)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
@@ -194,11 +200,50 @@ export default function Contracts() {
       const r = await getAdminAxios().post(`/api/contracts/${id}/send`)
       const url = `${window.location.origin}${r.data.signing_url}`
       setSigningLink(url)
-      toast.success('Signing link generated!')
+      toast.success(`Link re-sent to ${r.data.signer_name}`)
       fetchData()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send')
     }
+  }
+
+  // The venue signs first. That locks the terms and releases partner 1's link.
+  const openVenueSign = async (c) => {
+    setVenueSignContract(c)
+    setVenueSig(null)
+    setVenueAgreed(false)
+  }
+
+  const submitVenueSignature = async () => {
+    if (!venueSig) { toast.error('Please draw your signature first'); return }
+    if (!venueAgreed) { toast.error('Please confirm the terms'); return }
+    setVenueSigning(true)
+    try {
+      const r = await getAdminAxios().post(
+        `/api/contracts/${venueSignContract.id}/sign-venue`,
+        { signature_data: venueSig, agreed: true },
+      )
+      const next = r.data.next_signer
+      if (next) {
+        setSigningLink(`${window.location.origin}${next.signing_url}`)
+        toast.success(`Signed and locked. ${next.name} has been emailed their link.`)
+      } else {
+        toast.success('Signed and locked.')
+      }
+      setVenueSignContract(null)
+      fetchData()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to sign')
+    } finally {
+      setVenueSigning(false)
+    }
+  }
+
+  const loadSigners = async (id) => {
+    try {
+      const r = await getAdminAxios().get(`/api/contracts/${id}/signers`)
+      setSigners(s => ({ ...s, [id]: r.data }))
+    } catch { /* progress display is optional — never block the page on it */ }
   }
 
   const deleteContract = async (id) => {
@@ -213,7 +258,7 @@ export default function Contracts() {
     toast.success('Link copied to clipboard!')
   }
 
-  const openView = (c) => { setViewContract(c); setShowView(true) }
+  const openView = (c) => { setViewContract(c); setShowView(true); loadSigners(c.id) }
 
   // Open a printable version of the contract (browser "Save as PDF").
   const printContract = async (c) => {
@@ -345,16 +390,28 @@ export default function Contracts() {
                       <button onClick={() => printContract(c)} className="btn-ghost py-1 px-2 text-xs" title="Download / print PDF">
                         <ArrowDownTrayIcon className="w-3.5 h-3.5" />
                       </button>
-                      {c.status !== 'signed' && (
+                      {/* Before the venue signs there is nothing to send — the
+                          couple's links do not exist yet. Show the action that
+                          actually moves the contract forward. */}
+                      {c.status !== 'signed' && !c.locked_at && (
+                        <button
+                          onClick={() => openVenueSign(c)}
+                          className="btn-ghost py-1 px-2 text-xs text-rose-600 hover:bg-rose-50 font-semibold"
+                          title="Sign as the venue — this locks the terms and sends partner 1 their link"
+                        >
+                          Sign &amp; Lock
+                        </button>
+                      )}
+                      {c.status !== 'signed' && c.locked_at && (
                         <button
                           onClick={() => sendContract(c.id)}
                           className="btn-ghost py-1 px-2 text-xs text-blue-600 hover:bg-blue-50"
-                          title="Generate signing link"
+                          title="Re-send the current signer's link"
                         >
                           <PaperAirplaneIcon className="w-3.5 h-3.5" />
                         </button>
                       )}
-                      {c.status === 'draft' && (
+                      {c.status === 'draft' && !c.locked_at && (
                         <button onClick={() => deleteContract(c.id)} className="btn-ghost py-1 px-2 text-xs text-red-400 hover:bg-red-50">
                           <TrashIcon className="w-3.5 h-3.5" />
                         </button>
@@ -527,21 +584,131 @@ export default function Contracts() {
               <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{viewContract.content}</pre>
             </div>
 
+            {/* Where the contract actually is right now — the question staff
+                ask most often once something has been sent out. */}
+            {signers[viewContract.id]?.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-400 mb-3">Signing progress</p>
+                <ol className="space-y-2">
+                  {signers[viewContract.id].map(s => (
+                    <li key={s.sign_order} className="flex items-center gap-3 text-sm">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                        s.status === 'signed' ? 'bg-emerald-500 text-white'
+                        : s.status === 'sent' ? 'bg-blue-500 text-white'
+                        : 'bg-slate-200 text-slate-500'}`}>
+                        {s.status === 'signed' ? '✓' : s.sign_order}
+                      </span>
+                      <span className="font-medium text-slate-700">{s.name}</span>
+                      <span className="text-slate-400 text-xs">
+                        {s.role === 'venue' ? 'Venue' : s.role === 'partner1' ? 'Partner 1' : 'Partner 2'}
+                      </span>
+                      <span className="ml-auto text-xs text-slate-500">
+                        {s.status === 'signed'
+                          ? `Signed ${s.signed_at ? format(parseISO(s.signed_at.replace(' ', 'T') + 'Z'), 'MMM d, h:mma') : ''}`
+                          : s.status === 'sent' ? 'Waiting on them' : 'Not yet their turn'}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
               <button className="btn-secondary" onClick={() => setShowView(false)}>Close</button>
               <button className="btn-secondary" onClick={() => printContract(viewContract)}>
                 <ArrowDownTrayIcon className="w-4 h-4" />
                 Download PDF
               </button>
-              {viewContract.status !== 'signed' && (
+              {viewContract.status !== 'signed' && !viewContract.locked_at && (
+                <button
+                  className="btn-primary"
+                  onClick={() => { setShowView(false); openVenueSign(viewContract) }}
+                >
+                  Sign &amp; Lock as Venue
+                </button>
+              )}
+              {viewContract.status !== 'signed' && viewContract.locked_at && (
                 <button
                   className="btn-primary"
                   onClick={async () => { await sendContract(viewContract.id); setShowView(false) }}
                 >
                   <PaperAirplaneIcon className="w-4 h-4" />
-                  Send for Signature
+                  Re-send Current Link
                 </button>
               )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Venue signature ─────────────────────────────────────────────────
+          The venue signs before the couple sees the contract. Doing so freezes
+          the terms, so the warning here is the real point of the screen. */}
+      <Modal
+        isOpen={!!venueSignContract}
+        onClose={() => setVenueSignContract(null)}
+        title="Sign as the venue"
+        size="lg"
+      >
+        {venueSignContract && (
+          <div className="space-y-5">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <p className="text-sm text-amber-900 font-semibold mb-1">
+                This locks the contract permanently.
+              </p>
+              <p className="text-sm text-amber-800">
+                Once you sign, the wording and pricing can no longer be edited — the couple
+                signs exactly what you see now. Read it through first. If the terms need to
+                change afterwards you will have to delete this contract and issue a new one.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Contract</p>
+              <p className="font-semibold text-slate-900">{venueSignContract.title}</p>
+              <p className="text-sm text-slate-500">
+                {venueSignContract.partner1_name} &amp; {venueSignContract.partner2_name}
+              </p>
+            </div>
+
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <pre className="whitespace-pre-wrap text-xs text-slate-700 font-sans leading-relaxed">
+                {venueSignContract.content}
+              </pre>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Venue signature <span className="text-red-500">*</span>
+              </label>
+              <SignaturePad onChange={setVenueSig} />
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={venueAgreed}
+                onChange={e => setVenueAgreed(e.target.checked)}
+                className="mt-1 w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+              />
+              <span className="text-sm text-slate-600 leading-relaxed">
+                I am signing on behalf of Rustic Retreat Weddings &amp; Events, and I understand
+                this locks the contract and sends it to{' '}
+                <strong>{venueSignContract.partner1_name}</strong> to sign.
+              </span>
+            </label>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button className="btn-secondary" onClick={() => setVenueSignContract(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                disabled={venueSigning || !venueSig || !venueAgreed}
+                onClick={submitVenueSignature}
+              >
+                {venueSigning ? 'Signing…' : 'Sign & lock contract'}
+              </button>
             </div>
           </div>
         )}

@@ -27,7 +27,12 @@ export default function SignContract() {
 
   useEffect(() => {
     axios.get(`/api/contracts/sign/${token}`)
-      .then(r => setContract(r.data))
+      .then(r => {
+        setContract(r.data)
+        // Pre-fill with who we expect, so partners cannot sign in each
+        // other's slot by accident.
+        if (r.data.expected_signer_name) setSignerName(r.data.expected_signer_name)
+      })
       .catch(e => {
         setExpired(Boolean(e.response?.data?.expired))
         setError(e.response?.data?.error || 'Contract not found or link has expired.')
@@ -124,10 +129,39 @@ export default function SignContract() {
             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5">
               <CheckCircleIcon className="w-9 h-9 text-emerald-600" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Contract Signed!</h2>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+              {result.fully_signed === false ? 'Signature Recorded' : 'Contract Signed!'}
+            </h2>
             <p className="text-slate-500 mb-6">
-              Congratulations, <strong>{result.couple_name}</strong>! Your contract with Rustic Retreat has been signed and recorded.
+              {result.fully_signed === false
+                ? <>Thank you. {result.next_signer_name
+                    ? <>We've emailed <strong>{result.next_signer_name}</strong> their own link — the contract is complete once they sign.</>
+                    : 'Your signature has been recorded.'}</>
+                : <>Congratulations, <strong>{result.couple_name}</strong>! Your contract with Rustic Retreat has been signed and recorded.</>}
             </p>
+
+            {/* Signing progress, so each partner can see where things stand. */}
+            {result.signers?.length > 0 && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 text-left">
+                {result.signers.map(s => (
+                  <div key={s.role} className="flex items-center gap-2.5 py-1 text-sm">
+                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                      s.status === 'signed' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                      {s.status === 'signed' ? '✓' : ''}
+                    </span>
+                    <span className={s.status === 'signed' ? 'text-slate-700' : 'text-slate-400'}>
+                      {s.name}
+                      <span className="text-slate-400 text-xs ml-1.5">
+                        {s.role === 'venue' ? '(Rustic Retreat)' : ''}
+                      </span>
+                    </span>
+                    <span className="ml-auto text-xs text-slate-400">
+                      {s.status === 'signed' ? 'Signed' : 'Awaiting signature'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {result.is_new_account && (
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 text-left mb-6">
@@ -162,7 +196,7 @@ export default function SignContract() {
               </div>
             )}
 
-            {!result.is_new_account && (
+            {result.fully_signed !== false && !result.is_new_account && (
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 text-left">
                 <p className="text-sm text-slate-600">
                   Your portal credentials remain the same. Log in with your existing email and password.
@@ -170,24 +204,33 @@ export default function SignContract() {
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link
-                to="/portal/login"
-                className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
-              >
-                <HeartIcon className="w-5 h-5" />
-                Go to Wedding Portal
-              </Link>
-              <a
-                href={`/api/contracts/sign/${token}/print`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-6 py-3 rounded-xl transition-colors"
-              >
-                <DocumentTextIcon className="w-5 h-5" />
-                Download signed copy
-              </a>
-            </div>
+            {/* The portal and the executed copy only exist once every signature
+                is in — offering them mid-chain would hand over a half-signed
+                document and a login that has not been created yet. */}
+            {result.fully_signed === false ? (
+              <p className="text-sm text-slate-400">
+                You'll receive the completed contract by email once everyone has signed.
+              </p>
+            ) : (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <Link
+                  to="/portal/login"
+                  className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+                >
+                  <HeartIcon className="w-5 h-5" />
+                  Go to Wedding Portal
+                </Link>
+                <a
+                  href={`/api/contracts/sign/${token}/print`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-6 py-3 rounded-xl transition-colors"
+                >
+                  <DocumentTextIcon className="w-5 h-5" />
+                  Download signed copy
+                </a>
+              </div>
+            )}
           </div>
         </div>
       </div>

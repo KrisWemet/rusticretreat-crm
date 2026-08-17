@@ -36,6 +36,58 @@ function consentStatement(signerName, contractTitle) {
   );
 }
 
+// ── Signing chain ────────────────────────────────────────────────────────────
+// The venue signs first and that locks the terms; the couple then signs a
+// document that can no longer change under them. Order is fixed:
+//   1 venue → 2 partner 1 → 3 partner 2
+const VENUE_SIGNER_NAME = process.env.VENUE_SIGNER_NAME || 'Rustic Retreat Weddings & Events';
+
+function signersFor(contractId) {
+  return db.prepare(
+    'SELECT * FROM contract_signers WHERE contract_id = ? ORDER BY sign_order'
+  ).all(contractId);
+}
+
+// The next person owed a signature, or undefined when the contract is complete.
+function nextSigner(contractId) {
+  return db.prepare(`
+    SELECT * FROM contract_signers
+    WHERE contract_id = ? AND status != 'signed'
+    ORDER BY sign_order LIMIT 1
+  `).get(contractId);
+}
+
+// Issue a token for whoever is next and email them. Called after each signature
+// so only one live link exists at a time — a later signer's link simply does not
+// exist until it is their turn.
+function activateNextSigner(contract, couple) {
+  const next = nextSigner(contract.id);
+  if (!next) return null;
+
+  const token = generateToken();
+  db.prepare(`
+    UPDATE contract_signers
+    SET signing_token = ?, status = 'sent', sent_at = datetime('now')
+    WHERE id = ?
+  `).run(token, next.id);
+
+  // The venue signs from inside the CRM, where they are already authenticated,
+  // so there is nobody to email a link to.
+  if (next.role !== 'venue') {
+    // Falls back to partner 1's address when partner 2 has none of their own —
+    // the couple forwards it. Better than silently never sending the link.
+    const to = next.email || couple.email;
+    email.sendContractLink({
+      to,
+      coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
+      contractTitle: contract.title,
+      signingUrl: `/sign/${token}`,
+      signerName: next.name,
+    });
+  }
+  return { ...next, signing_token: token };
+}
+
 function generatePassword(len = 10) {
   const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
   // crypto.randomBytes, not Math.random — this is a real portal credential.
@@ -117,6 +169,15 @@ router.put('/:id', authenticateToken, (req, res) => {
     if (existing.status === 'signed') {
       return res.status(400).json({ error: 'Cannot edit a signed contract' });
     }
+    // The venue signing is the point of no return. If the terms could still move
+    // afterwards, the couple would be signing a document different from the one
+    // the venue committed to — which is the exact thing signing first prevents.
+    if (existing.locked_at) {
+      return res.status(400).json({
+        error: 'This contract was locked when the venue signed it and can no longer be edited. ' +
+               'Delete it and create a new one if the terms need to change.',
+      });
+    }
     db.prepare('UPDATE contracts SET title = ?, content = ? WHERE id = ?')
       .run(title ?? existing.title, content ?? existing.content, req.params.id);
     res.json(db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id));
@@ -141,33 +202,58 @@ function renderContractHtml(c) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const fmt = (d) => d ? new Date(d.replace(' ', 'T') + 'Z').toLocaleString('en-CA') : '';
 
-  // The signature image is user-supplied. Rendering it into an <img src> means
-  // only ever emitting a PNG/JPEG data URL — without this check a stored
-  // "data:text/html,<script>" would execute in the browser of whoever opens the
-  // executed contract, which on the admin route is staff.
-  const sigIsImage = typeof c.signature_data === 'string' &&
-    /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(c.signature_data);
+  const ROLE_LABEL = {
+    venue: 'For the Venue — Rustic Retreat Weddings & Events',
+    partner1: 'Client — Partner 1',
+    partner2: 'Client — Partner 2',
+  };
 
-  const auditRows = c.status === 'signed' ? [
-    ['Signed by', c.signer_name],
-    ['Date signed', fmt(c.signed_at)],
-    ['Email', c.signer_email],
-    ['First viewed', fmt(c.viewed_at)],
-    ['IP address', c.signer_ip],
-    ['Device', c.signer_user_agent],
-  ].filter(([, v]) => v) : [];
+  // Render one signature block per signer. Contracts executed before multi-party
+  // signing have no signer rows, so fall back to the contract's own columns and
+  // present them as the single signature they were.
+  const signers = (c.signers && c.signers.length) ? c.signers : (
+    c.status === 'signed' ? [{
+      role: 'partner1', name: c.signer_name, email: c.signer_email,
+      signature_data: c.signature_data, signed_at: c.signed_at, viewed_at: c.viewed_at,
+      signer_ip: c.signer_ip, signer_user_agent: c.signer_user_agent,
+      consent_text: c.consent_text, status: 'signed',
+    }] : []
+  );
 
-  const signedBlock = c.status === 'signed' ? `
-    <div class="signed">
-      <h2>Signature</h2>
-      ${sigIsImage
-        ? `<img class="sig" src="${esc(c.signature_data)}" alt="signature" />`
-        : (c.signature_data ? `<p class="sig-text">${esc(c.signature_data)}</p>` : '')}
-      <p class="signer">${esc(c.signer_name)}</p>
-      ${c.consent_text ? `<div class="consent"><strong>Consent recorded at signing:</strong><br>${esc(c.consent_text)}</div>` : ''}
+  const isImg = (s) => typeof s === 'string' &&
+    /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(s);
+
+  const renderSigner = (s) => {
+    if (s.status !== 'signed') {
+      return `<div class="pending-signer">
+        <strong>${esc(ROLE_LABEL[s.role] || s.role)}</strong><br>
+        ${esc(s.name)} — awaiting signature
+      </div>`;
+    }
+    const rows = [
+      ['Date signed', fmt(s.signed_at)],
+      ['Email', s.email],
+      ['First viewed', fmt(s.viewed_at)],
+      ['IP address', s.signer_ip],
+      ['Device', s.signer_user_agent],
+    ].filter(([, v]) => v);
+    return `<div class="sig-block">
+      <div class="role">${esc(ROLE_LABEL[s.role] || s.role)}</div>
+      ${isImg(s.signature_data)
+        ? `<img class="sig" src="${esc(s.signature_data)}" alt="signature" />`
+        : (s.signature_data ? `<p class="sig-text">${esc(s.signature_data)}</p>` : '')}
+      <p class="signer">${esc(s.name)}</p>
+      ${s.consent_text ? `<div class="consent"><strong>Consent recorded at signing:</strong><br>${esc(s.consent_text)}</div>` : ''}
       <table class="audit">
-        ${auditRows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}
+        ${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}
       </table>
+    </div>`;
+  };
+
+  const signedBlock = signers.length ? `
+    <div class="signed">
+      <h2>Signatures</h2>
+      ${signers.map(renderSigner).join('')}
     </div>` : `<div class="unsigned">Status: ${esc(c.status)} — not yet signed.</div>`;
 
   return `<!doctype html>
@@ -182,6 +268,10 @@ function renderContractHtml(c) {
   h2 { font-size:16px; font-family:system-ui,sans-serif }
   .content { white-space:pre-wrap; font-size:14px }
   .signed { margin-top:32px; border-top:2px solid #e2e8f0; padding-top:16px }
+  .sig-block { margin-bottom:28px; padding-bottom:20px; border-bottom:1px dashed #e2e8f0; page-break-inside:avoid }
+  .sig-block:last-child { border-bottom:0 }
+  .role { font-family:system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#e11d48; margin-bottom:8px }
+  .pending-signer { font-family:system-ui,sans-serif; font-size:13px; color:#b45309; background:#fffbeb; border-left:3px solid #f59e0b; padding:10px 14px; margin-bottom:16px }
   .sig { max-height:90px; display:block }
   .sig-text { font-size:24px; font-family:'Brush Script MT', cursive; display:inline-block; padding:4px 12px }
   .signer { border-top:1px solid #94a3b8; display:inline-block; padding-top:4px; margin:0 0 16px; min-width:260px }
@@ -209,10 +299,101 @@ router.get('/:id/print', authenticateToken, (req, res) => {
     WHERE c.id = ?
   `).get(req.params.id);
   if (!c) return res.status(404).send('Contract not found');
-  res.set('Content-Type', 'text/html').send(renderContractHtml(c));
+  res.set('Content-Type', 'text/html').send(renderContractHtml({ ...c, signers: signersFor(c.id) }));
 });
 
-// ── Admin: send contract (generate signing link) ─────────────────────────────
+// ── Admin: signer list for a contract ────────────────────────────────────────
+router.get('/:id/signers', authenticateToken, (req, res) => {
+  try {
+    const rows = signersFor(req.params.id).map(s => ({
+      ...s,
+      // The token is a bearer credential for signing. Staff need to be able to
+      // re-send or copy the current person's link, but there is no reason to
+      // expose tokens belonging to signers who are already done.
+      signing_token: s.status === 'signed' ? null : s.signing_token,
+      signature_data: undefined,
+    }));
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: venue signs, which starts the chain and locks the terms ───────────
+router.post('/:id/sign-venue', authenticateToken, (req, res) => {
+  const { signature_data, signer_name, agreed } = req.body;
+  if (!signature_data) return res.status(400).json({ error: 'Signature is required' });
+  if (agreed !== true) {
+    return res.status(400).json({ error: 'You must confirm the terms before signing' });
+  }
+
+  try {
+    const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
+    if (!contract) return res.status(404).json({ error: 'Not found' });
+    if (contract.locked_at) {
+      return res.status(400).json({ error: 'This contract has already been signed by the venue' });
+    }
+    const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
+    if (!couple) return res.status(404).json({ error: 'Couple not found' });
+
+    const venueName = signer_name || req.user?.name || VENUE_SIGNER_NAME;
+    const ip = req.ip || req.socket.remoteAddress || '';
+    const ua = String(req.headers['user-agent'] || '').slice(0, 500);
+
+    const start = db.transaction(() => {
+      // Rebuild the chain from scratch. A contract can be drafted, sent, and
+      // revised before anyone signs, and stale rows from an earlier attempt
+      // would otherwise leave a dead link in the sequence.
+      db.prepare('DELETE FROM contract_signers WHERE contract_id = ?').run(contract.id);
+
+      const add = db.prepare(`
+        INSERT INTO contract_signers (contract_id, sign_order, role, name, email, status)
+        VALUES (?, ?, ?, ?, ?, 'pending')
+      `);
+      add.run(contract.id, 1, 'venue', venueName, process.env.ADMIN_EMAIL || null);
+      add.run(contract.id, 2, 'partner1', couple.partner1_name, couple.email);
+      add.run(contract.id, 3, 'partner2', couple.partner2_name, couple.partner2_email || null);
+
+      // Record the venue's signature against row 1.
+      db.prepare(`
+        UPDATE contract_signers
+        SET status = 'signed', signed_at = datetime('now'), signature_data = ?,
+            signer_ip = ?, signer_user_agent = ?, consent_text = ?
+        WHERE contract_id = ? AND sign_order = 1
+      `).run(signature_data, ip, ua,
+             consentStatement(venueName, contract.title), contract.id);
+
+      // locked_at is what the edit endpoint checks. Once the venue has committed
+      // to these terms the couple must be signing the same document we did.
+      db.prepare(`
+        UPDATE contracts
+        SET locked_at = datetime('now'), status = 'sent', sent_at = datetime('now'),
+            signing_expires_at = datetime('now', ?)
+        WHERE id = ?
+      `).run(`+${SIGNING_LINK_DAYS} days`, contract.id);
+    });
+    start();
+
+    const fresh = db.prepare('SELECT * FROM contracts WHERE id = ?').get(contract.id);
+    const next = activateNextSigner(fresh, couple);
+
+    res.json({
+      success: true,
+      locked: true,
+      next_signer: next
+        ? { name: next.name, role: next.role, email: next.email || couple.email,
+            signing_url: `/sign/${next.signing_token}` }
+        : null,
+      signers: signersFor(contract.id).map(s => ({
+        sign_order: s.sign_order, role: s.role, name: s.name, status: s.status,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: re-send the current signer's link ─────────────────────────────────
 router.post('/:id/send', authenticateToken, (req, res) => {
   try {
     const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
@@ -220,25 +401,23 @@ router.post('/:id/send', authenticateToken, (req, res) => {
     if (contract.status === 'signed') {
       return res.status(400).json({ error: 'Contract already signed' });
     }
-    const token = generateToken();
-    // Re-sending reissues the token, so an earlier link stops working — the
-    // couple signs the copy we last sent them, not one from three revisions ago.
-    db.prepare(`
-      UPDATE contracts SET signing_token = ?, status = 'sent', sent_at = datetime('now'),
-             signing_expires_at = datetime('now', ?), viewed_at = NULL
-      WHERE id = ?
-    `).run(token, `+${SIGNING_LINK_DAYS} days`, req.params.id);
-
-    // Email signing link to couple
+    if (!contract.locked_at) {
+      return res.status(400).json({
+        error: 'Sign the contract as the venue first — that locks the terms before the couple signs it.',
+      });
+    }
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
-    email.sendContractLink({
-      to: couple.email,
-      coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
-      contractTitle: contract.title,
-      signingUrl: `/sign/${token}`,
-    });
+    // Reissues the current signer's token, so any earlier link stops working.
+    const next = activateNextSigner(contract, couple);
+    if (!next) return res.status(400).json({ error: 'Everyone has already signed' });
 
-    res.json({ token, signing_url: `/sign/${token}` });
+    res.json({
+      token: next.signing_token,
+      signing_url: `/sign/${next.signing_token}`,
+      signer_name: next.name,
+      signer_role: next.role,
+      sent_to: next.email || couple.email,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -247,24 +426,36 @@ router.post('/:id/send', authenticateToken, (req, res) => {
 // ── Public: get contract for signing (no auth) ───────────────────────────────
 router.get('/sign/:token', signLimiter, (req, res) => {
   try {
+    // Resolve through the signers table first; fall back to the contract's own
+    // token so links emailed before multi-party signing existed still open.
+    const signer = db.prepare(
+      'SELECT * FROM contract_signers WHERE signing_token = ?'
+    ).get(req.params.token);
+
     const contract = db.prepare(`
       SELECT c.id, c.title, c.content, c.status, c.signer_name, c.signed_at,
-             c.signing_expires_at, c.viewed_at,
+             c.signing_expires_at, c.viewed_at, c.locked_at,
              CASE WHEN c.signing_expires_at IS NOT NULL
                        AND datetime('now') > c.signing_expires_at
                   THEN 1 ELSE 0 END AS is_expired,
              co.partner1_name, co.partner2_name, co.email AS couple_email
       FROM contracts c JOIN couples co ON co.id = c.couple_id
-      WHERE c.signing_token = ?
-    `).get(req.params.token);
+      WHERE c.id = ? OR c.signing_token = ?
+    `).get(signer ? signer.contract_id : null, req.params.token);
 
     if (!contract) return res.status(404).json({ error: 'Invalid or expired signing link' });
+
+    const signers = signersFor(contract.id);
+    const progress = signers.map(s => ({
+      role: s.role, name: s.name, status: s.status, signed_at: s.signed_at,
+    }));
 
     // A signed contract stays retrievable through its link on purpose: it is how
     // the couple gets back to their own executed copy. Expiry gates signing, not
     // access to something they already signed.
-    if (contract.status === 'signed') {
-      return res.json({ ...contract, already_signed: true });
+    if (contract.status === 'signed' || (signer && signer.status === 'signed')) {
+      return res.json({ ...contract, already_signed: true, signers: progress,
+                        signer_name: signer ? signer.name : contract.signer_name });
     }
 
     if (contract.is_expired) {
@@ -274,16 +465,39 @@ router.get('/sign/:token', signLimiter, (req, res) => {
       });
     }
 
-    // First open only — this timestamps when the couple was actually presented
+    // Guard the order. A token is only issued when it is that person's turn, so
+    // this should not normally trigger — but if partner 2 somehow opens their
+    // link first, they must not be able to sign ahead of partner 1.
+    if (signer) {
+      const due = nextSigner(contract.id);
+      if (!due || due.id !== signer.id) {
+        return res.status(409).json({
+          error: `Waiting on ${due ? due.name : 'another signer'} to sign first. ` +
+                 'You will get an email the moment it is your turn.',
+          out_of_turn: true,
+          signers: progress,
+        });
+      }
+    }
+
+    // First open only — this timestamps when the signer was actually presented
     // with the terms, which is the fact worth keeping, not the last time they
     // refreshed the tab.
-    if (!contract.viewed_at) {
+    if (signer && !signer.viewed_at) {
+      db.prepare("UPDATE contract_signers SET viewed_at = datetime('now') WHERE id = ? AND viewed_at IS NULL")
+        .run(signer.id);
+    } else if (!signer && !contract.viewed_at) {
       db.prepare("UPDATE contracts SET viewed_at = datetime('now') WHERE id = ? AND viewed_at IS NULL")
         .run(contract.id);
     }
 
     res.json({
       ...contract,
+      signers: progress,
+      signer_role: signer ? signer.role : null,
+      // Pre-fill the name field with who we believe is signing, so a couple
+      // cannot accidentally sign in each other's slot.
+      expected_signer_name: signer ? signer.name : null,
       consent_statement: consentStatement('[your name]', contract.title),
     });
   } catch (err) {
@@ -306,21 +520,38 @@ router.post('/sign/:token', signLimiter, (req, res) => {
   }
 
   try {
+    const signer = db.prepare(
+      'SELECT * FROM contract_signers WHERE signing_token = ?'
+    ).get(req.params.token);
+
     const contract = db.prepare(`
       SELECT c.*, co.partner1_name, co.partner2_name, co.email, co.password_hash
       FROM contracts c JOIN couples co ON co.id = c.couple_id
-      WHERE c.signing_token = ?
-    `).get(req.params.token);
+      WHERE c.id = ? OR c.signing_token = ?
+    `).get(signer ? signer.contract_id : null, req.params.token);
 
     if (!contract) return res.status(404).json({ error: 'Invalid signing link' });
     if (contract.status === 'signed') {
       return res.status(400).json({ error: 'Contract already signed' });
+    }
+    if (signer && signer.status === 'signed') {
+      return res.status(400).json({ error: 'You have already signed this contract' });
     }
     if (contract.signing_expires_at &&
         new Date() > new Date(contract.signing_expires_at.replace(' ', 'T') + 'Z')) {
       return res.status(410).json({
         error: 'This signing link has expired. Contact Rustic Retreat and we will send you a fresh one.',
         expired: true,
+      });
+    }
+
+    // Enforce the order on write as well as on read. The read check stops the
+    // page rendering out of turn; this stops a replayed POST doing the same.
+    const due = signer ? nextSigner(contract.id) : null;
+    if (signer && (!due || due.id !== signer.id)) {
+      return res.status(409).json({
+        error: `Waiting on ${due ? due.name : 'another signer'} to sign first.`,
+        out_of_turn: true,
       });
     }
 
@@ -331,16 +562,51 @@ router.post('/sign/:token', signLimiter, (req, res) => {
     const user_agent = String(req.headers['user-agent'] || '').slice(0, 500);
     const consent_text = consentStatement(signer_name, contract.title);
 
-    // Mark signed
-    db.prepare(`
-      UPDATE contracts
-      SET status = 'signed', signed_at = datetime('now'),
-          signer_name = ?, signer_email = ?, signature_data = ?, signer_ip = ?,
-          signer_user_agent = ?, consent_text = ?,
-          portal_credentials_sent = 1
-      WHERE signing_token = ?
-    `).run(signer_name, contract.email, signature_data, signer_ip,
-           user_agent, consent_text, req.params.token);
+    // Record this person's signature. Everyone signed is what completes the
+    // contract — one signature no longer finishes it.
+    let allSigned = true;
+    if (signer) {
+      db.prepare(`
+        UPDATE contract_signers
+        SET status = 'signed', signed_at = datetime('now'), name = ?,
+            signature_data = ?, signer_ip = ?, signer_user_agent = ?, consent_text = ?
+        WHERE id = ?
+      `).run(signer_name, signature_data, signer_ip, user_agent, consent_text, signer.id);
+      allSigned = !nextSigner(contract.id);
+    }
+
+    if (allSigned) {
+      db.prepare(`
+        UPDATE contracts
+        SET status = 'signed', signed_at = datetime('now'),
+            signer_name = ?, signer_email = ?, signature_data = ?, signer_ip = ?,
+            signer_user_agent = ?, consent_text = ?,
+            portal_credentials_sent = 1
+        WHERE id = ?
+      `).run(signer_name, contract.email, signature_data, signer_ip,
+             user_agent, consent_text, contract.id);
+    }
+
+    // Everything below turns the contract into a booking: the couple becomes
+    // 'booked', the calendar date is claimed, and portal credentials are issued.
+    // None of that should happen off a half-signed agreement, so when signatures
+    // are still outstanding we stop here and hand the next person their link.
+    if (!allSigned) {
+      const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
+      const next = activateNextSigner(contract, couple);
+      return res.json({
+        success: true,
+        fully_signed: false,
+        message: next
+          ? `Thank you. ${next.name} has been emailed their signing link.`
+          : 'Thank you — your signature has been recorded.',
+        couple_name: `${contract.partner1_name} & ${contract.partner2_name}`,
+        next_signer_name: next ? next.name : null,
+        signers: signersFor(contract.id).map(s => ({
+          role: s.role, name: s.name, status: s.status, signed_at: s.signed_at,
+        })),
+      });
+    }
 
     // Update couple: status → booked, and sync event details from contract
     db.prepare(`
@@ -423,11 +689,15 @@ router.post('/sign/:token', signLimiter, (req, res) => {
 
     res.json({
       success: true,
+      fully_signed: true,
       message: 'Contract signed successfully!',
       couple_name: coupleNames,
       portal_email: contract.email,
       portal_password: is_new_account ? plain_password : null,
       is_new_account,
+      signers: signersFor(contract.id).map(s => ({
+        role: s.role, name: s.name, status: s.status, signed_at: s.signed_at,
+      })),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -439,17 +709,23 @@ router.post('/sign/:token', signLimiter, (req, res) => {
 // The signing link doubles as the couple's permanent receipt: same token, but
 // it only ever renders a contract that has actually been signed.
 router.get('/sign/:token/print', signLimiter, (req, res) => {
+  // Tokens live on contract_signers now; the contracts.signing_token fallback
+  // keeps links issued before multi-party signing working.
+  const signer = db.prepare(
+    'SELECT contract_id FROM contract_signers WHERE signing_token = ?'
+  ).get(req.params.token);
+
   const c = db.prepare(`
     SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
     FROM contracts c JOIN couples co ON co.id = c.couple_id
-    WHERE c.signing_token = ?
-  `).get(req.params.token);
+    WHERE c.id = ? OR c.signing_token = ?
+  `).get(signer ? signer.contract_id : null, req.params.token);
 
   if (!c) return res.status(404).send('Contract not found');
   if (c.status !== 'signed') {
     return res.status(404).send('This contract has not been signed yet.');
   }
-  res.set('Content-Type', 'text/html').send(renderContractHtml(c));
+  res.set('Content-Type', 'text/html').send(renderContractHtml({ ...c, signers: signersFor(c.id) }));
 });
 
 // ── Admin: generate contract pre-filled from an accepted proposal ─────────────

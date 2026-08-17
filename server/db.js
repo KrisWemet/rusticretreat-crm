@@ -76,7 +76,14 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     partner1_name TEXT NOT NULL,
     partner2_name TEXT NOT NULL,
+    -- Partner 1's address, and the couple's portal login. Kept UNIQUE because
+    -- auth.js looks a couple up by it.
     email TEXT UNIQUE NOT NULL,
+    -- Partner 2's own address, used for their signing link and their copy of
+    -- contract emails. Nullable on purpose: plenty of couples share one inbox,
+    -- and requiring a second address would block booking them at all. When it
+    -- is blank both signing links go to partner 1 to pass on.
+    partner2_email TEXT,
     phone TEXT,
     password_hash TEXT,
     wedding_date DATE,
@@ -265,6 +272,39 @@ db.exec(`
   );
 `);
 
+// ── Contract signers ─────────────────────────────────────────────────────────
+// A venue agreement is signed by three people in a fixed order: the venue
+// commits first, then each partner. One row per signer, each with its own token,
+// so only the person whose turn it is holds a working link — the next link does
+// not exist until the previous signature lands.
+//
+// The contracts table keeps its original single-signer columns. They are the
+// historical record for contracts signed before this existed, and the print view
+// still falls back to them, so old agreements keep rendering correctly.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS contract_signers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+    -- 1 = venue, 2 = partner 1, 3 = partner 2. Signing follows this order.
+    sign_order INTEGER NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('venue', 'partner1', 'partner2')),
+    name TEXT NOT NULL,
+    email TEXT,
+    signing_token TEXT UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'sent', 'signed')),
+    sent_at DATETIME,
+    viewed_at DATETIME,
+    signed_at DATETIME,
+    signature_data TEXT,
+    signer_ip TEXT,
+    signer_user_agent TEXT,
+    consent_text TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (contract_id, sign_order)
+  );
+  CREATE INDEX IF NOT EXISTS idx_contract_signers_contract ON contract_signers(contract_id);
+`);
+
 // Migrate existing contracts table with new event-detail columns
 for (const col of [
   'ALTER TABLE contracts ADD COLUMN wedding_date DATE',
@@ -280,7 +320,52 @@ for (const col of [
   'ALTER TABLE contracts ADD COLUMN consent_text TEXT',
   'ALTER TABLE contracts ADD COLUMN viewed_at DATETIME',
   'ALTER TABLE contracts ADD COLUMN signing_expires_at DATETIME',
+  // Set the moment the venue signs. From then on the terms are fixed and the
+  // contract cannot be edited — that is the whole point of signing first.
+  'ALTER TABLE contracts ADD COLUMN locked_at DATETIME',
+  'ALTER TABLE couples ADD COLUMN partner2_email TEXT',
 ]) { try { db.exec(col); } catch (_) {} }
+
+// Backfill signer rows for contracts signed before multi-party signing existed.
+// Without this an already-executed agreement would show an empty signer list and
+// read as unsigned in the new UI, which is exactly the wrong thing to say about
+// a contract someone is relying on. Runs once — the insert is skipped for any
+// contract that already has signers.
+//
+// Called after seedDatabase() rather than here: on a brand-new database the seed
+// inserts its signed contracts after this point in the file, so running inline
+// would leave them without signer rows until the second boot.
+function backfillContractSigners() {
+try {
+  const legacy = db.prepare(`
+    SELECT c.id, c.signer_name, c.signer_email, c.signature_data, c.signed_at,
+           c.signer_ip, c.signer_user_agent, c.consent_text, c.viewed_at,
+           c.signing_token, co.partner1_name
+    FROM contracts c JOIN couples co ON co.id = c.couple_id
+    WHERE c.status = 'signed'
+      AND NOT EXISTS (SELECT 1 FROM contract_signers s WHERE s.contract_id = c.id)
+  `).all();
+
+  const insertLegacy = db.prepare(`
+    INSERT INTO contract_signers
+      (contract_id, sign_order, role, name, email, signing_token, status,
+       signed_at, signature_data, signer_ip, signer_user_agent, consent_text, viewed_at)
+    VALUES (?, 2, 'partner1', ?, ?, ?, 'signed', ?, ?, ?, ?, ?, ?)
+  `);
+  for (const c of legacy) {
+    insertLegacy.run(
+      c.id, c.signer_name || c.partner1_name, c.signer_email, c.signing_token,
+      c.signed_at, c.signature_data, c.signer_ip, c.signer_user_agent,
+      c.consent_text, c.viewed_at,
+    );
+  }
+  if (legacy.length) {
+    console.log(`[migrate] Created signer records for ${legacy.length} previously signed contract(s).`);
+  }
+} catch (err) {
+  console.warn('[migrate] Could not backfill contract signers:', err.message);
+}
+}
 
 // Packages table
 db.exec(`
@@ -773,6 +858,7 @@ IN WITNESS WHEREOF, the Clients confirm they have read and agree to be legally b
 }
 
 seedDatabase();
+backfillContractSigners();
 
 // ── Credential bootstrap ─────────────────────────────────────────────────────
 // The seeded staff logins (admin123 / staff123) are published in this repo's

@@ -40,7 +40,7 @@ router.get('/:id', authenticateToken, (req, res) => {
 // Create couple
 router.post('/', authenticateToken, (req, res) => {
   const {
-    partner1_name, partner2_name, email, phone, wedding_date,
+    partner1_name, partner2_name, email, partner2_email, phone, wedding_date,
     venue_package, status, notes, budget_total
   } = req.body;
 
@@ -50,9 +50,9 @@ router.post('/', authenticateToken, (req, res) => {
 
   try {
     const result = db.prepare(`
-      INSERT INTO couples (partner1_name, partner2_name, email, phone, wedding_date, venue_package, status, notes, budget_total)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(partner1_name, partner2_name, email, phone || null, wedding_date || null,
+      INSERT INTO couples (partner1_name, partner2_name, email, partner2_email, phone, wedding_date, venue_package, status, notes, budget_total)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(partner1_name, partner2_name, email, partner2_email || null, phone || null, wedding_date || null,
       venue_package || null, status || 'lead', notes || null, budget_total || 0);
 
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(result.lastInsertRowid);
@@ -71,20 +71,22 @@ router.put('/:id', authenticateToken, (req, res) => {
   if (!couple) return res.status(404).json({ error: 'Couple not found' });
 
   const {
-    partner1_name, partner2_name, email, phone, wedding_date,
+    partner1_name, partner2_name, email, partner2_email, phone, wedding_date,
     venue_package, status, notes, budget_total
   } = req.body;
 
   try {
     db.prepare(`
       UPDATE couples SET
-        partner1_name = ?, partner2_name = ?, email = ?, phone = ?,
+        partner1_name = ?, partner2_name = ?, email = ?, partner2_email = ?, phone = ?,
         wedding_date = ?, venue_package = ?, status = ?, notes = ?, budget_total = ?
       WHERE id = ?
     `).run(
       partner1_name || couple.partner1_name,
       partner2_name || couple.partner2_name,
       email || couple.email,
+      // undefined means "not in this request"; empty string means "clear it".
+      partner2_email !== undefined ? (partner2_email || null) : couple.partner2_email,
       phone !== undefined ? phone : couple.phone,
       wedding_date !== undefined ? wedding_date : couple.wedding_date,
       venue_package !== undefined ? venue_package : couple.venue_package,
