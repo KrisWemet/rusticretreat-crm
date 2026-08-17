@@ -25,6 +25,32 @@ if (process.env.NODE_ENV === 'production') {
       '(e.g. mount /data, then DB_PATH=/data/rusticretreat.db).'
     );
   }
+
+  // Pointing DB_PATH somewhere like /data satisfies the check above whether or
+  // not a volume is actually mounted there — the app would boot happily and
+  // write to ordinary container disk that vanishes on the next deploy. That is
+  // the same silent data loss, just harder to spot. Railway names the real
+  // mount point, so on Railway we can insist the database lives inside it.
+  const mount = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+  if (process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_SERVICE_ID) {
+    if (!mount) {
+      throw new Error(
+        'Running on Railway with no volume attached, so nothing written here ' +
+        'survives a deploy. Add a volume to this service (Settings → Volumes, ' +
+        'mount path /data) and set DB_PATH to a file on it, e.g. ' +
+        '/data/rusticretreat.db.'
+      );
+    }
+    const mountDir = path.resolve(mount);
+    if (resolved !== mountDir && !resolved.startsWith(mountDir + path.sep)) {
+      throw new Error(
+        `DB_PATH (${resolved}) is not on the attached Railway volume ` +
+        `(mounted at ${mountDir}), so the database would be written to ` +
+        'container disk and lost on the next deploy. Set DB_PATH to a file ' +
+        `inside ${mountDir}, e.g. ${path.join(mountDir, 'rusticretreat.db')}.`
+      );
+    }
+  }
 }
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
