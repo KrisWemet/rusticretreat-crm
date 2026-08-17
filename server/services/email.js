@@ -8,9 +8,19 @@ const SMTP_FROM    = process.env.SMTP_FROM || 'Rustic Retreat <noreply@rusticret
 const ADMIN_EMAIL  = process.env.ADMIN_EMAIL || process.env.SMTP_USER;
 const BASE_URL     = process.env.BASE_URL || 'http://localhost:5173';
 
-const configured = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+// Resend's HTTP API is the preferred transport on a hosted platform: it is a
+// plain HTTPS call, so it works anywhere outbound web traffic does, whereas
+// SMTP ports are blocked or throttled on a lot of hosts. SMTP stays supported
+// for anyone pointing this at their own mail server.
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+// Overridable so the send path can be exercised against a local stub, and so a
+// deployment behind an outbound proxy can point at it. Defaults to Resend.
+const RESEND_API_URL = process.env.RESEND_API_URL || 'https://api.resend.com/emails';
 
-const transporter = configured
+const smtpConfigured = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+const configured = !!(RESEND_API_KEY || smtpConfigured);
+
+const transporter = smtpConfigured
   ? nodemailer.createTransport({
       host: SMTP_HOST,
       port: SMTP_PORT,
@@ -19,15 +29,49 @@ const transporter = configured
     })
   : null;
 
+async function sendViaResend({ to, subject, html, text }) {
+  const res = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: SMTP_FROM, to: [to], subject, html, text }),
+  });
+  // Read the body exactly once. A response body is a single-use stream, so
+  // parsing it as JSON and then falling back to text() on failure throws
+  // "Body has already been read" and buries the real reason for the refusal.
+  const raw = await res.text();
+  if (!res.ok) {
+    // Resend explains refusals in the body — an unverified domain, a bad key, a
+    // suppressed address. Surfacing that beats a bare status code, because each
+    // one needs a different fix.
+    throw new Error(`Resend rejected the message (HTTP ${res.status}): ${raw}`);
+  }
+  try { return JSON.parse(raw); } catch { return { raw }; }
+}
+
+// Returns { delivered: boolean, error?: string } rather than throwing.
+//
+// Callers fall into two camps and both are served by this shape. A contract
+// signing link is the whole point of the request, so its caller checks the
+// result and tells staff when delivery failed — reporting "sent" for a mail
+// that never left is how a couple ends up waiting on a link that is not coming.
+// Incidental notifications just ignore the result and carry on, since a failed
+// courtesy email must not roll back a signature that is already recorded.
 async function send({ to, subject, html, text }) {
+  if (!to) return { delivered: false, error: 'No recipient address' };
   if (!configured) {
     console.log(`[EMAIL – not configured] To: ${to} | Subject: ${subject}`);
-    return;
+    return { delivered: false, error: 'Email is not configured on this server' };
   }
   try {
-    await transporter.sendMail({ from: SMTP_FROM, to, subject, html, text });
+    if (RESEND_API_KEY) await sendViaResend({ to, subject, html, text });
+    else await transporter.sendMail({ from: SMTP_FROM, to, subject, html, text });
+    return { delivered: true };
   } catch (err) {
-    console.error('[EMAIL send error]', err.message);
+    console.error('[EMAIL send error]', to, err.message);
+    return { delivered: false, error: err.message };
   }
 }
 
@@ -39,7 +83,9 @@ async function sendContractLink({ to, coupleNames, contractTitle, signingUrl, si
   // the other partner, and the second signature never arrives.
   const greeting = signerName || coupleNames;
   const note = 'This link is for you personally — your partner receives their own once you have signed.';
-  await send({
+  // Returned, not swallowed: the caller needs to know whether the link actually
+  // went out before it tells staff the couple has been notified.
+  return send({
     to,
     subject: `Your contract is ready to sign — ${contractTitle}`,
     text: `Hi ${greeting},\n\nYour contract "${contractTitle}" from Rustic Retreat is ready for your review and digital signature.\n\nSign here: ${fullUrl}\n\n${note}\n\nIf you have any questions, please reply to this email.\n\nWarm regards,\nRustic Retreat`,

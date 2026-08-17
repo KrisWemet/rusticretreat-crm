@@ -47,6 +47,19 @@ router.post('/', authenticateToken, (req, res) => {
   if (!partner1_name || !partner2_name || !email) {
     return res.status(400).json({ error: 'Partner names and email are required' });
   }
+  // Each partner signs the contract from their own address so the signatures
+  // are independently attributable, so a second address is required rather
+  // than optional.
+  if (!partner2_email) {
+    return res.status(400).json({
+      error: 'Partner 2 needs their own email address — each partner signs the contract separately.',
+    });
+  }
+  if (partner2_email.trim().toLowerCase() === email.trim().toLowerCase()) {
+    return res.status(400).json({
+      error: 'Each partner needs a different email address so their signatures are separately attributable.',
+    });
+  }
 
   try {
     const result = db.prepare(`
@@ -74,6 +87,19 @@ router.put('/:id', authenticateToken, (req, res) => {
     partner1_name, partner2_name, email, partner2_email, phone, wedding_date,
     venue_package, status, notes, budget_total
   } = req.body;
+
+  const nextEmail = (email || couple.email).trim().toLowerCase();
+  const nextP2 = partner2_email !== undefined ? partner2_email : couple.partner2_email;
+  if (partner2_email !== undefined && !partner2_email) {
+    return res.status(400).json({
+      error: 'Partner 2 needs their own email address — each partner signs the contract separately.',
+    });
+  }
+  if (nextP2 && nextP2.trim().toLowerCase() === nextEmail) {
+    return res.status(400).json({
+      error: 'Each partner needs a different email address so their signatures are separately attributable.',
+    });
+  }
 
   try {
     db.prepare(`

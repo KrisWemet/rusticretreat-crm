@@ -60,7 +60,7 @@ function nextSigner(contractId) {
 // Issue a token for whoever is next and email them. Called after each signature
 // so only one live link exists at a time — a later signer's link simply does not
 // exist until it is their turn.
-function activateNextSigner(contract, couple) {
+async function activateNextSigner(contract, couple) {
   const next = nextSigner(contract.id);
   if (!next) return null;
 
@@ -73,19 +73,25 @@ function activateNextSigner(contract, couple) {
 
   // The venue signs from inside the CRM, where they are already authenticated,
   // so there is nobody to email a link to.
-  if (next.role !== 'venue') {
-    // Falls back to partner 1's address when partner 2 has none of their own —
-    // the couple forwards it. Better than silently never sending the link.
-    const to = next.email || couple.email;
-    email.sendContractLink({
-      to,
-      coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
-      contractTitle: contract.title,
-      signingUrl: `/sign/${token}`,
-      signerName: next.name,
-    });
-  }
-  return { ...next, signing_token: token };
+  if (next.role === 'venue') return { ...next, signing_token: token, delivered: true };
+
+  // Awaited, and the outcome travels back to the caller. Each partner signs
+  // from their own address for the signatures to be independently attributable,
+  // so there is no fallback recipient — if this address does not work, staff
+  // have to be told rather than left believing the couple was emailed.
+  const result = await email.sendContractLink({
+    to: next.email,
+    coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
+    contractTitle: contract.title,
+    signingUrl: `/sign/${token}`,
+    signerName: next.name,
+  });
+
+  return {
+    ...next, signing_token: token,
+    delivered: result?.delivered === true,
+    delivery_error: result?.error || null,
+  };
 }
 
 function generatePassword(len = 10) {
@@ -320,7 +326,7 @@ router.get('/:id/signers', authenticateToken, (req, res) => {
 });
 
 // ── Admin: venue signs, which starts the chain and locks the terms ───────────
-router.post('/:id/sign-venue', authenticateToken, (req, res) => {
+router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
   const { signature_data, signer_name, agreed } = req.body;
   if (!signature_data) return res.status(400).json({ error: 'Signature is required' });
   if (agreed !== true) {
@@ -335,6 +341,25 @@ router.post('/:id/sign-venue', authenticateToken, (req, res) => {
     }
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
     if (!couple) return res.status(404).json({ error: 'Couple not found' });
+
+    // Both partners sign from their own address so the two signatures are
+    // independently attributable — that is the point of collecting them
+    // separately. Refuse before locking rather than after: once locked the
+    // contract cannot be edited, so discovering the gap later means reissuing it.
+    if (!couple.partner2_email) {
+      return res.status(400).json({
+        error: `${couple.partner2_name} has no email address on file. ` +
+               'Add one to the couple before signing — each partner signs from their own address.',
+        missing_partner2_email: true,
+      });
+    }
+    if (couple.partner2_email.trim().toLowerCase() === couple.email.trim().toLowerCase()) {
+      return res.status(400).json({
+        error: 'Both partners have the same email address. Each partner needs their own so ' +
+               'their signatures are separately attributable.',
+        duplicate_partner_email: true,
+      });
+    }
 
     const venueName = signer_name || req.user?.name || VENUE_SIGNER_NAME;
     const ip = req.ip || req.socket.remoteAddress || '';
@@ -375,14 +400,15 @@ router.post('/:id/sign-venue', authenticateToken, (req, res) => {
     start();
 
     const fresh = db.prepare('SELECT * FROM contracts WHERE id = ?').get(contract.id);
-    const next = activateNextSigner(fresh, couple);
+    const next = await activateNextSigner(fresh, couple);
 
     res.json({
       success: true,
       locked: true,
       next_signer: next
-        ? { name: next.name, role: next.role, email: next.email || couple.email,
-            signing_url: `/sign/${next.signing_token}` }
+        ? { name: next.name, role: next.role, email: next.email,
+            signing_url: `/sign/${next.signing_token}`,
+            delivered: next.delivered, delivery_error: next.delivery_error }
         : null,
       signers: signersFor(contract.id).map(s => ({
         sign_order: s.sign_order, role: s.role, name: s.name, status: s.status,
@@ -394,7 +420,7 @@ router.post('/:id/sign-venue', authenticateToken, (req, res) => {
 });
 
 // ── Admin: re-send the current signer's link ─────────────────────────────────
-router.post('/:id/send', authenticateToken, (req, res) => {
+router.post('/:id/send', authenticateToken, async (req, res) => {
   try {
     const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
     if (!contract) return res.status(404).json({ error: 'Not found' });
@@ -408,7 +434,7 @@ router.post('/:id/send', authenticateToken, (req, res) => {
     }
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
     // Reissues the current signer's token, so any earlier link stops working.
-    const next = activateNextSigner(contract, couple);
+    const next = await activateNextSigner(contract, couple);
     if (!next) return res.status(400).json({ error: 'Everyone has already signed' });
 
     res.json({
@@ -416,7 +442,9 @@ router.post('/:id/send', authenticateToken, (req, res) => {
       signing_url: `/sign/${next.signing_token}`,
       signer_name: next.name,
       signer_role: next.role,
-      sent_to: next.email || couple.email,
+      sent_to: next.email,
+      delivered: next.delivered,
+      delivery_error: next.delivery_error,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -506,7 +534,7 @@ router.get('/sign/:token', signLimiter, (req, res) => {
 });
 
 // ── Public: submit signature ─────────────────────────────────────────────────
-router.post('/sign/:token', signLimiter, (req, res) => {
+router.post('/sign/:token', signLimiter, async (req, res) => {
   const { signer_name, signature_data, agreed } = req.body;
   if (!signer_name || !signature_data) {
     return res.status(400).json({ error: 'Signer name and signature are required' });
@@ -593,13 +621,16 @@ router.post('/sign/:token', signLimiter, (req, res) => {
     // are still outstanding we stop here and hand the next person their link.
     if (!allSigned) {
       const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
-      const next = activateNextSigner(contract, couple);
+      const next = await activateNextSigner(contract, couple);
       return res.json({
         success: true,
         fully_signed: false,
         message: next
-          ? `Thank you. ${next.name} has been emailed their signing link.`
+          ? (next.delivered
+              ? `Thank you. ${next.name} has been emailed their signing link.`
+              : `Thank you. Your signature is recorded — we could not email ${next.name} automatically, so Rustic Retreat will send their link directly.`)
           : 'Thank you — your signature has been recorded.',
+        next_signer_notified: next ? next.delivered : null,
         couple_name: `${contract.partner1_name} & ${contract.partner2_name}`,
         next_signer_name: next ? next.name : null,
         signers: signersFor(contract.id).map(s => ({

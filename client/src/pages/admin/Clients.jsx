@@ -181,13 +181,12 @@ export default function Clients() {
               type="email"
               value={form.partner2_email}
               onChange={f('partner2_email')}
-              placeholder="Optional — leave blank if they share an inbox"
+              required
             />
           </div>
           <p className="-mt-2 text-xs text-slate-400">
-            Each partner signs the contract separately and gets their own link. If partner 2 has no
-            address of their own, both links go to partner 1 to pass on. Partner 1's email is also
-            the couple's portal login.
+            Each partner signs the contract separately from their own address, so their signatures
+            are independently attributable. Both addresses are required and must be different.
           </p>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Phone" value={form.phone} onChange={f('phone')} />

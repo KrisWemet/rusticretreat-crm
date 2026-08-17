@@ -45,7 +45,10 @@ it.
 | `CRM_GATE_KEY` | yes* | Shared secret in front of the whole app. Without the cookie every path 404s. Generate with `openssl rand -hex 24`. |
 | `BASE_URL` | yes | Public URL of the deployed app. Used in emails and Stripe redirects. |
 | `ADMIN_BOOTSTRAP_PASSWORD` | first boot | Resets the admin password. See below. |
-| `SMTP_*`, `ADMIN_EMAIL` | recommended | Outbound email. Unset, emails are logged to the console instead of sent. |
+| `RESEND_API_KEY` | **yes** | Contract signing links are emailed to each partner individually, so signing does not work without email. Create a sending key at resend.com. |
+| `SMTP_FROM` | **yes** | Sender address, on a domain verified with your email provider — e.g. `Rustic Retreat <noreply@rusticretreatalberta.ca>`. |
+| `ADMIN_EMAIL` | recommended | Where staff notifications go when a contract completes. |
+| `SMTP_*` | alternative | Your own SMTP server, used only when `RESEND_API_KEY` is unset. Many hosts block outbound SMTP, which is why Resend's HTTPS API is the default. |
 | `STRIPE_*` | optional | Card payments. Unset, the portal falls back to e-Transfer. |
 | `SIGNING_LINK_DAYS` | optional | How long a contract signing link stays valid. Defaults to 45 days. |
 
@@ -65,7 +68,21 @@ git history. On your first deploy:
 That bootstrap also disables the second seeded staff login and the seeded couple
 portal logins, so no published credential stays usable.
 
-### 5. Clear the demo data when you are ready for real books
+### 5. Confirm email actually sends
+
+Signing is a three-party chain — venue, then each partner — and each partner is
+emailed their own link when their turn comes. If email is not working, the
+contract locks after you sign and then silently stalls.
+
+The CRM does not pretend otherwise: when a signing link fails to send, the API
+reports it and the Contracts screen shows an "Email not delivered" banner with
+the link so you can pass it on by hand. A green toast means it genuinely left
+the server.
+
+To verify: create a test contract against a couple whose two email addresses you
+control, sign it as the venue, and check that partner 1 receives the link.
+
+### 6. Clear the demo data when you are ready for real books
 
 The app deploys seeded with sample couples, bookings and invoices so every
 screen has something in it while you click through. That fake revenue will

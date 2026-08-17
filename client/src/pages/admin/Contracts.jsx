@@ -111,6 +111,7 @@ export default function Contracts() {
   const [showView, setShowView] = useState(false)
   const [viewContract, setViewContract] = useState(null)
   const [signingLink, setSigningLink] = useState(null)
+  const [deliveryWarning, setDeliveryWarning] = useState(null)
   const [venueSignContract, setVenueSignContract] = useState(null)
   const [venueSig, setVenueSig] = useState(null)
   const [venueAgreed, setVenueAgreed] = useState(false)
@@ -200,7 +201,16 @@ export default function Contracts() {
       const r = await getAdminAxios().post(`/api/contracts/${id}/send`)
       const url = `${window.location.origin}${r.data.signing_url}`
       setSigningLink(url)
-      toast.success(`Link re-sent to ${r.data.signer_name}`)
+      if (r.data.delivered) {
+        setDeliveryWarning(null)
+        toast.success(`Link re-sent to ${r.data.signer_name} at ${r.data.sent_to}`)
+      } else {
+        setDeliveryWarning(
+          `Could not email ${r.data.signer_name} at ${r.data.sent_to}. Send the link below yourself.` +
+          (r.data.delivery_error ? ` (${r.data.delivery_error})` : '')
+        )
+        toast.error('Email failed — send the link manually.')
+      }
       fetchData()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send')
@@ -226,7 +236,19 @@ export default function Contracts() {
       const next = r.data.next_signer
       if (next) {
         setSigningLink(`${window.location.origin}${next.signing_url}`)
-        toast.success(`Signed and locked. ${next.name} has been emailed their link.`)
+        if (next.delivered) {
+          toast.success(`Signed and locked. ${next.name} has been emailed their link.`)
+        } else {
+          // Never claim the couple was emailed when they were not — staff would
+          // wait on a signature that is never coming. The link is on screen, so
+          // say plainly that it has to go out by hand.
+          setDeliveryWarning(
+            `The contract is signed and locked, but we could not email ${next.name} at ` +
+            `${next.email}. Send them the link below yourself.` +
+            (next.delivery_error ? ` (${next.delivery_error})` : '')
+          )
+          toast.error(`Signed, but the email to ${next.name} failed — send the link manually.`)
+        }
       } else {
         toast.success('Signed and locked.')
       }
@@ -308,6 +330,14 @@ export default function Contracts() {
           </div>
         ))}
       </div>
+
+      {/* Delivery failure — the couple is NOT waiting on a link they never got. */}
+      {deliveryWarning && (
+        <div className="card p-4 border-amber-300 bg-amber-50">
+          <p className="text-sm font-semibold text-amber-900 mb-1">Email not delivered</p>
+          <p className="text-sm text-amber-800">{deliveryWarning}</p>
+        </div>
+      )}
 
       {/* Signing link banner */}
       {signingLink && (
