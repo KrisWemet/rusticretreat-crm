@@ -18,6 +18,7 @@ export default function SignContract() {
   const [contract, setContract] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [expired, setExpired] = useState(false)
   const [signerName, setSignerName] = useState('')
   const [signatureData, setSignatureData] = useState(null)
   const [agreed, setAgreed] = useState(false)
@@ -27,7 +28,10 @@ export default function SignContract() {
   useEffect(() => {
     axios.get(`/api/contracts/sign/${token}`)
       .then(r => setContract(r.data))
-      .catch(e => setError(e.response?.data?.error || 'Contract not found or link has expired.'))
+      .catch(e => {
+        setExpired(Boolean(e.response?.data?.expired))
+        setError(e.response?.data?.error || 'Contract not found or link has expired.')
+      })
       .finally(() => setLoading(false))
   }, [token])
 
@@ -46,6 +50,7 @@ export default function SignContract() {
       const r = await axios.post(`/api/contracts/sign/${token}`, {
         signer_name: signerName,
         signature_data: signatureData,
+        agreed: true,
       })
       setResult(r.data)
     } catch (err) {
@@ -73,7 +78,9 @@ export default function SignContract() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center">
           <ExclamationTriangleIcon className="w-12 h-12 text-amber-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-slate-900 mb-2">Link Not Found</h2>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">
+            {expired ? 'Signing Link Expired' : 'Link Not Found'}
+          </h2>
           <p className="text-slate-500">{error}</p>
         </div>
       </div>
@@ -91,6 +98,15 @@ export default function SignContract() {
             This contract was signed by <strong>{contract.signer_name}</strong> on{' '}
             {contract.signed_at ? format(parseISO(contract.signed_at), 'MMMM d, yyyy') : 'a previous date'}.
           </p>
+          <a
+            href={`/api/contracts/sign/${token}/print`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm mb-4"
+          >
+            <DocumentTextIcon className="w-4 h-4" />
+            View / download signed copy
+          </a>
           <p className="text-sm text-slate-400">
             Questions? Contact Rustic Retreat directly.
           </p>
@@ -154,13 +170,24 @@ export default function SignContract() {
               </div>
             )}
 
-            <Link
-              to="/portal/login"
-              className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
-            >
-              <HeartIcon className="w-5 h-5" />
-              Go to Wedding Portal
-            </Link>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link
+                to="/portal/login"
+                className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+              >
+                <HeartIcon className="w-5 h-5" />
+                Go to Wedding Portal
+              </Link>
+              <a
+                href={`/api/contracts/sign/${token}/print`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold px-6 py-3 rounded-xl transition-colors"
+              >
+                <DocumentTextIcon className="w-5 h-5" />
+                Download signed copy
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -271,8 +298,12 @@ export default function SignContract() {
                   )}
                 </div>
               </div>
+              {/* Rendered from the statement the server sends, so the sentence
+                  shown here is the exact text recorded against the signature. */}
               <span className="text-sm text-slate-600 leading-relaxed">
-                I, <strong>{signerName || '[your name]'}</strong>, have read and understood this contract in its entirety and agree to be legally bound by its terms and conditions. I confirm that my drawn signature above is my legally binding electronic signature.
+                {contract?.consent_statement
+                  ? contract.consent_statement.replace('[your name]', signerName || '[your name]')
+                  : `I, ${signerName || '[your name]'}, have read and understood this contract in its entirety and agree to be legally bound by its terms and conditions.`}
               </span>
             </label>
 

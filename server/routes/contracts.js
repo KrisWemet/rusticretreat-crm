@@ -17,6 +17,25 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// How long a signing link stays usable. Contracts sit unsigned for weeks while
+// couples think it over, so this is generous — but a link that never expires is
+// a permanent bearer credential to sign a binding agreement.
+const SIGNING_LINK_DAYS = Number(process.env.SIGNING_LINK_DAYS || 45);
+
+// The consent language lives here, server-side, and is echoed to the signing
+// page so the couple reads exactly the sentence that gets stored against their
+// signature. If the client sent its own text, the record would attest to
+// whatever the browser chose to post rather than what we actually presented.
+function consentStatement(signerName, contractTitle) {
+  return (
+    `I, ${signerName}, have read and understood "${contractTitle}" in its entirety ` +
+    'and agree to be legally bound by its terms and conditions. I confirm that the ' +
+    'signature I have drawn is my legally binding electronic signature, and I consent ' +
+    'to signing this agreement electronically under Alberta\'s Electronic Transactions ' +
+    'Act, SA 2001, c E-5.5.'
+  );
+}
+
 function generatePassword(len = 10) {
   const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
   // crypto.randomBytes, not Math.random — this is a real portal credential.
@@ -116,42 +135,60 @@ router.delete('/:id', authenticateToken, (req, res) => {
   }
 });
 
-// ── Admin: printable contract (open in browser, Save as PDF) ─────────────────
-router.get('/:id/print', authenticateToken, (req, res) => {
-  const c = db.prepare(`
-    SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
-    FROM contracts c JOIN couples co ON co.id = c.couple_id
-    WHERE c.id = ?
-  `).get(req.params.id);
-  if (!c) return res.status(404).send('Contract not found');
-
+// ── Printable contract renderer (shared by the admin and signer copies) ──────
+function renderContractHtml(c) {
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const fmt = (d) => d ? new Date(d.replace(' ', 'T') + 'Z').toLocaleString('en-CA') : '';
+
+  // The signature image is user-supplied. Rendering it into an <img src> means
+  // only ever emitting a PNG/JPEG data URL — without this check a stored
+  // "data:text/html,<script>" would execute in the browser of whoever opens the
+  // executed contract, which on the admin route is staff.
+  const sigIsImage = typeof c.signature_data === 'string' &&
+    /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(c.signature_data);
+
+  const auditRows = c.status === 'signed' ? [
+    ['Signed by', c.signer_name],
+    ['Date signed', fmt(c.signed_at)],
+    ['Email', c.signer_email],
+    ['First viewed', fmt(c.viewed_at)],
+    ['IP address', c.signer_ip],
+    ['Device', c.signer_user_agent],
+  ].filter(([, v]) => v) : [];
+
   const signedBlock = c.status === 'signed' ? `
     <div class="signed">
       <h2>Signature</h2>
-      <p><strong>Signed by:</strong> ${esc(c.signer_name)}</p>
-      ${c.signed_at ? `<p><strong>Date:</strong> ${esc(new Date(c.signed_at).toLocaleString())}</p>` : ''}
-      ${c.signer_email ? `<p><strong>Email:</strong> ${esc(c.signer_email)}</p>` : ''}
-      ${c.signature_data && c.signature_data.startsWith('data:image')
+      ${sigIsImage
         ? `<img class="sig" src="${esc(c.signature_data)}" alt="signature" />`
         : (c.signature_data ? `<p class="sig-text">${esc(c.signature_data)}</p>` : '')}
-      ${c.signer_ip ? `<p class="ip">Signed electronically · IP ${esc(c.signer_ip)}</p>` : ''}
+      <p class="signer">${esc(c.signer_name)}</p>
+      ${c.consent_text ? `<div class="consent"><strong>Consent recorded at signing:</strong><br>${esc(c.consent_text)}</div>` : ''}
+      <table class="audit">
+        ${auditRows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}
+      </table>
     </div>` : `<div class="unsigned">Status: ${esc(c.status)} — not yet signed.</div>`;
 
-  res.set('Content-Type', 'text/html').send(`<!doctype html>
-<html><head><meta charset="utf-8"><title>${esc(c.title)}</title>
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(c.title)}</title>
 <style>
   @media print { .noprint { display:none } @page { margin: 18mm } }
   body { font-family: Georgia, 'Times New Roman', serif; color:#1e293b; max-width:760px; margin:32px auto; padding:0 24px; line-height:1.55 }
-  .bar { background:#e11d48; color:#fff; padding:10px 16px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; font-family:system-ui,sans-serif; margin-bottom:24px }
-  .bar button { background:#fff; color:#e11d48; border:0; padding:8px 16px; border-radius:6px; font-weight:700; cursor:pointer }
+  .bar { background:#e11d48; color:#fff; padding:10px 16px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:12px; font-family:system-ui,sans-serif; margin-bottom:24px }
+  .bar button { background:#fff; color:#e11d48; border:0; padding:8px 16px; border-radius:6px; font-weight:700; cursor:pointer; white-space:nowrap }
   h1 { font-size:22px; margin:0 0 4px }
+  h2 { font-size:16px; font-family:system-ui,sans-serif }
   .content { white-space:pre-wrap; font-size:14px }
   .signed { margin-top:32px; border-top:2px solid #e2e8f0; padding-top:16px }
-  .sig { max-height:90px; border-bottom:1px solid #94a3b8; margin-top:6px }
-  .sig-text { font-size:24px; font-family:'Brush Script MT', cursive; border-bottom:1px solid #94a3b8; display:inline-block; padding:4px 12px }
-  .ip { color:#94a3b8; font-size:12px; font-family:system-ui,sans-serif }
+  .sig { max-height:90px; display:block }
+  .sig-text { font-size:24px; font-family:'Brush Script MT', cursive; display:inline-block; padding:4px 12px }
+  .signer { border-top:1px solid #94a3b8; display:inline-block; padding-top:4px; margin:0 0 16px; min-width:260px }
+  .consent { background:#f8fafc; border-left:3px solid #e11d48; padding:10px 14px; font-family:system-ui,sans-serif; font-size:12px; line-height:1.6; margin-bottom:16px }
+  .audit { border-collapse:collapse; font-family:system-ui,sans-serif; font-size:12px; color:#475569 }
+  .audit td { padding:3px 14px 3px 0; vertical-align:top; word-break:break-word }
+  .audit td:first-child { color:#94a3b8; white-space:nowrap }
   .unsigned { margin-top:32px; color:#b45309; font-style:italic }
 </style></head>
 <body>
@@ -161,7 +198,18 @@ router.get('/:id/print', authenticateToken, (req, res) => {
   </div>
   <div class="content">${esc(c.content)}</div>
   ${signedBlock}
-</body></html>`);
+</body></html>`;
+}
+
+// ── Admin: printable contract (open in browser, Save as PDF) ─────────────────
+router.get('/:id/print', authenticateToken, (req, res) => {
+  const c = db.prepare(`
+    SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
+    FROM contracts c JOIN couples co ON co.id = c.couple_id
+    WHERE c.id = ?
+  `).get(req.params.id);
+  if (!c) return res.status(404).send('Contract not found');
+  res.set('Content-Type', 'text/html').send(renderContractHtml(c));
 });
 
 // ── Admin: send contract (generate signing link) ─────────────────────────────
@@ -173,10 +221,13 @@ router.post('/:id/send', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Contract already signed' });
     }
     const token = generateToken();
+    // Re-sending reissues the token, so an earlier link stops working — the
+    // couple signs the copy we last sent them, not one from three revisions ago.
     db.prepare(`
-      UPDATE contracts SET signing_token = ?, status = 'sent', sent_at = datetime('now')
+      UPDATE contracts SET signing_token = ?, status = 'sent', sent_at = datetime('now'),
+             signing_expires_at = datetime('now', ?), viewed_at = NULL
       WHERE id = ?
-    `).run(token, req.params.id);
+    `).run(token, `+${SIGNING_LINK_DAYS} days`, req.params.id);
 
     // Email signing link to couple
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
@@ -198,16 +249,43 @@ router.get('/sign/:token', signLimiter, (req, res) => {
   try {
     const contract = db.prepare(`
       SELECT c.id, c.title, c.content, c.status, c.signer_name, c.signed_at,
+             c.signing_expires_at, c.viewed_at,
+             CASE WHEN c.signing_expires_at IS NOT NULL
+                       AND datetime('now') > c.signing_expires_at
+                  THEN 1 ELSE 0 END AS is_expired,
              co.partner1_name, co.partner2_name, co.email AS couple_email
       FROM contracts c JOIN couples co ON co.id = c.couple_id
       WHERE c.signing_token = ?
     `).get(req.params.token);
 
     if (!contract) return res.status(404).json({ error: 'Invalid or expired signing link' });
+
+    // A signed contract stays retrievable through its link on purpose: it is how
+    // the couple gets back to their own executed copy. Expiry gates signing, not
+    // access to something they already signed.
     if (contract.status === 'signed') {
       return res.json({ ...contract, already_signed: true });
     }
-    res.json(contract);
+
+    if (contract.is_expired) {
+      return res.status(410).json({
+        error: 'This signing link has expired. Contact Rustic Retreat and we will send you a fresh one.',
+        expired: true,
+      });
+    }
+
+    // First open only — this timestamps when the couple was actually presented
+    // with the terms, which is the fact worth keeping, not the last time they
+    // refreshed the tab.
+    if (!contract.viewed_at) {
+      db.prepare("UPDATE contracts SET viewed_at = datetime('now') WHERE id = ? AND viewed_at IS NULL")
+        .run(contract.id);
+    }
+
+    res.json({
+      ...contract,
+      consent_statement: consentStatement('[your name]', contract.title),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -215,9 +293,16 @@ router.get('/sign/:token', signLimiter, (req, res) => {
 
 // ── Public: submit signature ─────────────────────────────────────────────────
 router.post('/sign/:token', signLimiter, (req, res) => {
-  const { signer_name, signature_data } = req.body;
+  const { signer_name, signature_data, agreed } = req.body;
   if (!signer_name || !signature_data) {
     return res.status(400).json({ error: 'Signer name and signature are required' });
+  }
+  // The signing page has always shown an "I agree" checkbox, but the server used
+  // to accept a signature without it — so the one affirmative act that makes an
+  // electronic signature defensible was enforced only in the browser, where a
+  // direct POST bypasses it entirely.
+  if (agreed !== true) {
+    return res.status(400).json({ error: 'You must confirm you agree to the terms before signing' });
   }
 
   try {
@@ -231,17 +316,31 @@ router.post('/sign/:token', signLimiter, (req, res) => {
     if (contract.status === 'signed') {
       return res.status(400).json({ error: 'Contract already signed' });
     }
+    if (contract.signing_expires_at &&
+        new Date() > new Date(contract.signing_expires_at.replace(' ', 'T') + 'Z')) {
+      return res.status(410).json({
+        error: 'This signing link has expired. Contact Rustic Retreat and we will send you a fresh one.',
+        expired: true,
+      });
+    }
 
-    const signer_ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+    // req.ip, not the raw header: Express resolves it against the one trusted
+    // proxy hop configured in index.js, so a client cannot fabricate the address
+    // recorded against their own signature by sending X-Forwarded-For.
+    const signer_ip = req.ip || req.socket.remoteAddress || '';
+    const user_agent = String(req.headers['user-agent'] || '').slice(0, 500);
+    const consent_text = consentStatement(signer_name, contract.title);
 
     // Mark signed
     db.prepare(`
       UPDATE contracts
       SET status = 'signed', signed_at = datetime('now'),
           signer_name = ?, signer_email = ?, signature_data = ?, signer_ip = ?,
+          signer_user_agent = ?, consent_text = ?,
           portal_credentials_sent = 1
       WHERE signing_token = ?
-    `).run(signer_name, contract.email, signature_data, signer_ip, req.params.token);
+    `).run(signer_name, contract.email, signature_data, signer_ip,
+           user_agent, consent_text, req.params.token);
 
     // Update couple: status → booked, and sync event details from contract
     db.prepare(`
@@ -333,6 +432,24 @@ router.post('/sign/:token', signLimiter, (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Public: signer's own executed copy ───────────────────────────────────────
+// Signing a contract and having no way to keep it is not a real e-sign flow.
+// The signing link doubles as the couple's permanent receipt: same token, but
+// it only ever renders a contract that has actually been signed.
+router.get('/sign/:token/print', signLimiter, (req, res) => {
+  const c = db.prepare(`
+    SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
+    FROM contracts c JOIN couples co ON co.id = c.couple_id
+    WHERE c.signing_token = ?
+  `).get(req.params.token);
+
+  if (!c) return res.status(404).send('Contract not found');
+  if (c.status !== 'signed') {
+    return res.status(404).send('This contract has not been signed yet.');
+  }
+  res.set('Content-Type', 'text/html').send(renderContractHtml(c));
 });
 
 // ── Admin: generate contract pre-filled from an accepted proposal ─────────────

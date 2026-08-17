@@ -4,7 +4,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "reset-data": "node reset-data.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

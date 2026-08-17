@@ -8,6 +8,25 @@ const crypto = require('crypto');
 // this must point at a mounted volume (e.g. DB_PATH=/data/rusticretreat.db) or
 // every record is destroyed on each push. The fallback keeps local dev identical.
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'rusticretreat.db');
+
+// The warning above was advice, and advice does not survive a deploy at 11pm.
+// A DB_PATH left inside the app directory in production is silent, total data
+// loss on the next push — the bookings, invoices and signed contracts this CRM
+// exists to keep are simply gone, and nothing surfaces until someone looks.
+// Refuse to boot instead: a failed deploy is recoverable, an erased ledger is not.
+if (process.env.NODE_ENV === 'production') {
+  const resolved = path.resolve(DB_PATH);
+  const appDir = path.resolve(__dirname, '..');
+  if (resolved === appDir || resolved.startsWith(appDir + path.sep)) {
+    throw new Error(
+      `DB_PATH (${resolved}) is inside the application directory, which hosted ` +
+      'platforms replace on every deploy — all CRM data would be destroyed on the ' +
+      'next push. Attach a persistent volume and set DB_PATH to a path on it ' +
+      '(e.g. mount /data, then DB_PATH=/data/rusticretreat.db).'
+    );
+  }
+}
+
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new Database(DB_PATH);
@@ -176,6 +195,14 @@ db.exec(`
     signer_email TEXT,
     signature_data TEXT,
     signer_ip TEXT,
+    -- Signing-ceremony audit trail. Alberta's Electronic Transactions Act does
+    -- not prescribe a format, but if a signature is ever disputed the useful
+    -- evidence is what the signer was shown, that they affirmatively accepted
+    -- it, and from where — not just that a row says 'signed'.
+    signer_user_agent TEXT,
+    consent_text TEXT,
+    viewed_at DATETIME,
+    signing_expires_at DATETIME,
     portal_credentials_sent INTEGER DEFAULT 0,
     wedding_date DATE,
     start_time TEXT,
@@ -222,6 +249,11 @@ for (const col of [
   'ALTER TABLE contracts ADD COLUMN reception_location TEXT',
   'ALTER TABLE contracts ADD COLUMN package_name TEXT',
   'ALTER TABLE contracts ADD COLUMN total_price REAL',
+  // E-signature audit trail + link expiry
+  'ALTER TABLE contracts ADD COLUMN signer_user_agent TEXT',
+  'ALTER TABLE contracts ADD COLUMN consent_text TEXT',
+  'ALTER TABLE contracts ADD COLUMN viewed_at DATETIME',
+  'ALTER TABLE contracts ADD COLUMN signing_expires_at DATETIME',
 ]) { try { db.exec(col); } catch (_) {} }
 
 // Packages table
