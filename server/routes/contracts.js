@@ -42,6 +42,12 @@ function consentStatement(signerName, contractTitle) {
 //   1 venue → 2 partner 1 → 3 partner 2
 const VENUE_SIGNER_NAME = process.env.VENUE_SIGNER_NAME || 'Rustic Retreat Weddings & Events';
 
+// The couple-facing portal is not in use yet, so signing does not mint portal
+// logins. Issuing credentials for a portal nobody is running would hand couples
+// a password to somewhere they should not be going, and quietly create a live
+// login on every signature. Set ENABLE_COUPLE_PORTAL=1 to turn it back on.
+const PORTAL_ENABLED = process.env.ENABLE_COUPLE_PORTAL === '1';
+
 function signersFor(contractId) {
   return db.prepare(
     'SELECT * FROM contract_signers WHERE contract_id = ? ORDER BY sign_order'
@@ -553,7 +559,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
     ).get(req.params.token);
 
     const contract = db.prepare(`
-      SELECT c.*, co.partner1_name, co.partner2_name, co.email, co.password_hash
+      SELECT c.*, co.partner1_name, co.partner2_name, co.email, co.partner2_email, co.password_hash
       FROM contracts c JOIN couples co ON co.id = c.couple_id
       WHERE c.id = ? OR c.signing_token = ?
     `).get(signer ? signer.contract_id : null, req.params.token);
@@ -687,11 +693,11 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       }
     }
 
-    // Create / reveal portal credentials
+    // Create / reveal portal credentials — only while the portal is in use.
     let plain_password = null;
     let is_new_account = false;
 
-    if (!contract.password_hash) {
+    if (PORTAL_ENABLED && !contract.password_hash) {
       // First-time: generate credentials
       plain_password = generatePassword();
       const hashed = bcrypt.hashSync(plain_password, 10);
@@ -703,12 +709,16 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
     const coupleNames = `${contract.partner1_name} & ${contract.partner2_name}`;
     const signedAt = new Date().toLocaleString();
 
-    // Confirmation email to couple
-    email.sendContractSignedCouple({
-      to: contract.email,
-      coupleNames,
-      contractTitle: contract.title,
-    });
+    // Confirmation email to both partners — each signed, so each gets told it is
+    // done, along with a link to their own executed copy.
+    for (const addr of [contract.email, contract.partner2_email].filter(Boolean)) {
+      email.sendContractSignedCouple({
+        to: addr,
+        coupleNames,
+        contractTitle: contract.title,
+        portalEnabled: PORTAL_ENABLED,
+      });
+    }
 
     // Notification email to admin
     email.sendContractSignedAdmin({
@@ -723,7 +733,8 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       fully_signed: true,
       message: 'Contract signed successfully!',
       couple_name: coupleNames,
-      portal_email: contract.email,
+      portal_enabled: PORTAL_ENABLED,
+      portal_email: PORTAL_ENABLED ? contract.email : null,
       portal_password: is_new_account ? plain_password : null,
       is_new_account,
       signers: signersFor(contract.id).map(s => ({

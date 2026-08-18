@@ -163,7 +163,7 @@ export default function SignContract() {
               </div>
             )}
 
-            {result.is_new_account && (
+            {result.portal_enabled && result.is_new_account && (
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 text-left mb-6">
                 <div className="flex items-center gap-2 mb-3">
                   <KeyIcon className="w-5 h-5 text-rose-600" />
@@ -196,7 +196,7 @@ export default function SignContract() {
               </div>
             )}
 
-            {result.fully_signed !== false && !result.is_new_account && (
+            {result.portal_enabled && result.fully_signed !== false && !result.is_new_account && (
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 text-left">
                 <p className="text-sm text-slate-600">
                   Your portal credentials remain the same. Log in with your existing email and password.
@@ -213,13 +213,15 @@ export default function SignContract() {
               </p>
             ) : (
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Link
-                  to="/portal/login"
-                  className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
-                >
-                  <HeartIcon className="w-5 h-5" />
-                  Go to Wedding Portal
-                </Link>
+                {result.portal_enabled && (
+                  <Link
+                    to="/portal/login"
+                    className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+                  >
+                    <HeartIcon className="w-5 h-5" />
+                    Go to Wedding Portal
+                  </Link>
+                )}
                 <a
                   href={`/api/contracts/sign/${token}/print`}
                   target="_blank"

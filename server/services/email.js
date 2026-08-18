@@ -100,15 +100,27 @@ async function sendContractLink({ to, coupleNames, contractTitle, signingUrl, si
 }
 
 // ── Contract signed — confirmation to couple ─────────────────────────────────
-async function sendContractSignedCouple({ to, coupleNames, contractTitle, portalUrl }) {
+async function sendContractSignedCouple({ to, coupleNames, contractTitle, portalUrl, portalEnabled }) {
   const url = portalUrl || `${BASE_URL}/portal/login`;
+  // Only point couples at the portal when it is actually running. Sending a
+  // "log in here" button to a portal that is switched off invites a support
+  // call on the happiest email the venue sends.
+  const portalBlock = portalEnabled
+    ? {
+        text: `\n\nLog in to your wedding planning portal to start planning: ${url}`,
+        html: `<p style="margin:24px 0"><a href="${url}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Open Wedding Portal</a></p>`,
+      }
+    : {
+        text: '\n\nWe will be in touch shortly with your next steps.',
+        html: '<p>We will be in touch shortly with your next steps.</p>',
+      };
   await send({
     to,
     subject: `Contract signed — welcome to Rustic Retreat! 🎉`,
-    text: `Hi ${coupleNames},\n\nThank you for signing "${contractTitle}". Your booking with Rustic Retreat is now confirmed!\n\nLog in to your wedding planning portal to start planning: ${url}\n\nWarm regards,\nRustic Retreat`,
+    text: `Hi ${coupleNames},\n\nThank you for signing "${contractTitle}". Your booking with Rustic Retreat is now confirmed!${portalBlock.text}\n\nWarm regards,\nRustic Retreat`,
     html: `<p>Hi <strong>${coupleNames}</strong>,</p>
 <p>Thank you for signing <strong>"${contractTitle}"</strong>. Your booking with Rustic Retreat is now officially confirmed! 🎉</p>
-<p style="margin:24px 0"><a href="${url}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Open Wedding Portal</a></p>
+${portalBlock.html}
 <p>Warm regards,<br>Rustic Retreat</p>`,
   });
 }

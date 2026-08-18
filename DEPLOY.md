@@ -51,6 +51,7 @@ it.
 | `SMTP_*` | alternative | Your own SMTP server, used only when `RESEND_API_KEY` is unset. Many hosts block outbound SMTP, which is why Resend's HTTPS API is the default. |
 | `STRIPE_*` | optional | Card payments. Unset, the portal falls back to e-Transfer. |
 | `SIGNING_LINK_DAYS` | optional | How long a contract signing link stays valid. Defaults to 45 days. |
+| `ENABLE_COUPLE_PORTAL` | leave unset | The couple portal is switched off. Signing does not create portal logins and the confirmation email omits the portal link. Set to `1` when you are ready to run it. |
 
 \* `CRM_GATE_KEY` is required in production. To intentionally run without the
 gate, set `CRM_PUBLIC=1` instead — but note the seeded staff passwords are in
