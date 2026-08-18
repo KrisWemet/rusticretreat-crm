@@ -14,6 +14,7 @@ import {
   CalendarIcon,
   ChartBarIcon,
   CubeIcon,
+  ShieldCheckIcon,
   MapIcon,
   ViewColumnsIcon,
   DocumentDuplicateIcon,
@@ -36,6 +37,7 @@ const navItems = [
   { to: '/vendors',    icon: BuildingStorefrontIcon,    label: 'Vendors' },
   { to: '/analytics',  icon: ChartBarIcon,              label: 'Analytics' },
   { to: '/packages',   icon: CubeIcon,                  label: 'Packages' },
+  { to: '/backups',    icon: ShieldCheckIcon,           label: 'Backups' },
 ]
 
 export default function Sidebar({ unreadMessages = 0, pendingTasks = 0, open = false, onClose = () => {} }) {

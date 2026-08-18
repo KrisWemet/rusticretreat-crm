@@ -29,6 +29,7 @@ import PortalPayments from './pages/portal/Payments'
 import PortalSettings from './pages/portal/Settings'
 import Analytics from './pages/admin/Analytics'
 import Packages from './pages/admin/Packages'
+import Backups from './pages/admin/Backups'
 import Tours from './pages/admin/Tours'
 import Pipeline from './pages/admin/Pipeline'
 import Proposals from './pages/admin/Proposals'
@@ -86,6 +87,7 @@ function App() {
             <Route path="vendors" element={<VendorsAdmin />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="packages" element={<Packages />} />
+            <Route path="backups" element={<Backups />} />
           </Route>
 
           {/* Couple portal routes */}

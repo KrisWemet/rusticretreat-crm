@@ -52,6 +52,8 @@ it.
 | `STRIPE_*` | optional | Card payments. Unset, the portal falls back to e-Transfer. |
 | `SIGNING_LINK_DAYS` | optional | How long a contract signing link stays valid. Defaults to 45 days. |
 | `ENABLE_COUPLE_PORTAL` | leave unset | The couple portal is switched off. Signing does not create portal logins and the confirmation email omits the portal link. Set to `1` when you are ready to run it. |
+| `BACKUP_INTERVAL_HOURS` | optional | How often to snapshot the database. Defaults to 24. Set to `0` to disable. |
+| `BACKUP_KEEP` | optional | How many snapshots to retain. Defaults to 14. |
 
 \* `CRM_GATE_KEY` is required in production. To intentionally run without the
 gate, set `CRM_PUBLIC=1` instead — but note the seeded staff passwords are in
@@ -102,6 +104,33 @@ per-couple vendor lists. It keeps your staff logins and your venue setup
 
 It refuses to run without `--yes`. Signed contracts are business records —
 download the database file first if there is any chance you still need them.
+
+---
+
+## Backups
+
+The app snapshots its own database every 24 hours into `backups/` beside the
+database file — so on Railway, onto the volume. It keeps the most recent 14 and
+takes one a minute after each boot, so a fresh deploy always has a restore
+point. **Backups** in the sidebar lists them, takes one on demand, and downloads
+any of them. Admin only: a snapshot is every couple, price and signature in one
+file.
+
+Snapshots use SQLite's online backup API, not a file copy. This matters more
+than it sounds. The database runs in WAL mode, where recent commits live in a
+`-wal` sidecar until a checkpoint, so a cron job doing `cp rusticretreat.db`
+produces a file that is stale at best and unreadable at worst — while appearing
+to succeed. If you set up any backup tooling of your own, have it call this
+endpoint rather than copy the file.
+
+**What this does and does not cover.** Snapshots sit on the same volume as the
+live database, so they protect you from a bad import, an accidental delete, or a
+corrupted write. They do not protect you from losing the volume. For that a copy
+has to leave the server — download one periodically and keep it somewhere else.
+The Backups screen says so too.
+
+To restore: download a snapshot, and replace the file at `DB_PATH` with it
+(delete any `-wal` and `-shm` files sitting beside it), then restart the service.
 
 ---
 

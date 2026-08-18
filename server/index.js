@@ -105,10 +105,12 @@ app.use('/api/addons', require('./routes/addons'));
 app.use('/api/proposals', require('./routes/proposals'));
 app.use('/api/forms', require('./routes/forms'));
 app.use('/api/payments', require('./routes/payments'));
+app.use('/api/backup', require('./routes/backup'));
 
 // Start background schedulers
 require('./services/paymentReminder').startReminderScheduler();
 require('./services/leadNurture').startLeadNurtureScheduler();
+require('./services/backup').startBackupScheduler();
 
 // Health check. Must be registered BEFORE the production SPA catch-all below —
 // Express matches in registration order, so app.get('*') would otherwise shadow
