@@ -37,7 +37,11 @@ function authenticateToken(req, res, next) {
     req.user = user;
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Invalid or expired token' });
+    // 401, not 403: the token is unusable, so the caller is not authenticated at
+    // all. The client ends the session on 401 and merely reports a 403, so
+    // conflating them leaves a signed-out user staring at a dashboard whose
+    // every request fails, with nothing telling them to log in again.
+    return res.status(401).json({ error: 'Invalid or expired token', session_expired: true });
   }
 }
 
@@ -57,7 +61,11 @@ function authenticateCouple(req, res, next) {
     req.couple = couple;
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Invalid or expired token' });
+    // 401, not 403: the token is unusable, so the caller is not authenticated at
+    // all. The client ends the session on 401 and merely reports a 403, so
+    // conflating them leaves a signed-out user staring at a dashboard whose
+    // every request fails, with nothing telling them to log in again.
+    return res.status(401).json({ error: 'Invalid or expired token', session_expired: true });
   }
 }
 
@@ -80,7 +88,11 @@ function authenticateAny(req, res, next) {
     req.auth = decoded;
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Invalid or expired token' });
+    // 401, not 403: the token is unusable, so the caller is not authenticated at
+    // all. The client ends the session on 401 and merely reports a 403, so
+    // conflating them leaves a signed-out user staring at a dashboard whose
+    // every request fails, with nothing telling them to log in again.
+    return res.status(401).json({ error: 'Invalid or expired token', session_expired: true });
   }
 }
 
