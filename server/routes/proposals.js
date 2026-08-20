@@ -106,27 +106,39 @@ router.put('/:id', authenticateToken, (req, res) => {
 
 // ── Admin: send proposal to couple (generates public link + email) ───────────
 router.post('/:id/send', authenticateToken, async (req, res) => {
-  const proposal = getFullProposal(req.params.id);
-  if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+  // Wrapped because Express 4 does not catch a rejected async handler: the
+  // rejection escapes to the process, and Node treats an unhandled rejection as
+  // fatal. One failed proposal email would take the entire CRM down and every
+  // request would answer 502 until the platform restarted it.
+  try {
+    const proposal = getFullProposal(req.params.id);
+    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
 
-  const token = proposal.public_token || crypto.randomBytes(24).toString('hex');
-  db.prepare(`UPDATE proposals SET status = 'sent', public_token = ?, sent_at = datetime('now') WHERE id = ?`)
-    .run(token, proposal.id);
+    const token = proposal.public_token || crypto.randomBytes(24).toString('hex');
+    db.prepare(`UPDATE proposals SET status = 'sent', public_token = ?, sent_at = datetime('now') WHERE id = ?`)
+      .run(token, proposal.id);
 
-  // Move the couple forward in the pipeline when a proposal goes out.
-  db.prepare(`UPDATE couples SET pipeline_stage = 'proposal' WHERE id = ? AND pipeline_stage IN ('inquiry', 'tour')`)
-    .run(proposal.couple_id);
+    // Move the couple forward in the pipeline when a proposal goes out.
+    db.prepare(`UPDATE couples SET pipeline_stage = 'proposal' WHERE id = ? AND pipeline_stage IN ('inquiry', 'tour')`)
+      .run(proposal.couple_id);
 
-  if (proposal.couple_email) {
-    await email.sendProposal({
-      to: proposal.couple_email,
-      coupleNames: `${proposal.partner1_name} & ${proposal.partner2_name}`,
-      title: proposal.title,
-      total: proposal.total,
-      token,
-    });
+    let delivery = { delivered: true, error: null };
+    if (proposal.couple_email) {
+      const r = await email.sendProposal({
+        to: proposal.couple_email,
+        coupleNames: `${proposal.partner1_name} & ${proposal.partner2_name}`,
+        title: proposal.title,
+        total: proposal.total,
+        token,
+      });
+      delivery = { delivered: r?.delivered === true, error: r?.error || null };
+    }
+    // The proposal is sent either way — the link is live. Say so honestly rather
+    // than letting staff assume the couple was emailed.
+    res.json({ ...getFullProposal(req.params.id), ...delivery });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  res.json(getFullProposal(req.params.id));
 });
 
 router.delete('/:id', authenticateToken, (req, res) => {

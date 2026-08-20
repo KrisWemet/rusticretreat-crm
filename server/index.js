@@ -6,6 +6,7 @@ require('dotenv').config();
 const app = express();
 
 const IS_PROD = process.env.NODE_ENV === 'production';
+const BOOTED_AT = new Date();
 
 // Trust exactly one proxy hop (Railway/Vercel/Fly all sit in front of us) so
 // req.ip is the proxy-validated client address rather than a client-supplied
@@ -145,7 +146,15 @@ require('./services/backup').startBackupScheduler();
 // it and return index.html with a 200, making the platform healthcheck pass even
 // when every API router is broken.
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  // uptime_seconds makes a crash loop visible from the outside: if this keeps
+  // resetting to a few seconds, the process is dying and being restarted, which
+  // is what a 502 on every page actually means.
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime_seconds: Math.round(process.uptime()),
+    booted_at: BOOTED_AT.toISOString(),
+  });
 });
 
 // Unmatched /api paths must 404 as JSON. Without this the SPA catch-all answers
@@ -168,6 +177,30 @@ if (IS_PROD) {
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error', message: err.message });
+});
+
+// ── Last-resort crash guards ─────────────────────────────────────────────────
+// Node kills the process on an unhandled promise rejection, and Express 4 does
+// not catch a rejected async route handler — so one failed email inside one
+// request could take the whole CRM offline, and every page would answer 502
+// until the platform noticed and restarted it. That has happened.
+//
+// Individual handlers still catch their own errors; this only stops a miss from
+// being fatal. Both are logged loudly and prefixed so they are findable in the
+// deploy log, because a swallowed crash that nobody can see is its own problem.
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL-GUARD] Unhandled promise rejection — request failed, server kept running');
+  console.error(reason instanceof Error ? reason.stack : reason);
+});
+
+process.on('uncaughtException', (err) => {
+  // Node's own advice is to exit here, on the grounds that state may be
+  // corrupt. For this app the realistic source is an async callback in one
+  // request, and taking a venue's entire CRM offline is the worse failure —
+  // Railway would restart it, but only after every page has been dead for a
+  // while. Log it as needing investigation and stay up.
+  console.error('[FATAL-GUARD] Uncaught exception — server kept running, investigate this');
+  console.error(err?.stack || err);
 });
 
 const PORT = process.env.PORT || 3001;
