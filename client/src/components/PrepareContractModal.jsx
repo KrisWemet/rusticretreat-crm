@@ -39,6 +39,7 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
   // while it was away, without putting `values` in any dependency list.
   const valuesRef = useRef(values)
   useEffect(() => { valuesRef.current = values }, [values])
+  const [syncWarnings, setSyncWarnings] = useState([])
 
   // Keyed on the contract id alone. Anything broader re-runs while the modal is
   // open, and this effect resets `values` — so a re-run means losing work.
@@ -79,7 +80,16 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
       // flight. Otherwise the newest keystrokes would be reported as saved when
       // they are still only in the browser.
       if (valuesRef.current === sent) setDirty(false)
-      if (!quiet) toast.success('Venue details saved')
+      // A sync conflict means the contract and the client record now disagree
+      // about an email address — which decides where the signing link goes. It
+      // has to be said out loud, not buried in a response body.
+      if (r.data.sync_warnings?.length) {
+        r.data.sync_warnings.forEach(w => toast.error(w, { duration: 8000 }))
+        setSyncWarnings(r.data.sync_warnings)
+      } else {
+        setSyncWarnings([])
+        if (!quiet) toast.success('Venue details saved')
+      }
       onSaved?.()
       return r.data
     } catch (e) {
@@ -175,6 +185,24 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {syncWarnings.length > 0 && (
+            <div className="flex items-start gap-2 bg-rose-50 border border-rose-300 rounded-xl px-4 py-3">
+              <ExclamationTriangleIcon className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-rose-900">
+                  The client record could not be updated to match
+                </p>
+                <ul className="text-xs text-rose-700 mt-1 list-disc pl-4 space-y-0.5">
+                  {syncWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+                <p className="text-xs text-rose-700 mt-1.5">
+                  Signing links are sent to the address on the client record, so fix this before
+                  signing or the contract will name one address and the email will go to another.
+                </p>
               </div>
             </div>
           )}

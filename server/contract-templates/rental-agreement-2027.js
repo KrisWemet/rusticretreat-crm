@@ -44,22 +44,32 @@ module.exports = {
         { t: 'h1', text: '1. PARTIES TO THIS AGREEMENT' },
         { t: 'h2', text: 'Venue' },
         { t: 'p', text: 'Rustic Retreat Weddings & Events Ltd.  ·  Shannon Ouimet, Venue Coordinator  ·  rusticretreatalberta@gmail.com  ·  (780)210-6252' },
+        // Filled by the VENUE, not the couple. The contract cannot be sent
+        // without knowing who to send it to, and the signing chain already
+        // refuses to lock a contract until both partners' addresses are on
+        // file — so asking the couple for them was circular.
+        //
+        // Names and emails are required because the signing links depend on
+        // them. Phone and postal address are not: the venue often does not have
+        // them when the booking is made, and a missing postal code must never
+        // block a wedding. Blank optional fields print as a ruled line, exactly
+        // as they do on the paper contract.
         { t: 'h2', text: 'Client Details' },
         { t: 'fields', cols: 2, items: [
-          { key: 'client1_name',  label: 'CLIENT 1: FULL NAME', type: 'text',  fill: CLIENT, required: true },
-          { key: 'client2_name',  label: 'CLIENT 2: FULL NAME', type: 'text',  fill: CLIENT, required: true },
-          { key: 'client1_phone', label: 'CLIENT 1: PHONE',     type: 'tel',   fill: CLIENT, required: true },
-          { key: 'client2_phone', label: 'CLIENT 2: PHONE',     type: 'tel',   fill: CLIENT, required: true },
-          { key: 'client1_email', label: 'CLIENT 1: EMAIL',     type: 'email', fill: CLIENT, required: true },
-          { key: 'client2_email', label: 'CLIENT 2: EMAIL',     type: 'email', fill: CLIENT, required: true },
+          { key: 'client1_name',  label: 'CLIENT 1: FULL NAME', type: 'text',  fill: VENUE, required: true },
+          { key: 'client2_name',  label: 'CLIENT 2: FULL NAME', type: 'text',  fill: VENUE, required: true },
+          { key: 'client1_phone', label: 'CLIENT 1: PHONE',     type: 'tel',   fill: VENUE, required: false },
+          { key: 'client2_phone', label: 'CLIENT 2: PHONE',     type: 'tel',   fill: VENUE, required: false },
+          { key: 'client1_email', label: 'CLIENT 1: EMAIL',     type: 'email', fill: VENUE, required: true },
+          { key: 'client2_email', label: 'CLIENT 2: EMAIL',     type: 'email', fill: VENUE, required: true },
         ]},
         { t: 'fields', cols: 1, items: [
-          { key: 'mailing_address', label: 'MAILING ADDRESS', type: 'text', fill: CLIENT, required: true },
+          { key: 'mailing_address', label: 'MAILING ADDRESS', type: 'text', fill: VENUE, required: false },
         ]},
         { t: 'fields', cols: 3, items: [
-          { key: 'city',        label: 'CITY',        type: 'text', fill: CLIENT, required: true },
-          { key: 'province',    label: 'PROVINCE',    type: 'text', fill: CLIENT, required: true },
-          { key: 'postal_code', label: 'POSTAL CODE', type: 'text', fill: CLIENT, required: true },
+          { key: 'city',        label: 'CITY',        type: 'text', fill: VENUE, required: false },
+          { key: 'province',    label: 'PROVINCE',    type: 'text', fill: VENUE, required: false },
+          { key: 'postal_code', label: 'POSTAL CODE', type: 'text', fill: VENUE, required: false },
         ]},
         { t: 'fields', cols: 2, items: [
           { key: 'agreement_date', label: 'AGREEMENT DATE',      type: 'date', fill: VENUE, required: true },

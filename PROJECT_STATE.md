@@ -214,6 +214,22 @@ separately: one link, one ceremony, both documents, and a consent statement that
 names both by title. Sending them apart would recreate by hand the half-executed
 booking that clause exists to prevent.
 
+**Who fills in what.** The venue supplies Section 1's Client Details — both
+names, both emails, phone and postal address — because the contract cannot be
+sent without knowing where to send it, and `sign-venue` already refuses to lock
+one until both partners' addresses are on file. Asking the couple for them was
+circular. Names and emails are required; phone and address are not, so a missing
+postal code can never block a booking. The couple fills in their on-site
+contacts and their five choices, and initials.
+
+Those fields are **prefilled from the couple record** at creation and **written
+back to it** on save, so the contract is the place staff edit and the couple
+record follows. They must not drift: signing links go to the couple record while
+the contract prints its own copy, so a disagreement means the document names one
+address and the email goes to another. `couples.email` is UNIQUE (it is the
+portal login), so a collision is surfaced as a warning on the prep screen rather
+than silently dropped.
+
 **Two locks, not one.** `locked_at` freezes the terms and the venue's fields when
 the venue signs. `client_fields_locked_at` freezes the couple's answers when
 Client 1 submits, so Client 2 initials and signs the same document rather than

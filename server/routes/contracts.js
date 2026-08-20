@@ -225,6 +225,30 @@ router.post('/', authenticateToken, (req, res) => {
       guest_count || null, ceremony_location || null, reception_location || null,
       package_name || null, total_price || null,
     );
+    // Seed the client-detail fields the venue fills in. The CRM already holds
+    // these from the enquiry, and retyping a couple's own email into their
+    // contract is both wasted work and a chance to get the signing address
+    // wrong. Only non-empty values are written, so nothing overwrites a real
+    // answer with a blank.
+    if (packet) {
+      const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(couple_id);
+      if (couple) {
+        const seed = {
+          client1_name:  couple.partner1_name,
+          client2_name:  couple.partner2_name,
+          client1_email: couple.email,
+          client2_email: couple.partner2_email,
+          client1_phone: couple.phone,
+        };
+        tpl.saveValues(
+          result.lastInsertRowid,
+          Object.fromEntries(Object.entries(seed).filter(([, v]) => v)),
+          'venue',
+          packet,
+        );
+      }
+    }
+
     const contract = db.prepare(`
       SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
       FROM contracts c JOIN couples co ON co.id = c.couple_id
@@ -312,7 +336,11 @@ router.get('/:id/template', authenticateToken, (req, res) => {
 // ── Admin: fill in the venue's own fields before sending ─────────────────────
 router.put('/:id/fields', authenticateToken, (req, res) => {
   try {
-    const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
+    const contract = db.prepare(`
+      SELECT c.*, co.partner1_name, co.partner2_name, co.email, co.partner2_email
+      FROM contracts c JOIN couples co ON co.id = c.couple_id
+      WHERE c.id = ?
+    `).get(req.params.id);
     if (!contract) return res.status(404).json({ error: 'Not found' });
     if (!contract.template_key) {
       return res.status(400).json({ error: 'This is a free-text contract, not a template' });
@@ -332,6 +360,36 @@ router.put('/:id/fields', authenticateToken, (req, res) => {
     const { written, ignored } = tpl.saveValues(contract.id, req.body?.fields, 'venue', packet);
     const { values } = tpl.getValues(contract.id);
 
+    // The couple's names and addresses live in two places now: on the couple
+    // record, which the signing chain reads to decide who gets a link, and on
+    // the contract, which is what gets printed. If they disagree the contract
+    // names one address and the link goes to another — silently. So a change
+    // here is written back to the couple record, making the contract the place
+    // staff edit and the couple record follow.
+    const syncWarnings = [];
+    const syncPairs = [
+      ['client1_name',  'partner1_name'],
+      ['client2_name',  'partner2_name'],
+      ['client1_email', 'email'],
+      ['client2_email', 'partner2_email'],
+    ];
+    for (const [fieldKey, coupleCol] of syncPairs) {
+      const v = String(values[fieldKey] ?? '').trim();
+      if (!v || v === contract[coupleCol]) continue;
+      try {
+        db.prepare(`UPDATE couples SET ${coupleCol} = ? WHERE id = ?`).run(v, contract.couple_id);
+      } catch (e) {
+        // couples.email is UNIQUE — it is the portal login. A collision means
+        // another couple already uses that address, which is a real conflict
+        // staff have to resolve, not something to paper over.
+        syncWarnings.push(
+          coupleCol === 'email'
+            ? `Could not set ${v} as the client's main email — another client record already uses it.`
+            : `Could not update ${coupleCol}: ${e.message}`
+        );
+      }
+    }
+
     // Mirror the two answers the rest of the CRM reads onto the contract row, so
     // the calendar and the invoice list keep working without every consumer
     // learning how to walk a template.
@@ -345,6 +403,7 @@ router.put('/:id/fields', authenticateToken, (req, res) => {
 
     res.json({
       success: true, written, ignored, values,
+      sync_warnings: syncWarnings,
       payment_schedule: tpl.paymentSchedule(packet, values),
       missing_venue: tpl.missingRequired(packet, values, 'venue'),
     });
