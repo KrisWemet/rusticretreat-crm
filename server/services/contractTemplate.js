@@ -225,6 +225,40 @@ function paymentSchedule(packet, values) {
   });
 }
 
+// Splits the GST-inclusive fee back into its parts for display. The stored
+// value is always the total the client pays, so the subtotal is derived from it
+// rather than kept separately — one number in the database, no chance of the
+// parts and the total disagreeing.
+function feeBreakdown(packet, values) {
+  const doc = packet.documents.find(d => d.gstRate != null);
+  const rate = doc ? doc.gstRate : 0;
+  const total = parseFloat(String(values.total_package_fee || '').replace(/[^0-9.]/g, '')) || 0;
+  const subtotal = rate ? total / (1 + rate) : total;
+  return {
+    rate,
+    subtotal: Math.round(subtotal * 100) / 100,
+    gst: Math.round((total - subtotal) * 100) / 100,
+    total: Math.round(total * 100) / 100,
+  };
+}
+
+// The GST-inclusive price for a package option, which is what Section 4 wants.
+function packagePriceWithTax(packet, optionValue) {
+  for (const doc of packet.documents) {
+    for (const section of doc.sections) {
+      for (const block of section.blocks) {
+        if (block.t === 'choice' && block.key === 'package') {
+          const opt = block.options.find(o => o.value === optionValue);
+          if (!opt || opt.price == null) return null;
+          const rate = doc.gstRate || 0;
+          return Math.round(opt.price * (1 + rate) * 100) / 100;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function packageLabel(packet, values) {
   for (const doc of packet.documents) {
     for (const section of doc.sections) {
@@ -245,5 +279,5 @@ module.exports = {
   collectFields, initialsBlocks, defaultValues,
   getValues, saveValues, missingRequired,
   getInitials, initialsByBlock, saveInitials, missingInitials,
-  paymentSchedule, packageLabel,
+  paymentSchedule, packageLabel, feeBreakdown, packagePriceWithTax,
 };

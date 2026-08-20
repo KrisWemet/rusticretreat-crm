@@ -192,6 +192,10 @@ module.exports = {
           { key: 'total_package_fee', label: 'TOTAL PACKAGE FEE (INCLUDING GST / EXCL. OVERAGES)', type: 'money', fill: VENUE, required: true },
           { key: 'damage_deposit',    label: 'DAMAGE DEPOSIT (DUE AT CHECK-IN)',                   type: 'money', fill: VENUE, required: true, default: '1000.00' },
         ]},
+        // Reconciles the two figures: Section 3 quotes $6,500, Section 4 shows
+        // $6,825, and without this line a couple has no way to see that the
+        // difference is GST.
+        { t: 'feeSummary' },
         { t: 'paymentSchedule' },
         { t: 'note', text: 'Your dates are NOT confirmed until all documentation is signed and the initial deposit is received.' },
         { t: 'h2', text: '4.1 Payment Methods' },
@@ -459,6 +463,12 @@ module.exports = {
       ['Fire Extinguishers', 'Gazebo, Bridal Suite, Generator Area'],
     ],
   },
+
+  // Alberta charges 5% GST and no provincial sales tax. The package prices in
+  // Section 3 are quoted before tax; Section 4's "TOTAL PACKAGE FEE (INCLUDING
+  // GST)" is that price plus GST, which is what the payment schedule is a share
+  // of. Kept here so the rate is stated once.
+  gstRate: 0.05,
 
   // Section 4's schedule. Percentages are of `total_package_fee`; the damage
   // deposit is a flat amount taken at check-in and is not part of the package

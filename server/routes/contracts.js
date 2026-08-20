@@ -320,13 +320,14 @@ router.get('/:id/template', authenticateToken, (req, res) => {
         documents: packet.documents.map(d => ({
           key: d.key, title: d.title, subtitle: d.subtitle, preamble: d.preamble,
           venueBlock: d.venueBlock, sections: d.sections, appendix: d.appendix,
-          signatures: d.signatures,
+          signatures: d.signatures, gstRate: d.gstRate,
         })),
       },
       values, meta,
       locked: !!contract.locked_at,
       client_fields_locked: !!contract.client_fields_locked_at,
       payment_schedule: tpl.paymentSchedule(packet, values),
+      fee_breakdown: tpl.feeBreakdown(packet, values),
       missing_venue: tpl.missingRequired(packet, values, 'venue'),
       missing_client: tpl.missingRequired(packet, values, 'client'),
       initials_blocks: tpl.initialsBlocks(packet),
@@ -408,6 +409,7 @@ router.put('/:id/fields', authenticateToken, (req, res) => {
       success: true, written, ignored, values,
       sync_warnings: syncWarnings,
       payment_schedule: tpl.paymentSchedule(packet, values),
+      fee_breakdown: tpl.feeBreakdown(packet, values),
       missing_venue: tpl.missingRequired(packet, values, 'venue'),
     });
   } catch (err) {
@@ -820,11 +822,12 @@ router.get('/sign/:token', signLimiter, (req, res) => {
             documents: packet.documents.map(d => ({
               key: d.key, title: d.title, subtitle: d.subtitle, preamble: d.preamble,
               venueBlock: d.venueBlock, sections: d.sections, appendix: d.appendix,
-              signatures: d.signatures,
+              signatures: d.signatures, gstRate: d.gstRate,
             })),
           },
           values,
           payment_schedule: tpl.paymentSchedule(packet, values),
+      fee_breakdown: tpl.feeBreakdown(packet, values),
           can_edit_fields: !!canEditFields,
           client_fields_locked: !!contract.client_fields_locked_at,
           initials_blocks: tpl.initialsBlocks(packet),

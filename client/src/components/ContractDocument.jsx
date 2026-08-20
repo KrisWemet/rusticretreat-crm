@@ -43,41 +43,58 @@ const COLS = { 1: 'sm:grid-cols-1', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3' }
 function Field({ f, value, onChange, editable, invalid }) {
   if (f.type === 'spacer') return <div className="hidden sm:block" />
 
-  const label = f.label ? (
-    <label htmlFor={`f-${f.key}`} className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-      {f.label}{f.required && editable && <span className="text-rose-500 ml-1">*</span>}
-    </label>
-  ) : null
+  const labelClass = 'block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1'
+  const labelText = f.label
+    ? <>{f.label}{f.required && editable && <span className="text-rose-500 ml-1">*</span>}</>
+    : null
 
   if (!editable) {
+    // Read-only: there is no input here, so this is a caption, not a label.
+    // Rendering <label htmlFor="f-…"> pointed at an id that does not exist and
+    // was the bulk of the browser's reported form issues. The value carries the
+    // id instead, and is described by the caption.
     const shown = display(f, value)
+    const capId = `cap-${f.key}`
     return (
       <div>
-        {label}
-        <div className={`border-b py-1 min-h-[28px] text-[15px] break-words ${shown ? 'border-slate-300 text-slate-900' : 'border-slate-200 text-slate-300'}`}>
+        {labelText && <div id={capId} className={labelClass}>{labelText}</div>}
+        <div
+          id={`f-${f.key}-value`}
+          aria-labelledby={labelText ? capId : undefined}
+          className={`border-b py-1 min-h-[28px] text-[15px] break-words ${shown ? 'border-slate-300 text-slate-900' : 'border-slate-200 text-slate-300'}`}
+        >
           {shown || '—'}
         </div>
       </div>
     )
   }
 
+  const label = labelText
+    ? <label htmlFor={`f-${f.key}`} className={labelClass}>{labelText}</label>
+    : null
+
   const base = `w-full border rounded-lg px-3 py-2 text-[15px] transition-colors
     focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-400
     ${invalid ? 'border-rose-400 bg-rose-50' : 'border-slate-200 bg-white'}`
+
+  // A few fields carry no visible label because the heading above them already
+  // says what they are — Section 13's notes box, for one. They still need a
+  // name a screen reader can announce.
+  const a11y = f.label ? {} : { 'aria-label': f.ariaLabel || f.placeholder || f.key.replace(/_/g, ' ') }
 
   return (
     <div>
       {label}
       {f.type === 'textarea' ? (
-        <textarea id={`f-${f.key}`} rows={4} className={base} placeholder={f.placeholder || ''}
+        <textarea id={`f-${f.key}`} {...a11y} rows={4} className={base} placeholder={f.placeholder || ''}
           value={value || ''} onChange={e => onChange(f.key, e.target.value)} />
       ) : f.type === 'select' ? (
-        <select id={`f-${f.key}`} className={base} value={value || ''} onChange={e => onChange(f.key, e.target.value)}>
+        <select id={`f-${f.key}`} {...a11y} className={base} value={value || ''} onChange={e => onChange(f.key, e.target.value)}>
           <option value="">Select…</option>
           {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       ) : (
-        <input id={`f-${f.key}`} className={base} placeholder={f.placeholder || ''}
+        <input id={`f-${f.key}`} {...a11y} className={base} placeholder={f.placeholder || ''}
           type={f.type === 'money' ? 'text' : (f.type || 'text')}
           inputMode={f.type === 'money' ? 'decimal' : undefined}
           value={value || ''} onChange={e => onChange(f.key, e.target.value)} />
@@ -92,11 +109,15 @@ function ChoiceBlock({ block, value, onChange, editable, invalid }) {
   return (
     <div className="my-4">
       {block.label && (
-        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-2">
+        <div id={`cg-${block.key}`} className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-2">
           {block.label}{block.required && editable && <span className="text-rose-500 ml-1">*</span>}
         </div>
       )}
-      <div className={`overflow-x-auto rounded-lg border ${invalid ? 'border-rose-400' : 'border-slate-200'}`}>
+      <div
+        role={editable ? 'radiogroup' : undefined}
+        aria-labelledby={editable && block.label ? `cg-${block.key}` : undefined}
+        className={`overflow-x-auto rounded-lg border ${invalid ? 'border-rose-400' : 'border-slate-200'}`}
+      >
         <table className="w-full text-sm">
           {hasCols && (
             <thead>
@@ -111,23 +132,27 @@ function ChoiceBlock({ block, value, onChange, editable, invalid }) {
           <tbody>
             {block.options.map(o => {
               const on = o.value === value
-              const Row = editable ? 'label' : 'div'
+              // One id per radio, and every cell is a <label for> pointing at it.
+              // The row used to be a bare <label> with an onClick and no control
+              // inside, which is both an accessibility fault and the reason the
+              // browser reported labels with nothing attached.
+              const rid = `c-${block.key}-${o.value}`
               return (
                 <tr key={o.value} className={on ? 'bg-emerald-50' : ''}>
                   <td className="px-3 py-2 align-top">
                     {editable ? (
-                      <input type="radio" name={block.key} value={o.value} checked={on}
+                      <input type="radio" id={rid} name={block.key} value={o.value} checked={on}
                         onChange={() => onChange(block.key, o.value)}
                         className="w-4 h-4 text-rose-600 focus:ring-rose-400" />
                     ) : (
-                      <span className="text-base">{on ? '☑' : '☐'}</span>
+                      <span className="text-base" aria-hidden="true">{on ? '☑' : '☐'}</span>
                     )}
                   </td>
                   {o.cells.map((c, i) => (
                     <td key={i} className={`px-3 py-2 align-top ${on ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>
-                      {editable ? (
-                        <Row className="cursor-pointer block" onClick={() => onChange(block.key, o.value)}>{c}</Row>
-                      ) : c}
+                      {editable
+                        ? <label htmlFor={rid} className="cursor-pointer block">{c}</label>
+                        : c}
                     </td>
                   ))}
                 </tr>
@@ -224,12 +249,38 @@ function PaymentScheduleTable({ rows }) {
   )
 }
 
+function FeeSummary({ breakdown }) {
+  if (!breakdown?.total) return null
+  const { subtotal, gst, total, rate } = breakdown
+  return (
+    <div className="my-4 ml-auto max-w-sm rounded-lg border border-slate-200 overflow-hidden">
+      <table className="w-full text-sm">
+        <tbody>
+          <tr className="border-b border-slate-100">
+            <td className="px-3 py-2 text-slate-600">Package fee (before tax)</td>
+            <td className="px-3 py-2 text-right whitespace-nowrap">{fmtMoney(subtotal)}</td>
+          </tr>
+          <tr className="border-b border-slate-100">
+            <td className="px-3 py-2 text-slate-600">GST ({Math.round(rate * 100)}%)</td>
+            <td className="px-3 py-2 text-right whitespace-nowrap">{fmtMoney(gst)}</td>
+          </tr>
+          <tr className="bg-slate-50">
+            <td className="px-3 py-2 font-bold text-slate-900">Total package fee (including GST)</td>
+            <td className="px-3 py-2 text-right whitespace-nowrap font-bold text-slate-900">{fmtMoney(total)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function ContractDocument({
   packet,
   values = {},
   onChange,
   editableFill = null,     // 'venue' | 'client' | null
   paymentSchedule = [],
+  feeBreakdown = null,
   initialsFor = null,      // 'partner1' | 'partner2' | null — whose turn it is
   myInitials = {},         // { blockKey: 'AB' }
   allInitials = {},        // { blockKey: { partner1: 'AB', partner2: 'JR' } }
@@ -327,6 +378,8 @@ export default function ContractDocument({
             highlight={highlightBlock === block.key}
           />
         )
+      case 'feeSummary':
+        return <FeeSummary key={key} breakdown={feeBreakdown} />
       case 'paymentSchedule':
         return <PaymentScheduleTable key={key} rows={paymentSchedule} />
       default:

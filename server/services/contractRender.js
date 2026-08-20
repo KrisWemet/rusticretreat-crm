@@ -7,7 +7,7 @@
 // should not depend on a bundle running — but it is the one place in this feature
 // where a change has to be made twice.
 
-const { paymentSchedule } = require('./contractTemplate');
+const { paymentSchedule, feeBreakdown } = require('./contractTemplate');
 
 const esc = s => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -115,6 +115,18 @@ function renderPaymentSchedule(packet, values) {
   </table>`;
 }
 
+function renderFeeSummary(packet, values) {
+  const b = feeBreakdown(packet, values);
+  if (!b.total) return '';
+  return `<table class="grid fee-summary">
+    <tbody>
+      <tr><td>Package fee (before tax)</td><td class="num">${fmtMoney(b.subtotal)}</td></tr>
+      <tr><td>GST (${(b.rate * 100).toFixed(0)}%)</td><td class="num">${fmtMoney(b.gst)}</td></tr>
+      <tr class="total"><td>Total package fee (including GST)</td><td class="num">${fmtMoney(b.total)}</td></tr>
+    </tbody>
+  </table>`;
+}
+
 function renderBlock(block, ctx) {
   const { values, initials, signers, packet } = ctx;
   switch (block.t) {
@@ -137,6 +149,7 @@ function renderBlock(block, ctx) {
     case 'fields':         return renderFieldsBlock(block, values);
     case 'choice':         return renderChoiceBlock(block, values);
     case 'initials':       return renderInitialsBlock(block, initials, signers);
+    case 'feeSummary':      return renderFeeSummary(packet, values);
     case 'paymentSchedule': return renderPaymentSchedule(packet, values);
     default: return '';
   }
@@ -287,6 +300,8 @@ function renderPacketHtml({ packet, values, signers, initials, initialsRows, tit
   table.grid td, table.choice td { padding:6px 8px; border-bottom:1px solid #e2e8f0; vertical-align:top }
   table.grid td.k { color:#64748b; white-space:nowrap; width:34% }
   .num { text-align:right; white-space:nowrap }
+  table.fee-summary { max-width:360px; margin-left:auto }
+  table.fee-summary tr.total td { font-weight:800; border-top:2px solid #cbd5e1; border-bottom:0 }
   tr.chosen td { background:#f0fdf4; font-weight:700 }
   tr.unchosen td { color:#94a3b8 }
   td.box { width:24px; font-size:15px; text-align:center }

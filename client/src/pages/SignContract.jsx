@@ -408,12 +408,15 @@ export default function SignContract() {
 
             {/* Your initials — set once, then stamped clause by clause. */}
             <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
-              <label className="block text-sm font-semibold text-slate-800 mb-1">Your initials</label>
+              <label htmlFor="signer-initials" className="block text-sm font-semibold text-slate-800 mb-1">Your initials</label>
               <p className="text-xs text-slate-500 mb-3">
                 Set these once, then tap “Initial here” at each marked clause. Every clause is
                 acknowledged separately, so there is no way to apply them all at once.
               </p>
               <input
+                id="signer-initials"
+                name="signer-initials"
+                autoComplete="off"
                 value={initialsText}
                 onChange={e => setInitialsText(e.target.value.toUpperCase().slice(0, 4))}
                 maxLength={4}
@@ -430,6 +433,7 @@ export default function SignContract() {
               onChange={setField}
               editableFill={canEditFields ? 'client' : null}
               paymentSchedule={tpl.payment_schedule || []}
+              feeBreakdown={tpl.fee_breakdown || null}
               initialsFor={contract.signer_role}
               myInitials={myInitials}
               allInitials={tpl.all_initials || {}}
@@ -468,10 +472,13 @@ export default function SignContract() {
           <div className="px-6 py-6 space-y-6">
             {/* Full name */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="signer-name" className="block text-sm font-medium text-slate-700 mb-1">
                 Full Legal Name <span className="text-red-500">*</span>
               </label>
               <input
+                id="signer-name"
+                name="signer-name"
+                autoComplete="name"
                 type="text"
                 required
                 value={signerName}
@@ -483,9 +490,9 @@ export default function SignContract() {
 
             {/* Signature pad */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <div className="block text-sm font-medium text-slate-700 mb-2">
                 Signature <span className="text-red-500">*</span>
-              </label>
+              </div>
               <SignaturePad onChange={setSignatureData} />
             </div>
 
@@ -493,6 +500,8 @@ export default function SignContract() {
             <label className="flex items-start gap-3 cursor-pointer group">
               <div className="relative flex-shrink-0 mt-0.5">
                 <input
+                  id="consent-agreed"
+                  name="consent-agreed"
                   type="checkbox"
                   checked={agreed}
                   onChange={e => setAgreed(e.target.checked)}

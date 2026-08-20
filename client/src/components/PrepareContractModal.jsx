@@ -68,6 +68,11 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
   // the package fee in Section 4. The link is declared in the template (`sets`
   // on the choice, `price` on each option), not hardcoded here, so the price in
   // the table the couple reads and the fee they are charged cannot disagree.
+  const gstRate = useMemo(
+    () => data?.packet?.documents?.find(d => d.gstRate != null)?.gstRate ?? 0,
+    [data?.packet],
+  )
+
   const linkedChoices = useMemo(() => {
     const out = {}
     for (const doc of data?.packet?.documents || [])
@@ -86,7 +91,12 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
       // discount — they can always edit the amount after choosing.
       if (link && v[key] !== value) {
         const opt = link.options.find(o => o.value === value)
-        if (opt?.price != null) next[link.sets] = String(opt.price)
+        // Section 3 quotes the price before tax; Section 4 wants it including
+        // GST. The rate comes from the template so it is stated once.
+        if (opt?.price != null) {
+          const withTax = Math.round(opt.price * (1 + gstRate) * 100) / 100
+          next[link.sets] = String(withTax)
+        }
       }
       return next
     })
@@ -134,6 +144,17 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
   // package fee, a TBD row has no amount, and the remaining flat row is the
   // damage deposit.
   const num = v => parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')) || 0
+  const liveFeeBreakdown = useMemo(() => {
+    const total = num(values.total_package_fee)
+    const subtotal = gstRate ? total / (1 + gstRate) : total
+    return {
+      rate: gstRate,
+      subtotal: Math.round(subtotal * 100) / 100,
+      gst: Math.round((total - subtotal) * 100) / 100,
+      total: Math.round(total * 100) / 100,
+    }
+  }, [values.total_package_fee, gstRate])
+
   const livePaymentSchedule = useMemo(() => {
     const rows = data?.payment_schedule || []
     const total = num(values.total_package_fee)
@@ -238,6 +259,7 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
               onChange={setField}
               editableFill={data.locked ? null : 'venue'}
               paymentSchedule={livePaymentSchedule}
+              feeBreakdown={liveFeeBreakdown}
               invalidFields={invalid}
             />
           </div>
