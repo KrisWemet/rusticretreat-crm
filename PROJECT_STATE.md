@@ -192,6 +192,54 @@ collects one and the client detail page had no field — so every couple arrivin
 through the website could never be given a contract, with nowhere to fix it.
 When you make something required, check every path that creates the record.
 
+### Template-backed contracts (the real venue agreement)
+
+The venue's actual contract is a 15-page rental agreement plus a mandatory
+6-page Schedule A. Both are transcribed into `server/contract-templates/` as
+structured block lists — wording verbatim from the owner's PDFs, structure ours.
+`schema.md` in that folder is the block reference.
+
+```
+contract-templates/rental-agreement-2027.js   13 sections, 12 initials blocks,
+                                              11 venue fields, 22 client fields
+contract-templates/schedule-a-2027.js         14 sections, rules only, no fields
+services/contractTemplate.js                  packets, values, initials, schedule
+services/contractRender.js                    → static HTML for the printed record
+client/src/components/ContractDocument.jsx    → React for prep + signing
+```
+
+**A packet is what gets signed.** Section 12.1 of the rental agreement makes the
+booking incomplete until Schedule A is signed too, so the two never travel
+separately: one link, one ceremony, both documents, and a consent statement that
+names both by title. Sending them apart would recreate by hand the half-executed
+booking that clause exists to prevent.
+
+**Two locks, not one.** `locked_at` freezes the terms and the venue's fields when
+the venue signs. `client_fields_locked_at` freezes the couple's answers when
+Client 1 submits, so Client 2 initials and signs the same document rather than
+one still moving. Client 2 gets a read-only view; if something is wrong the
+contract has to be reissued, which is the correct outcome.
+
+**The venue cannot sign an incomplete contract.** Signing is one-way, so a blank
+required field would be blank forever on a document the couple is then bound by.
+`POST /:id/sign-venue` refuses and names what is missing.
+
+**No bulk initials.** Twelve clauses, each initialled by its own click, each row
+carrying its own timestamp, IP and user agent. The point of separate initials is
+separate acknowledgment; an "initial everything" button would defeat it. The
+signing page compensates with a progress counter and a jump-to-next control
+instead.
+
+**Two renderers, one vocabulary.** `contractRender.js` produces the static
+printed record; `ContractDocument.jsx` produces the interactive one. They are
+deliberately separate — the printed record must not depend on a bundle running —
+but **adding a block type means editing both**. That is the one place in this
+feature where a change has to be made twice.
+
+Free-text contracts still work unchanged: `template_key IS NULL` keeps the old
+renderer and the old flow, so already-executed agreements print as they always
+did.
+
 ### Print stylesheets: `@media print` goes last, with `!important`
 
 The printable contract and proposal both carry a red toolbar marked `.noprint`.
@@ -205,6 +253,18 @@ Both files now put the `@media print` block at the **end** of the stylesheet and
 use `display: none !important`. Verify with Playwright's `emulateMedia({media:
 'print'})` and read the *computed* style — `isVisible()` on a screen-media page
 tells you nothing about what lands on paper.
+
+### A modal closing is not the same as its children not rendering
+
+Closing the prep screen set `prepContract` to null while the modal still held the
+loaded contract data, and its body read `contract.title`. The whole Contracts
+page went white. `Modal` returns null when closed, which feels like protection
+and is not: React evaluates a component's children before Modal ever decides
+whether to render them. Clear the loaded data when the subject goes away, and
+guard the body on the subject as well as on the data.
+
+This was the third change in this project that was correct at the API and broken
+in the browser. Curl proves nothing here.
 
 ### Never put a backtick inside HTML that lives in a template literal
 

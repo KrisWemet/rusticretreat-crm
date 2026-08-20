@@ -7,6 +7,13 @@ have already cost real debugging time. Keep it updated as you work.
 A wedding-venue CRM with contract e-signing built in. Live on Railway. The
 separate `KrisWemet/e-sign` repo is empty and irrelevant; everything is here.
 
+The real venue agreement — 15 pages plus a mandatory 6-page Schedule A, with
+twelve initials blocks and boxes both sides fill in — lives in
+`server/contract-templates/` as structured data. Read `schema.md` there before
+changing it, and note that **a block type has to be handled in two renderers**:
+`services/contractRender.js` (printed record) and
+`client/src/components/ContractDocument.jsx` (prep and signing).
+
 ## Before you change anything
 
 **Test couple-facing changes in a browser with no session and no cookie.** Two
