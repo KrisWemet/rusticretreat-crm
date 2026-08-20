@@ -197,6 +197,9 @@ export default function Payments() {
       {/* Filter */}
       <div className="flex items-center gap-3">
         <select
+          id="payments-filter-couple"
+          name="payments-filter-couple"
+          aria-label="Filter invoices by client"
           value={filterCouple}
           onChange={e => setFilterCouple(e.target.value)}
           className="input-field w-64"
@@ -293,8 +296,10 @@ export default function Payments() {
       <Modal isOpen={showAdd} onClose={() => { setShowAdd(false); setForm(EMPTY_FORM) }} title="Add Invoice">
         <form onSubmit={handleAdd} className="space-y-4">
           <div>
-            <label className="label">Client Couple <span className="text-red-500">*</span></label>
+            <label htmlFor="invoice-couple" className="label">Client Couple <span className="text-red-500">*</span></label>
             <select
+              id="invoice-couple"
+              name="invoice-couple"
               value={form.couple_id}
               onChange={e => handleCoupleSelectAdd(e.target.value)}
               required
@@ -307,8 +312,8 @@ export default function Payments() {
           <Input label="Description" value={form.description} onChange={f('description')} required placeholder="e.g. Booking Deposit (25%)" />
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Amount ($) <span className="text-red-500">*</span></label>
-              <input type="number" min="0" step="0.01" required value={form.amount} onChange={f('amount')} className="input-field" placeholder="0.00" />
+              <label htmlFor="payment-amount" className="label">Amount ($) <span className="text-red-500">*</span></label>
+              <input id="payment-amount" name="payment-amount" type="number" min="0" step="0.01" required value={form.amount} onChange={f('amount')} className="input-field" placeholder="0.00" />
             </div>
             <Input type="date" label="Due Date" value={form.due_date} onChange={f('due_date')} />
           </div>
@@ -325,8 +330,10 @@ export default function Payments() {
         <form onSubmit={handleSchedule} className="space-y-4">
           <p className="text-sm text-slate-500">Creates three standard invoices: 25% deposit, 25% at 90 days before event, and 50% final balance at 30 days before event.</p>
           <div>
-            <label className="label">Client Couple <span className="text-red-500">*</span></label>
+            <label htmlFor="schedule-couple" className="label">Client Couple <span className="text-red-500">*</span></label>
             <select
+              id="schedule-couple"
+              name="schedule-couple"
               value={scheduleForm.couple_id}
               onChange={e => handleCoupleSelectSchedule(e.target.value)}
               required
@@ -338,8 +345,8 @@ export default function Payments() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Total Contract Price ($) <span className="text-red-500">*</span></label>
-              <input type="number" min="0" step="0.01" required value={scheduleForm.total_price} onChange={sf('total_price')} className="input-field" placeholder="0.00" />
+              <label htmlFor="schedule-total-price" className="label">Total Contract Price ($) <span className="text-red-500">*</span></label>
+              <input id="schedule-total-price" name="schedule-total-price" type="number" min="0" step="0.01" required value={scheduleForm.total_price} onChange={sf('total_price')} className="input-field" placeholder="0.00" />
             </div>
             <Input type="date" label="Wedding Date" value={scheduleForm.wedding_date} onChange={sf('wedding_date')} />
           </div>

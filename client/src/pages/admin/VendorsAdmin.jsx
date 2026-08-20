@@ -73,7 +73,7 @@ export default function VendorsAdmin() {
         <BuildingStorefrontIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
-          placeholder="Search vendors..."
+          id="vendors-search" name="vendors-search" aria-label="Search vendors" placeholder="Search vendors..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="input-field pl-9"
@@ -167,7 +167,7 @@ export default function VendorsAdmin() {
           <Input label="Website" value={form.website} onChange={f('website')} placeholder="https://" />
           <Textarea label="Notes" value={form.notes} onChange={f('notes')} />
           <label className="flex items-center gap-2.5 cursor-pointer">
-            <input type="checkbox" checked={form.booked} onChange={e => setForm(p => ({ ...p, booked: e.target.checked }))} className="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500" />
+            <input id="vendor-booked" name="vendor-booked" type="checkbox" checked={form.booked} onChange={e => setForm(p => ({ ...p, booked: e.target.checked }))} className="w-4 h-4 rounded text-rose-600 border-slate-300 focus:ring-rose-500" />
             <span className="text-sm text-slate-700">Already confirmed/booked</span>
           </label>
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">

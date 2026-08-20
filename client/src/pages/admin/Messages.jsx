@@ -69,7 +69,7 @@ export default function Messages() {
               <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search couples..."
+                id="messages-search" name="messages-search" aria-label="Search couples" placeholder="Search couples..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="input-field pl-9 py-1.5 text-xs"

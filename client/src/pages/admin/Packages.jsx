@@ -225,17 +225,17 @@ export default function Packages() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="label">Name</label>
-                <input className="input" value={addonForm.name} onChange={e => setAddonForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Extra Night" />
+                <label htmlFor="packages-name-1" className="label">Name</label>
+                <input id="packages-name-1" name="packages-name-1" className="input" value={addonForm.name} onChange={e => setAddonForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Extra Night" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Price (CAD $)</label>
-                  <input className="input" type="number" min="0" value={addonForm.price} onChange={e => setAddonForm(f => ({ ...f, price: e.target.value }))} placeholder="750" />
+                  <label htmlFor="packages-price-cad-2" className="label">Price (CAD $)</label>
+                  <input id="packages-price-cad-2" name="packages-price-cad-2" className="input" type="number" min="0" value={addonForm.price} onChange={e => setAddonForm(f => ({ ...f, price: e.target.value }))} placeholder="750" />
                 </div>
                 <div>
-                  <label className="label">Charged</label>
-                  <select className="input" value={addonForm.unit} onChange={e => setAddonForm(f => ({ ...f, unit: e.target.value }))}>
+                  <label htmlFor="packages-charged-3" className="label">Charged</label>
+                  <select id="packages-charged-3" name="packages-charged-3" className="input" value={addonForm.unit} onChange={e => setAddonForm(f => ({ ...f, unit: e.target.value }))}>
                     <option value="flat">Flat fee</option>
                     <option value="per_guest">Per guest (over 60)</option>
                     <option value="per_night">Per night</option>
@@ -243,8 +243,8 @@ export default function Packages() {
                 </div>
               </div>
               <div>
-                <label className="label">Description</label>
-                <textarea className="input" rows={2} value={addonForm.description} onChange={e => setAddonForm(f => ({ ...f, description: e.target.value }))} placeholder="Shown to couples on the proposal…" />
+                <label htmlFor="packages-description-4" className="label">Description</label>
+                <textarea id="packages-description-4" name="packages-description-4" className="input" rows={2} value={addonForm.description} onChange={e => setAddonForm(f => ({ ...f, description: e.target.value }))} placeholder="Shown to couples on the proposal…" />
               </div>
             </div>
             <div className="flex gap-3 px-6 pb-6">
@@ -265,26 +265,26 @@ export default function Packages() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="label">Package Name</label>
-                <input className="input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. 3-Day Weekend" />
+                <label htmlFor="packages-package-name-5" className="label">Package Name</label>
+                <input id="packages-package-name-5" name="packages-package-name-5" className="input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. 3-Day Weekend" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Price (CAD $)</label>
-                  <input className="input" type="number" min="0" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="45000" />
+                  <label htmlFor="packages-price-cad-6" className="label">Price (CAD $)</label>
+                  <input id="packages-price-cad-6" name="packages-price-cad-6" className="input" type="number" min="0" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="45000" />
                 </div>
                 <div>
-                  <label className="label">Max Guests</label>
-                  <input className="input" type="number" min="1" value={form.max_guests} onChange={e => setForm(f => ({ ...f, max_guests: e.target.value }))} placeholder="200" />
+                  <label htmlFor="packages-max-guests-7" className="label">Max Guests</label>
+                  <input id="packages-max-guests-7" name="packages-max-guests-7" className="input" type="number" min="1" value={form.max_guests} onChange={e => setForm(f => ({ ...f, max_guests: e.target.value }))} placeholder="200" />
                 </div>
               </div>
               <div>
-                <label className="label">Description</label>
-                <textarea className="input" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description of this package..." />
+                <label htmlFor="packages-description-8" className="label">Description</label>
+                <textarea id="packages-description-8" name="packages-description-8" className="input" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description of this package..." />
               </div>
               <div>
-                <label className="label">What's Included <span className="text-slate-400 font-normal">(comma-separated)</span></label>
-                <textarea className="input" rows={3} value={form.includes} onChange={e => setForm(f => ({ ...f, includes: e.target.value }))} placeholder="Forest Clearing ceremony, Clear-Top Gazebo reception, Tables & chairs, Fire pit access..." />
+                <label htmlFor="package-includes" className="label">What's Included <span className="text-slate-400 font-normal">(comma-separated)</span></label>
+                <textarea id="package-includes" name="package-includes" className="input" rows={3} value={form.includes} onChange={e => setForm(f => ({ ...f, includes: e.target.value }))} placeholder="Forest Clearing ceremony, Clear-Top Gazebo reception, Tables & chairs, Fire pit access..." />
               </div>
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="active" checked={form.is_active} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} className="w-4 h-4 accent-rose-600" />

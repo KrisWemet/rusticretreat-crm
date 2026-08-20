@@ -158,12 +158,12 @@ export default function Forms() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="label">Form Title</label>
-                <input className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Event Details Questionnaire" />
+                <label htmlFor="forms-form-title-1" className="label">Form Title</label>
+                <input id="forms-form-title-1" name="forms-form-title-1" className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Event Details Questionnaire" />
               </div>
               <div>
-                <label className="label">Description</label>
-                <textarea className="input" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Shown to the couple above the questions…" />
+                <label htmlFor="forms-description-2" className="label">Description</label>
+                <textarea id="forms-description-2" name="forms-description-2" className="input" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Shown to the couple above the questions…" />
               </div>
 
               <div className="space-y-3">

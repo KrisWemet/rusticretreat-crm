@@ -328,6 +328,23 @@ grep -n "async (req, res)" server/routes/*.js   # then check each has try {
 `uptime_seconds`; if it keeps resetting to a few seconds, the process is
 crash-looping.
 
+### Form controls: the shared components own the ids
+
+`components/ui/Input.jsx` (Input, Textarea, Select) generates an id per instance
+with `useId` and points its `<label>` at it. Nearly every admin form is built
+from these, so the missing `htmlFor`/`id` there was on its own responsible for
+most of the browser's form issues across the app.
+
+**Use the shared components.** A raw `<input className="input">` under a bare
+`<label className="label">` is the pattern that caused this, and it is still
+easy to reintroduce. If a control genuinely has no visible label — a search box,
+a filter dropdown — give it an explicit `id`, `name` and `aria-label`.
+
+Audit the whole app with `scratchpad/a11yfull.js`: it visits all 16 admin pages,
+opens each one's create modal, and counts controls with no id/name, controls
+with no accessible name, and labels pointing at nothing. It should report 0.
+`pub-a11y.js` does the same for /login, /inquire and /portal/login.
+
 ### Never load a webfont with a CSS `@import`
 
 `client/src/index.css` opened with

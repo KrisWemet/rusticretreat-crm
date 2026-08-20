@@ -67,8 +67,8 @@ export default function Settings() {
         </div>
 
         <div>
-          <label className="label">Current Password</label>
-          <input
+          <label htmlFor="settings-current-password-1" className="label">Current Password</label>
+          <input id="settings-current-password-1" name="settings-current-password-1"
             type="password"
             required
             value={form.current_password}
@@ -79,8 +79,8 @@ export default function Settings() {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="label">New Password</label>
-            <input
+            <label htmlFor="settings-new-password-2" className="label">New Password</label>
+            <input id="settings-new-password-2" name="settings-new-password-2"
               type="password"
               required
               minLength={8}
@@ -91,8 +91,8 @@ export default function Settings() {
             />
           </div>
           <div>
-            <label className="label">Confirm New Password</label>
-            <input
+            <label htmlFor="settings-confirm-new-password-3" className="label">Confirm New Password</label>
+            <input id="settings-confirm-new-password-3" name="settings-confirm-new-password-3"
               type="password"
               required
               minLength={8}

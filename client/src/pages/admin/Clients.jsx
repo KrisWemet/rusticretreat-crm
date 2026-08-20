@@ -98,7 +98,10 @@ export default function Clients() {
         <div className="relative flex-1">
           <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
+            id="clients-search"
+            name="clients-search"
             type="text"
+            aria-label="Search clients by name or email"
             placeholder="Search by name or email..."
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -202,8 +205,8 @@ export default function Clients() {
             <Input label="Budget" type="number" value={form.budget_total} onChange={f('budget_total')} placeholder="0" />
           </div>
           <div>
-            <label className="label">Notes</label>
-            <textarea value={form.notes} onChange={f('notes')} rows={3} className="input-field resize-none" />
+            <label htmlFor="clients-notes-1" className="label">Notes</label>
+            <textarea id="clients-notes-1" name="clients-notes-1" value={form.notes} onChange={f('notes')} rows={3} className="input-field resize-none" />
           </div>
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
             <button type="button" className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>

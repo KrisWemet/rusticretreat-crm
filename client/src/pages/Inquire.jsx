@@ -124,20 +124,20 @@ export default function Inquire() {
             <h2 className="text-base font-semibold text-slate-800 mb-4">About You</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Partner 1 Name <span className="text-red-500">*</span></label>
-                <input required value={form.partner1_name} onChange={f('partner1_name')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="First & last name" />
+                <label htmlFor="inquire-partner-1-name-1" className="block text-sm font-medium text-slate-700 mb-1">Partner 1 Name <span className="text-red-500">*</span></label>
+                <input id="inquire-partner-1-name-1" name="inquire-partner-1-name-1" required value={form.partner1_name} onChange={f('partner1_name')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="First & last name" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Partner 2 Name <span className="text-red-500">*</span></label>
-                <input required value={form.partner2_name} onChange={f('partner2_name')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="First & last name" />
+                <label htmlFor="inquire-partner-2-name-2" className="block text-sm font-medium text-slate-700 mb-1">Partner 2 Name <span className="text-red-500">*</span></label>
+                <input id="inquire-partner-2-name-2" name="inquire-partner-2-name-2" required value={form.partner2_name} onChange={f('partner2_name')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="First & last name" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email Address <span className="text-red-500">*</span></label>
-                <input required type="email" value={form.email} onChange={f('email')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="you@example.com" />
+                <label htmlFor="inquire-email-address-3" className="block text-sm font-medium text-slate-700 mb-1">Email Address <span className="text-red-500">*</span></label>
+                <input id="inquire-email-address-3" name="inquire-email-address-3" required type="email" value={form.email} onChange={f('email')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="you@example.com" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
-                <input type="tel" value={form.phone} onChange={f('phone')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="(555) 000-0000" />
+                <label htmlFor="inquire-phone-number-4" className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                <input id="inquire-phone-number-4" name="inquire-phone-number-4" type="tel" value={form.phone} onChange={f('phone')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="(555) 000-0000" />
               </div>
             </div>
           </div>
@@ -146,12 +146,12 @@ export default function Inquire() {
             <h2 className="text-base font-semibold text-slate-800 mb-4">Your Wedding</h2>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Preferred Wedding Date</label>
-                <input type="date" value={form.wedding_date} onChange={f('wedding_date')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" />
+                <label htmlFor="inquire-preferred-wedding-date-5" className="block text-sm font-medium text-slate-700 mb-1">Preferred Wedding Date</label>
+                <input id="inquire-preferred-wedding-date-5" name="inquire-preferred-wedding-date-5" type="date" value={form.wedding_date} onChange={f('wedding_date')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Estimated Guest Count <span className="text-slate-400 font-normal">(max 80)</span></label>
-                <input type="number" min="1" max="80" value={form.guest_count} onChange={f('guest_count')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="e.g. 60" />
+                <label htmlFor="inquire-estimated-guest-count-6" className="block text-sm font-medium text-slate-700 mb-1">Estimated Guest Count <span className="text-slate-400 font-normal">(max 80)</span></label>
+                <input id="inquire-estimated-guest-count-6" name="inquire-estimated-guest-count-6" type="number" min="1" max="80" value={form.guest_count} onChange={f('guest_count')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="e.g. 60" />
               </div>
             </div>
             {dateStatus && (
@@ -168,6 +168,8 @@ export default function Inquire() {
           <div className="bg-rose-50/60 rounded-xl p-4 border border-rose-100">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
+                id="inquire-wants-tour"
+                name="inquire-wants-tour"
                 type="checkbox"
                 checked={form.request_tour}
                 onChange={e => setForm(p => ({ ...p, request_tour: e.target.checked }))}
@@ -180,15 +182,15 @@ export default function Inquire() {
             </label>
             {form.request_tour && (
               <div className="mt-3 pl-7">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Preferred tour date</label>
-                <input type="date" value={form.tour_date} onChange={f('tour_date')} className="w-full max-w-xs px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" />
+                <label htmlFor="inquire-preferred-tour-date-7" className="block text-sm font-medium text-slate-700 mb-1">Preferred tour date</label>
+                <input id="inquire-preferred-tour-date-7" name="inquire-preferred-tour-date-7" type="date" value={form.tour_date} onChange={f('tour_date')} className="w-full max-w-xs px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" />
               </div>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">How did you hear about us?</label>
-            <select value={form.heard_about} onChange={f('heard_about')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent">
+            <label htmlFor="inquire-how-did-you-8" className="block text-sm font-medium text-slate-700 mb-1">How did you hear about us?</label>
+            <select id="inquire-how-did-you-8" name="inquire-how-did-you-8" value={form.heard_about} onChange={f('heard_about')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent">
               <option value="">Select...</option>
               <option>Google Search</option>
               <option>Instagram / Social Media</option>
@@ -200,8 +202,8 @@ export default function Inquire() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Tell us about your vision</label>
-            <textarea
+            <label htmlFor="inquire-tell-us-about-9" className="block text-sm font-medium text-slate-700 mb-1">Tell us about your vision</label>
+            <textarea id="inquire-tell-us-about-9" name="inquire-tell-us-about-9"
               value={form.message}
               onChange={f('message')}
               rows={4}

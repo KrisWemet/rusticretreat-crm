@@ -250,31 +250,31 @@ export default function Proposals() {
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Couple</label>
-                  <select className="input" value={form.couple_id} onChange={e => setForm(f => ({ ...f, couple_id: e.target.value }))}>
+                  <label htmlFor="proposal-couple-1" className="label">Couple</label>
+                  <select id="proposal-couple-1" name="proposal-couple-1" className="input" value={form.couple_id} onChange={e => setForm(f => ({ ...f, couple_id: e.target.value }))}>
                     <option value="">Select couple…</option>
                     {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Proposal Title</label>
-                  <input className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="3-Day Weekend Proposal" />
+                  <label htmlFor="proposal-proposal-title-2" className="label">Proposal Title</label>
+                  <input id="proposal-proposal-title-2" name="proposal-proposal-title-2" className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="3-Day Weekend Proposal" />
                 </div>
                 <div>
-                  <label className="label">Check-In Date</label>
-                  <input type="date" className="input" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
+                  <label htmlFor="proposal-check-in-date-3" className="label">Check-In Date</label>
+                  <input id="proposal-check-in-date-3" name="proposal-check-in-date-3" type="date" className="input" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="label">Check-Out Date</label>
-                  <input type="date" className="input" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+                  <label htmlFor="proposal-check-out-date-4" className="label">Check-Out Date</label>
+                  <input id="proposal-check-out-date-4" name="proposal-check-out-date-4" type="date" className="input" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="label">Guest Count</label>
-                  <input type="number" min="1" max="80" className="input" value={form.guest_count} onChange={e => setForm(f => ({ ...f, guest_count: e.target.value }))} placeholder="e.g. 60" />
+                  <label htmlFor="proposal-guest-count-5" className="label">Guest Count</label>
+                  <input id="proposal-guest-count-5" name="proposal-guest-count-5" type="number" min="1" max="80" className="input" value={form.guest_count} onChange={e => setForm(f => ({ ...f, guest_count: e.target.value }))} placeholder="e.g. 60" />
                 </div>
                 <div>
-                  <label className="label">Valid Until</label>
-                  <input type="date" className="input" value={form.valid_until} onChange={e => setForm(f => ({ ...f, valid_until: e.target.value }))} />
+                  <label htmlFor="proposal-valid-until-6" className="label">Valid Until</label>
+                  <input id="proposal-valid-until-6" name="proposal-valid-until-6" type="date" className="input" value={form.valid_until} onChange={e => setForm(f => ({ ...f, valid_until: e.target.value }))} />
                 </div>
               </div>
 
@@ -326,14 +326,14 @@ export default function Proposals() {
                   <div className="flex justify-between text-slate-500"><span>Subtotal</span><span>${subtotal.toLocaleString()}</span></div>
                   <div className="flex justify-between text-slate-500 items-center">
                     <span className="flex items-center gap-1">GST
-                      <input type="number" className="w-12 px-1 py-0.5 border border-slate-200 rounded text-xs text-right" value={form.tax_rate} onChange={e => setForm(f => ({ ...f, tax_rate: e.target.value }))} />%
+                      <input id="proposal-tax-rate" name="proposal-tax-rate" aria-label="GST rate, percent" type="number" className="w-12 px-1 py-0.5 border border-slate-200 rounded text-xs text-right" value={form.tax_rate} onChange={e => setForm(f => ({ ...f, tax_rate: e.target.value }))} />%
                     </span>
                     <span>${tax.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between font-bold text-slate-800 text-base border-t border-slate-100 pt-1.5"><span>Total</span><span>${total.toLocaleString()}</span></div>
                   <div className="flex justify-between text-rose-600 items-center">
                     <span className="flex items-center gap-1">Deposit
-                      <input type="number" className="w-12 px-1 py-0.5 border border-slate-200 rounded text-xs text-right" value={form.deposit_pct} onChange={e => setForm(f => ({ ...f, deposit_pct: e.target.value }))} />%
+                      <input id="proposal-deposit-pct" name="proposal-deposit-pct" aria-label="Deposit, percent" type="number" className="w-12 px-1 py-0.5 border border-slate-200 rounded text-xs text-right" value={form.deposit_pct} onChange={e => setForm(f => ({ ...f, deposit_pct: e.target.value }))} />%
                     </span>
                     <span>${deposit.toLocaleString()}</span>
                   </div>
@@ -341,8 +341,8 @@ export default function Proposals() {
               </div>
 
               <div>
-                <label className="label">Notes <span className="text-slate-400 font-normal">(shown to couple)</span></label>
-                <textarea className="input" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="A personal note about this proposal…" />
+                <label htmlFor="proposal-notes" className="label">Notes <span className="text-slate-400 font-normal">(shown to couple)</span></label>
+                <textarea id="proposal-notes" name="proposal-notes" className="input" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="A personal note about this proposal…" />
               </div>
             </div>
 

@@ -85,8 +85,8 @@ export default function PortalLogin() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Email address</label>
-              <input
+              <label htmlFor="portallo-email-address-1" className="label">Email address</label>
+              <input id="portallo-email-address-1" name="portallo-email-address-1"
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -96,8 +96,8 @@ export default function PortalLogin() {
               />
             </div>
             <div>
-              <label className="label">Password</label>
-              <input
+              <label htmlFor="portallo-password-2" className="label">Password</label>
+              <input id="portallo-password-2" name="portallo-password-2"
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}

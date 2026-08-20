@@ -736,8 +736,10 @@ export default function Contracts() {
           {/* Basic info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="label">Client Couple <span className="text-red-500">*</span></label>
+              <label htmlFor="contract-couple" className="label">Client Couple <span className="text-red-500">*</span></label>
               <select
+                id="contract-couple"
+                name="contract-couple"
                 value={form.couple_id}
                 onChange={handleCoupleChange}
                 required
@@ -798,8 +800,8 @@ export default function Contracts() {
 
           {/* Terms body */}
           <div>
-            <label className="label">Contract Terms</label>
-            <textarea
+            <label htmlFor="contract-contract-terms-1" className="label">Contract Terms</label>
+            <textarea id="contract-contract-terms-1" name="contract-contract-terms-1"
               value={form.terms}
               onChange={f('terms')}
               required={!form.template_packet}
