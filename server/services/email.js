@@ -20,6 +20,16 @@ const RESEND_API_URL = process.env.RESEND_API_URL || 'https://api.resend.com/ema
 const smtpConfigured = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
 const configured = !!(RESEND_API_KEY || smtpConfigured);
 
+// Signing links are emailed to each partner in turn, so with no transport the
+// whole e-signature flow stalls after the venue signs. Say so at boot, in the
+// deploy log, rather than letting it surface later as a failed contract send.
+if (!configured && process.env.NODE_ENV === 'production') {
+  console.warn(
+    '[EMAIL] No RESEND_API_KEY and no SMTP settings — outbound email is DISABLED. ' +
+    'Contract signing links will not reach couples; staff will have to send them by hand.'
+  );
+}
+
 const transporter = smtpConfigured
   ? nodemailer.createTransport({
       host: SMTP_HOST,

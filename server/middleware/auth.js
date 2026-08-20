@@ -3,19 +3,52 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-// Use JWT_SECRET from env when provided. Otherwise generate one and persist
-// it to a gitignored file so tokens survive restarts but can't be forged
-// with a known hardcoded default.
+// Use JWT_SECRET from env when provided. Otherwise generate one and persist it
+// to a gitignored file so tokens survive restarts but can't be forged with a
+// known hardcoded default.
+//
+// That file goes beside the database rather than in the application directory.
+// Hosted platforms replace the app directory on every deploy, so the old
+// location meant a fresh secret each time — silently invalidating every signed
+// token and logging out everyone, staff and couples alike, on every push. The
+// symptom is baffling: the app looks fine and each request fails with 401.
+// The database directory is the one place already guaranteed to persist.
+function secretPath() {
+  const dbPath = process.env.DB_PATH;
+  if (dbPath) return path.join(path.dirname(dbPath), '.jwt-secret');
+  return path.join(__dirname, '..', '.jwt-secret');
+}
+
 function loadSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
-  const secretPath = path.join(__dirname, '..', '.jwt-secret');
+
+  const current = secretPath();
   try {
-    return fs.readFileSync(secretPath, 'utf8').trim();
-  } catch (_) {
-    const secret = crypto.randomBytes(32).toString('hex');
-    fs.writeFileSync(secretPath, secret, { mode: 0o600 });
-    return secret;
+    return fs.readFileSync(current, 'utf8').trim();
+  } catch (_) { /* not there yet — fall through */ }
+
+  // Adopt a secret from the pre-volume location if one is still around, so an
+  // upgrade does not log everyone out the once.
+  const legacy = path.join(__dirname, '..', '.jwt-secret');
+  if (legacy !== current) {
+    try {
+      const existing = fs.readFileSync(legacy, 'utf8').trim();
+      if (existing) {
+        fs.writeFileSync(current, existing, { mode: 0o600 });
+        return existing;
+      }
+    } catch (_) { /* no legacy file either */ }
   }
+
+  const secret = crypto.randomBytes(32).toString('hex');
+  fs.writeFileSync(current, secret, { mode: 0o600 });
+  if (process.env.NODE_ENV === 'production') {
+    console.warn(
+      `[auth] No JWT_SECRET set — generated one and stored it at ${current}. ` +
+      'It persists there, but setting JWT_SECRET explicitly is preferable.'
+    );
+  }
+  return secret;
 }
 
 const JWT_SECRET = loadSecret();
