@@ -312,6 +312,24 @@ grep -n "async (req, res)" server/routes/*.js   # then check each has try {
 `uptime_seconds`; if it keeps resetting to a few seconds, the process is
 crash-looping.
 
+### Never pass `getAdminAxios()` as a prop
+
+`getAdminAxios()` builds a **new axios instance on every call**. Passing
+`api={getAdminAxios()}` therefore hands the child a different object on every
+render of the parent, and any effect listing `api` in its dependencies re-runs
+constantly.
+
+That destroyed the venue's work on the contract prep form: the effect reloaded
+the template and called `setValues()`, wiping whatever was being typed. The
+Contracts page re-renders on a 60-second timer and on every window focus, so
+filling the form in was close to impossible — and each reload added more console
+errors, which is what the "issue count keeps climbing" report was.
+
+Components take the client from `useAuth()` and hold it in a `useRef`, and
+effects key on a **primitive** (`contract?.id`), never on an object. The
+contracts page also suspends its background refresh entirely while the prep
+modal is open.
+
 ### A modal closing is not the same as its children not rendering
 
 Closing the prep screen set `prepContract` to null while the modal still held the

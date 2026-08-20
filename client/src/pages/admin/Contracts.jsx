@@ -171,7 +171,12 @@ export default function Contracts() {
   // and the staleness is invisible, because a wrong status looks exactly like
   // a right one. Refresh when the tab regains focus, which is precisely when
   // someone has come back to check, and on a slow timer while it stays open.
+  //
+  // Suspended while the prep form is open: refreshing under someone who is
+  // typing has no value, and re-rendering this page while a modal is mounted is
+  // exactly what destroyed their work before.
   useEffect(() => {
+    if (prepContract) return
     const refresh = () => { if (document.visibilityState === 'visible') fetchData() }
     document.addEventListener('visibilitychange', refresh)
     window.addEventListener('focus', refresh)
@@ -181,7 +186,7 @@ export default function Contracts() {
       window.removeEventListener('focus', refresh)
       clearInterval(timer)
     }
-  }, [])
+  }, [prepContract])
 
   // When couple is selected, pre-fill event details from their existing booking
   const handleCoupleChange = async (e) => {
@@ -660,7 +665,6 @@ export default function Contracts() {
       {/* ── Venue prep for template contracts ──────────────────────────── */}
       <PrepareContractModal
         contract={prepContract}
-        api={getAdminAxios()}
         onClose={() => setPrepContract(null)}
         onSaved={fetchData}
       />

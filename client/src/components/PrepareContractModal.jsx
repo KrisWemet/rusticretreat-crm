@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import Modal from './ui/Modal'
 import ContractDocument from './ContractDocument'
 import toast from 'react-hot-toast'
@@ -14,7 +15,19 @@ import { CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/so
  * sign an incomplete one; this screen is how the venue sees what is outstanding
  * before it gets that far.
  */
-export default function PrepareContractModal({ contract, api, onClose, onSaved }) {
+export default function PrepareContractModal({ contract, onClose, onSaved }) {
+  // The axios client is taken from context and read through a ref, never
+  // received as a prop. getAdminAxios() builds a NEW instance on every call, so
+  // passing api={getAdminAxios()} handed this component a different object on
+  // every render of the parent — and with `api` in the effect's dependency list
+  // that re-ran the load, which called setValues() and wiped whatever was being
+  // typed. The parent re-renders on a 60-second timer and on every window
+  // focus, so filling this form in was close to impossible.
+  const { getAdminAxios } = useAuth()
+  const apiRef = useRef(null)
+  if (!apiRef.current) apiRef.current = getAdminAxios()
+  const api = apiRef.current
+
   const [data, setData] = useState(null)
   const [values, setValues] = useState({})
   const [invalid, setInvalid] = useState({})
@@ -22,18 +35,33 @@ export default function PrepareContractModal({ contract, api, onClose, onSaved }
   const [loading, setLoading] = useState(true)
   const [dirty, setDirty] = useState(false)
 
+  // Mirrors `values` so an in-flight save can tell whether anything was typed
+  // while it was away, without putting `values` in any dependency list.
+  const valuesRef = useRef(values)
+  useEffect(() => { valuesRef.current = values }, [values])
+
+  // Keyed on the contract id alone. Anything broader re-runs while the modal is
+  // open, and this effect resets `values` — so a re-run means losing work.
+  const contractId = contract?.id ?? null
   useEffect(() => {
     // Closing sets contract to null while `data` is still populated. The body
     // below reads contract.title, and Modal cannot save us — React evaluates a
     // component's children before Modal ever decides whether to render them, so
     // the stale data alone was enough to blank the whole Contracts page.
-    if (!contract) { setData(null); setValues({}); setInvalid({}); setDirty(false); return }
+    if (contractId == null) { setData(null); setValues({}); setInvalid({}); setDirty(false); return }
+    let cancelled = false
     setLoading(true)
-    api.get(`/api/contracts/${contract.id}/template`)
-      .then(r => { setData(r.data); setValues(r.data.values || {}); setDirty(false) })
-      .catch(e => toast.error(e.response?.data?.error || 'Could not load this contract'))
-      .finally(() => setLoading(false))
-  }, [contract, api])
+    api.get(`/api/contracts/${contractId}/template`)
+      .then(r => {
+        if (cancelled) return
+        setData(r.data)
+        setValues(r.data.values || {})
+        setDirty(false)
+      })
+      .catch(e => { if (!cancelled) toast.error(e.response?.data?.error || 'Could not load this contract') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [contractId, api])
 
   const setField = useCallback((key, value) => {
     setValues(v => ({ ...v, [key]: value }))
@@ -44,9 +72,13 @@ export default function PrepareContractModal({ contract, api, onClose, onSaved }
   const save = async ({ quiet } = {}) => {
     setSaving(true)
     try {
-      const r = await api.put(`/api/contracts/${contract.id}/fields`, { fields: values })
+      const sent = valuesRef.current
+      const r = await api.put(`/api/contracts/${contract.id}/fields`, { fields: sent })
       setData(d => ({ ...d, ...r.data }))
-      setDirty(false)
+      // Clear the dirty flag only if nothing was typed while the save was in
+      // flight. Otherwise the newest keystrokes would be reported as saved when
+      // they are still only in the browser.
+      if (valuesRef.current === sent) setDirty(false)
       if (!quiet) toast.success('Venue details saved')
       onSaved?.()
       return r.data
