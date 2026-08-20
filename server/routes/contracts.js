@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
 const rateLimit = require('../middleware/rateLimit');
+const { ETRANSFER_EMAIL } = require('../venue');
 
 // Public signing endpoints share one limiter: generous enough for normal
 // reading/signing, tight enough to stop token brute-forcing.
@@ -920,7 +921,7 @@ ${itemLines}
    Deposit (${proposal.deposit_pct}%):  ${fmtCAD(deposit)} — due by ${depositDue}
    Final Balance:  ${fmtCAD(balance)} — due by ${balanceDue}
 
-   Payments accepted by e-transfer to info@rusticretreat.com or online through the client portal.
+   Payments accepted by Interac e-Transfer to ${ETRANSFER_EMAIL}${PORTAL_ENABLED ? ' or online through the client portal' : ''}.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

@@ -270,7 +270,9 @@ export default function Payments() {
                         {inv.paid ? <CheckCircleSolid className="w-3.5 h-3.5" /> : <ClockIcon className="w-3.5 h-3.5" />}
                         {inv.paid ? 'Paid' : 'Unpaid'}
                       </button>
-                      {inv.paid && inv.paid_at && (
+                      {/* !! matters: inv.paid is SQLite's integer 0, and React
+                          renders a bare 0 as the text "0", not as nothing. */}
+                      {!!inv.paid && inv.paid_at && (
                         <div className="text-xs text-slate-400 mt-0.5">{format(parseISO(inv.paid_at), 'MMM d')}</div>
                       )}
                     </td>

@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { authenticateCouple } = require('../middleware/auth');
 const invoices = require('./invoices');
+const { ETRANSFER_EMAIL } = require('../venue');
 
 const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
@@ -14,6 +15,9 @@ router.get('/config', (req, res) => {
   res.json({
     enabled: !!stripe,
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
+    // The portal shows this to couples as the e-Transfer recipient. Served from
+    // the same constant the contract prints so the two cannot drift apart.
+    etransferEmail: ETRANSFER_EMAIL,
   });
 });
 

@@ -5,7 +5,7 @@ a trap worth recording, or change the deployment.** It exists so a new session
 does not rediscover the same landmines.
 
 Last updated: 2026-08-20 · branch `claude/wedding-crm-esign-integration-coau0z`
-· HEAD `142fa8f`
+· HEAD `d9104bf`
 
 ---
 
@@ -69,6 +69,62 @@ already authenticated:
 
 **Test any couple-facing change in a browser with no cookie and no session.**
 Curling the API proves nothing; the API was correct throughout both bugs.
+
+### The CRM issues two different contracts, and they contradict each other
+
+**Unresolved — the owner is supplying the real contract text.** Until then, do
+not treat either document as authoritative.
+
+Staff can produce a contract two ways, and the two produce materially different
+agreements for the same venue:
+
+| | New Contract button | Generate from a proposal |
+| --- | --- | --- |
+| Where | `client/src/pages/admin/Contracts.jsx` `DEFAULT_TERMS` | `server/routes/contracts.js` `from-proposal` |
+| Cancel 120 days out | deposit only | 50% of total |
+| GST | not mentioned | itemised, 5% |
+| Payment schedule | referred to, absent | real dates |
+| Force majeure | absent | present |
+| Guest cap | none | 80 |
+| Fire bans | fireworks promised outright | subject to Alberta restrictions |
+| Generators off 10 PM | present | absent |
+
+On a $7,350 booking the cancellation row alone is a $3,675 difference decided by
+which button staff happened to click. Neither matches how the venue actually
+invoices (25% / 25% at 90 days / 50% at 30 days). `DEFAULT_TERMS` also has an
+overlap at exactly 60 days between its 50% and 100% cancellation bands, which
+reads against the venue as the drafter.
+
+`contracts` has **no end-date column**, so a manually written contract cannot
+state which days a multi-day package covers — while its clause 1 refers to "the
+first day" and "the final day". `proposals` does have `end_date`; the
+proposal-derived contract prints it into the body but the contract row drops it.
+
+**When the real contract text arrives, both paths must render the same document.**
+
+### Anything printed into a signed document is a promise
+
+The contract told couples to e-transfer to `info@rusticretreat.com` and the
+portal payment page said `payments@rusticretreat.com` — two different addresses,
+both on a domain the venue does not send email from. Either one sends a couple's
+deposit to a mailbox nobody reads.
+
+The address now lives in `server/venue.js` and is served to the portal through
+`GET /api/payments/config`, so the contract and the portal cannot drift apart.
+Override with `ETRANSFER_EMAIL`; it defaults to `info@rusticretreatalberta.ca`.
+**The mailbox half is unconfirmed — the owner confirmed the domain only.**
+
+The same contract also directed payment "online through the client portal" while
+the portal is switched off. It now only says that when `ENABLE_COUPLE_PORTAL` is
+set. Check any couple-facing sentence against what is actually turned on.
+
+### SQLite integers are not booleans in JSX
+
+`inv.paid` comes back as `0`, and React renders `{inv.paid && <x/>}` as a literal
+"0" on the page. A stray zero sat under every unpaid invoice on the couple's
+payment page and the admin one. Guard integer flags with `!!`. Three more sites
+still do this with `guest_count`, harmless only because a guest count of zero
+does not occur in practice.
 
 ### Persistence: everything must live on the volume
 
@@ -297,6 +353,9 @@ See `DEPLOY.md` for the full write-up.
   three parties labelled).
 - `GET /api/messages/unread/count` is dead code; the sidebar Messages badge is
   wired but never fed.
+- `ETRANSFER_EMAIL` is **not yet set on Railway** — the default carries the right
+  domain but an unconfirmed mailbox. Set it once the owner confirms the address.
+- The two contract templates still disagree; see the trap above.
 
 ---
 

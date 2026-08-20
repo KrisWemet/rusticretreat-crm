@@ -16,6 +16,10 @@ export default function Payments() {
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [cardEnabled, setCardEnabled] = useState(false)
+  // Served by the API, not hardcoded here: the same value goes into the signed
+  // contract, and a payment address that differs between the two sends money
+  // to a mailbox nobody reads.
+  const [etransferEmail, setEtransferEmail] = useState(null)
   const [paying, setPaying] = useState(null)
 
   useEffect(() => {
@@ -24,7 +28,7 @@ export default function Payments() {
       .catch(() => {})
       .finally(() => setLoading(false))
     getCoupleAxios().get('/api/payments/config')
-      .then(r => setCardEnabled(r.data.enabled))
+      .then(r => { setCardEnabled(r.data.enabled); setEtransferEmail(r.data.etransferEmail || null) })
       .catch(() => {})
   }, [])
 
@@ -128,7 +132,9 @@ export default function Payments() {
                               Due {format(parseISO(inv.due_date), 'MMMM d, yyyy')}
                             </p>
                           )}
-                          {inv.paid && inv.paid_at && (
+                          {/* !! matters: inv.paid is SQLite's integer 0, and React
+                              renders a bare 0 as the text "0", not as nothing. */}
+                          {!!inv.paid && inv.paid_at && (
                             <p className="text-xs text-emerald-600 mt-0.5">
                               Paid {format(parseISO(inv.paid_at), 'MMMM d, yyyy')}
                             </p>
@@ -168,8 +174,10 @@ export default function Payments() {
       <div className="card border-rose-100 bg-rose-50/40 p-4">
         <p className="text-sm font-medium text-slate-700 mb-1">How to pay</p>
         <p className="text-sm text-slate-500">
-          We accept Interac e-Transfer (preferred), credit card, or cheque. For e-Transfer, send to{' '}
-          <span className="font-medium text-slate-700">payments@rusticretreat.com</span> and include your names in the message.
+          We accept Interac e-Transfer (preferred), credit card, or cheque.{' '}
+          {etransferEmail
+            ? <>For e-Transfer, send to <span className="font-medium text-slate-700">{etransferEmail}</span> and include your names in the message.{' '}</>
+            : <>For e-Transfer, ask your coordinator for the current address.{' '}</>}
           A receipt is emailed automatically once each payment is recorded.
         </p>
       </div>
