@@ -254,6 +254,30 @@ use `display: none !important`. Verify with Playwright's `emulateMedia({media:
 'print'})` and read the *computed* style — `isVisible()` on a screen-media page
 tells you nothing about what lands on paper.
 
+### An async route handler without try/catch kills the whole server
+
+Express 4 does not catch a rejected `async` handler. The rejection escapes to
+the process and Node treats an unhandled rejection as fatal, so **one failed
+email inside one request takes the entire CRM offline** and every page answers
+502 until the platform restarts it. `POST /api/proposals/:id/send` did exactly
+this.
+
+Proven, not assumed: a minimal Express app with one rejecting async route
+answers 200, then 000 — process gone — after a single request to it.
+
+`index.js` now installs `unhandledRejection` and `uncaughtException` guards that
+log under `[FATAL-GUARD]` and keep serving. They are a net, not a licence:
+**every async handler still needs its own try/catch.** Audit with
+
+```bash
+grep -n "async (req, res)" server/routes/*.js   # then check each has try {
+```
+
+**Reading a 502:** it is never a route or auth problem — those are 404 and
+401/403. 502 means nothing was listening. `GET /api/health` reports
+`uptime_seconds`; if it keeps resetting to a few seconds, the process is
+crash-looping.
+
 ### A modal closing is not the same as its children not rendering
 
 Closing the prep screen set `prepContract` to null while the modal still held the
