@@ -328,6 +328,33 @@ grep -n "async (req, res)" server/routes/*.js   # then check each has try {
 `uptime_seconds`; if it keeps resetting to a few seconds, the process is
 crash-looping.
 
+### Never load a webfont with a CSS `@import`
+
+`client/src/index.css` opened with
+`@import url('https://fonts.googleapis.com/css2?family=Inter…')`. That is the
+worst possible place for it: the browser fetches the bundled stylesheet, parses
+it, *then* discovers the import and fetches Google Fonts — and paints nothing
+until that finishes. With Google Fonts unreachable, **every page in the CRM took
+12.7 seconds to appear**, uniformly, because it was a network timeout rather
+than work.
+
+Measured before and after over twelve pages: **12,700 ms → ~22 ms** to
+navigation, ~60 ms to visible content.
+
+The font now loads from `index.html` with `media="print"` and an `onload` that
+promotes it, so it never blocks first paint. If Google Fonts is slow, blocked by
+an extension, or down, the app renders instantly in the fallback stack and
+simply keeps the system font. Do not move it back into the CSS.
+
+### Do not `SELECT c.*` for a list endpoint
+
+`GET /api/contracts` returned whole rows, which meant every contract's
+`signature_data` — a base64 PNG each — plus the full contract text and audit
+trail, none of which the table renders. 27 KB of signature images per request,
+re-fetched every sixty seconds by the page's refresh timer, growing with every
+contract signed. **44 KB → 6.6 KB** by naming the columns. The detail modals
+fetch the full row when they open.
+
 ### Never pass `getAdminAxios()` as a prop
 
 `getAdminAxios()` builds a **new axios instance on every call**. Passing

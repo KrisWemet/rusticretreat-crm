@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* Inter is loaded from index.html, deliberately not with @import.
+   A CSS @import puts the font on the critical path twice over: the browser has
+   to fetch this stylesheet, parse it, discover the import, and only then fetch
+   Google Fonts — and it paints nothing until that finishes. When Google Fonts
+   was unreachable, every page in the app took over twelve seconds to appear.
+   The link tag in index.html loads it without blocking, and the stack below
+   renders correctly in the meantime. */
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +12,8 @@
 
 @layer base {
   html {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto,
+                 'Helvetica Neue', Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   * {

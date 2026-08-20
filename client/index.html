@@ -5,6 +5,24 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rustic Retreat Wedding Venue</title>
+
+    <!-- Inter, loaded without blocking the first paint. media="print" means the
+         browser fetches it at low priority and renders the app immediately in
+         the fallback stack; onload promotes it once it arrives. If Google Fonts
+         is slow, blocked by an extension, or unreachable, the CRM still loads
+         at full speed and simply keeps the system font. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      media="print"
+      onload="this.media='all'; this.onload=null;"
+    />
+    <noscript>
+      <link rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>

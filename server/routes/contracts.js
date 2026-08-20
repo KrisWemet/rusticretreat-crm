@@ -132,8 +132,20 @@ function generatePassword(len = 10) {
 // ── Admin: list all contracts ────────────────────────────────────────────────
 router.get('/', authenticateToken, (req, res) => {
   try {
+    // Deliberately NOT `SELECT c.*`. That shipped every contract's
+    // signature_data — a base64 PNG each — plus the full contract text and the
+    // audit trail, none of which this list displays. On a real database it was
+    // 27 KB of signature images per request, re-fetched every sixty seconds and
+    // growing with every contract signed. The detail modal fetches the whole
+    // row when it opens, which is the one place any of it is needed.
     const rows = db.prepare(`
-      SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
+      SELECT c.id, c.couple_id, c.title, c.status, c.template_key, c.template_version,
+             c.sent_at, c.signed_at, c.signer_name, c.signer_email, c.viewed_at,
+             c.signing_expires_at, c.locked_at, c.client_fields_locked_at,
+             c.wedding_date, c.start_time, c.end_time, c.guest_count,
+             c.ceremony_location, c.reception_location, c.package_name,
+             c.total_price, c.created_at,
+             co.partner1_name, co.partner2_name, co.email AS couple_email
       FROM contracts c
       JOIN couples co ON co.id = c.couple_id
       ORDER BY c.created_at DESC

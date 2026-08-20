@@ -149,7 +149,13 @@ export default function Contracts() {
       // The open detail modal holds a copy taken when it was opened, so re-point
       // it at the refreshed row — otherwise it keeps showing the status the
       // contract had before the couple signed, right above their signatures.
-      setViewContract(v => (v ? cRes.data.find(c => c.id === v.id) || v : v))
+      setViewContract(v => {
+        if (!v) return v
+        const fresh = cRes.data.find(c => c.id === v.id)
+        // Merge rather than replace: the refreshed list row has no content or
+        // signature on it, and replacing would blank them in an open modal.
+        return fresh ? { ...v, ...fresh } : v
+      })
     } catch (err) {
       // This runs on a 60-second timer. Left unhandled, every tick threw an
       // uncaught rejection, so a server that was down for twenty minutes buried
@@ -287,6 +293,9 @@ export default function Contracts() {
     setVenueSignContract(c)
     setVenueSig(null)
     setVenueAgreed(false)
+    // This modal shows the contract text before signing, and the list no longer
+    // carries it.
+    loadFull(c, setVenueSignContract)
   }
 
   const submitVenueSignature = async () => {
@@ -368,7 +377,20 @@ export default function Contracts() {
     toast.success('Link copied to clipboard!')
   }
 
-  const openView = (c) => { setViewContract(c); setShowView(true); loadSigners(c.id) }
+  // The list carries only what the table shows. Anything heavy — the contract
+  // text, the legacy signature image — is fetched when a modal actually needs
+  // it, and merged over the row we already have.
+  const loadFull = async (c, set) => {
+    try {
+      const r = await getAdminAxios().get(`/api/contracts/${c.id}`)
+      set(v => (v && v.id === c.id ? { ...v, ...r.data } : v))
+    } catch { /* the row we already have is enough to render the header */ }
+  }
+
+  const openView = (c) => {
+    setViewContract(c); setShowView(true)
+    loadSigners(c.id); loadFull(c, setViewContract)
+  }
 
   // Open a printable version of the contract (browser "Save as PDF").
   const printContract = async (c) => {
