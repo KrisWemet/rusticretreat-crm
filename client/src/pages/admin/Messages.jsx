@@ -20,7 +20,7 @@ export default function Messages() {
     setConversations(r.data)
   }
 
-  useEffect(() => { fetchConversations().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchConversations().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const selectCouple = async (conv) => {
     setSelectedCouple(conv)

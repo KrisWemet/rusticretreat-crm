@@ -38,7 +38,7 @@ export default function Tours() {
     const r = await getAdminAxios().get('/api/tours')
     setTours(r.data)
   }
-  useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const update = async (id, body, msg) => {
     try {

@@ -24,7 +24,7 @@ export default function Budget() {
     setItems(r.data.items); setBudgetTotal(r.data.budget_total || 0)
   }
 
-  useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

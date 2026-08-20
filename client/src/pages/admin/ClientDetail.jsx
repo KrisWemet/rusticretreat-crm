@@ -50,7 +50,7 @@ export default function ClientDetail() {
   }
 
   useEffect(() => {
-    fetchData().finally(() => setLoading(false))
+    fetchData().catch(() => {}).finally(() => setLoading(false))
   }, [id])
 
   const handleEdit = async (e) => {

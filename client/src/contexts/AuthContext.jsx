@@ -118,23 +118,55 @@ export function AuthProvider({ children }) {
     navigate('/portal/login')
   }
 
-  const getAdminAxios = () => {
-    const token = localStorage.getItem('adminToken')
-    const instance = axios.create({
-      headers: { Authorization: `Bearer ${token}` }
-    })
+  // A request with no timeout hangs until the browser gives up, which can be
+  // well over a minute. Every page then sits on its loading spinner with no
+  // explanation. Twenty seconds is far longer than any endpoint here needs and
+  // short enough that a stalled request turns into a visible message.
+  const REQUEST_TIMEOUT_MS = 20000
+
+  // Network failures are reported once, centrally. Every page fetches on mount,
+  // so when the server is unreachable each one was producing its own uncaught
+  // rejection and its own silent blank screen. One toast, deduplicated by id,
+  // covers the whole app without ten separate error branches.
+  const attachInterceptors = (instance, onUnauthorised) => {
     instance.interceptors.response.use(r => r, err => {
-      if (err.response?.status === 401) endSession()
+      if (err.response?.status === 401) {
+        onUnauthorised?.()
+      } else if (!err.response) {
+        // No response at all: timed out, DNS failed, or the server is down.
+        // A 4xx/5xx is a different thing and belongs to the calling page.
+        toast.error(
+          'Can’t reach the server. Check your connection — the site may be restarting.',
+          { id: 'network-down', duration: 6000 },
+        )
+      }
       return Promise.reject(err)
     })
     return instance
   }
 
+  const getAdminAxios = () => {
+    const token = localStorage.getItem('adminToken')
+    return attachInterceptors(
+      axios.create({
+        timeout: REQUEST_TIMEOUT_MS,
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      endSession,
+    )
+  }
+
   const getCoupleAxios = () => {
     const token = localStorage.getItem('coupleToken')
-    return axios.create({
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    return attachInterceptors(
+      axios.create({
+        timeout: REQUEST_TIMEOUT_MS,
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      // The couple side has never force-logged-out on a 401 and this change is
+      // not the place to start doing it — only the network handling is shared.
+      undefined,
+    )
   }
 
   return (

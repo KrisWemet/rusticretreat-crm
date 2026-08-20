@@ -24,7 +24,7 @@ export default function VendorList() {
     setVendors(r.data)
   }
 
-  useEffect(() => { fetchVendors().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchVendors().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

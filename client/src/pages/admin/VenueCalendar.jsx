@@ -31,7 +31,7 @@ export default function VenueCalendar() {
     setTours(r.data.tours || [])
   }
 
-  useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const days = eachDayOfInterval({
     start: startOfWeek(startOfMonth(current), { weekStartsOn: 0 }),

@@ -49,7 +49,7 @@ export default function Payments() {
     setCouples(cRes.data)
   }
 
-  useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   // When couple is selected in Add form, auto-fill from their booking
   const handleCoupleSelectAdd = async (coupleId) => {

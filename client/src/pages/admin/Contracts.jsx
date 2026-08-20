@@ -169,7 +169,7 @@ export default function Contracts() {
     }
   }
 
-  useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   // Contracts change without anyone touching this screen: couples sign from
   // their own phones, minutes or days later. Fetching only on mount meant the

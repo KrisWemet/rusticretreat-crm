@@ -21,7 +21,7 @@ export default function Timeline() {
     setEvents(r.data)
   }
 
-  useEffect(() => { fetchEvents().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchEvents().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

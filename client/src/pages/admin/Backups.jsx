@@ -29,7 +29,7 @@ export default function Backups() {
     }
   }
 
-  useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const runBackup = async () => {
     setRunning(true)

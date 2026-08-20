@@ -363,6 +363,22 @@ promotes it, so it never blocks first paint. If Google Fonts is slow, blocked by
 an extension, or down, the app renders instantly in the fallback stack and
 simply keeps the system font. Do not move it back into the CSS.
 
+### Network failures are handled centrally, not per page
+
+`getAdminAxios`/`getCoupleAxios` set a **20-second timeout** and an interceptor
+that toasts once (deduplicated by id) when a request comes back with no response
+at all — timed out, DNS failed, server down. A 4xx/5xx still belongs to the
+calling page.
+
+Before this, every page fetched on mount with `.finally()` and no `.catch()`, so
+an unreachable server produced one uncaught rejection per page and a loading
+spinner that never resolved. Seventeen pages had it.
+
+**Reading a hang:** if a *static* file such as `/favicon.svg` also times out, the
+problem is not any endpoint — the server or the network path is at fault, not a
+query. This app's tables are tiny (single-digit couples and contracts), so a
+slow query is never the explanation.
+
 ### Do not `SELECT c.*` for a list endpoint
 
 `GET /api/contracts` returned whole rows, which meant every contract's

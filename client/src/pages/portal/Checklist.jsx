@@ -25,7 +25,7 @@ export default function Checklist() {
     setItems(r.data)
   }
 
-  useEffect(() => { fetchItems().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchItems().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const handleAdd = async (e) => {
     e.preventDefault()

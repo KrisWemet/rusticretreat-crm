@@ -28,7 +28,7 @@ export default function VendorsAdmin() {
     setVendors(vRes.data); setCouples(cRes.data)
   }
 
-  useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const handleAdd = async (e) => {
     e.preventDefault()

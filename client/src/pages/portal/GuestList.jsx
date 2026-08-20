@@ -33,7 +33,7 @@ export default function GuestList() {
     setGuests(r.data)
   }
 
-  useEffect(() => { fetchGuests().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchGuests().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

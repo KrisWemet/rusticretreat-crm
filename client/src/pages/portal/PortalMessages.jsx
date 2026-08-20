@@ -17,7 +17,7 @@ export default function PortalMessages() {
     setMessages(r.data)
   }
 
-  useEffect(() => { fetchMessages().finally(() => setLoading(false)) }, [couple])
+  useEffect(() => { fetchMessages().catch(() => {}).finally(() => setLoading(false)) }, [couple])
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const sendMessage = async (e) => {

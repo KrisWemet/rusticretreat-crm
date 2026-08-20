@@ -41,7 +41,16 @@ export default function Clients() {
     setCouples(r.data)
   }
 
-  useEffect(() => { fetchCouples().finally(() => setLoading(false)) }, [search, statusFilter])
+  // Debounced: the search box used to fire a request on every keystroke, so
+  // typing a name meant one round trip per letter. The status dropdown is not
+  // debounced separately — it changes at most once per click and rides the same
+  // 300ms with no perceptible delay.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchCouples().catch(() => {}).finally(() => setLoading(false))
+    }, search ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [search, statusFilter])
 
   const handleAdd = async (e) => {
     e.preventDefault()

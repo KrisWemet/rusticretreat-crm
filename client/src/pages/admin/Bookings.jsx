@@ -36,7 +36,7 @@ export default function Bookings() {
     setCouples(cRes.data)
   }
 
-  useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
