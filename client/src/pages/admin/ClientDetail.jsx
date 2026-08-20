@@ -290,11 +290,18 @@ export default function ClientDetail() {
             <Input label="Partner 2 Name" value={form.partner2_name || ''} onChange={e => setForm(f => ({...f, partner2_name: e.target.value}))} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Email" type="email" value={form.email || ''} onChange={e => setForm(f => ({...f, email: e.target.value}))} required />
-            <Input label="Phone" value={form.phone || ''} onChange={e => setForm(f => ({...f, phone: e.target.value}))} />
+            <Input label="Partner 1 Email" type="email" value={form.email || ''} onChange={e => setForm(f => ({...f, email: e.target.value}))} required />
+            {/* Without this field a couple who arrived through the website form
+                could never be given a contract: signing requires partner 2's own
+                address, the public form does not ask for one, and there was
+                nowhere else in the app to add it. */}
+            <Input label="Partner 2 Email" type="email" value={form.partner2_email || ''} onChange={e => setForm(f => ({...f, partner2_email: e.target.value}))} />
           </div>
           <div className="grid grid-cols-2 gap-4">
+            <Input label="Phone" value={form.phone || ''} onChange={e => setForm(f => ({...f, phone: e.target.value}))} />
             <Input label="Wedding Date" type="date" value={form.wedding_date || ''} onChange={e => setForm(f => ({...f, wedding_date: e.target.value}))} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <Input label="Venue Package" value={form.venue_package || ''} onChange={e => setForm(f => ({...f, venue_package: e.target.value}))} />
           </div>
           <div className="grid grid-cols-2 gap-4">

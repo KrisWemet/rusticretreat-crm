@@ -110,8 +110,11 @@ export default function Contracts() {
   const [showCreate, setShowCreate] = useState(false)
   const [showView, setShowView] = useState(false)
   const [viewContract, setViewContract] = useState(null)
-  const [signingLink, setSigningLink] = useState(null)
-  const [deliveryWarning, setDeliveryWarning] = useState(null)
+  // Describes what just happened to a contract's signing chain. Held together
+  // rather than as a bare link, because whether the email actually went out
+  // changes what staff are being asked to do — nothing, or send it by hand.
+  const [handoff, setHandoff] = useState(null)
+  const [missingEmailFor, setMissingEmailFor] = useState(null)
   const [venueSignContract, setVenueSignContract] = useState(null)
   const [venueSig, setVenueSig] = useState(null)
   const [venueAgreed, setVenueAgreed] = useState(false)
@@ -199,18 +202,16 @@ export default function Contracts() {
   const sendContract = async (id) => {
     try {
       const r = await getAdminAxios().post(`/api/contracts/${id}/send`)
-      const url = `${window.location.origin}${r.data.signing_url}`
-      setSigningLink(url)
-      if (r.data.delivered) {
-        setDeliveryWarning(null)
-        toast.success(`Link re-sent to ${r.data.signer_name} at ${r.data.sent_to}`)
-      } else {
-        setDeliveryWarning(
-          `Could not email ${r.data.signer_name} at ${r.data.sent_to}. Send the link below yourself.` +
-          (r.data.delivery_error ? ` (${r.data.delivery_error})` : '')
-        )
-        toast.error('Email failed — send the link manually.')
-      }
+      setHandoff({
+        url: `${window.location.origin}${r.data.signing_url}`,
+        name: r.data.signer_name,
+        email: r.data.sent_to,
+        delivered: r.data.delivered,
+        error: r.data.delivery_error,
+        resent: true,
+      })
+      if (r.data.delivered) toast.success(`Link re-sent to ${r.data.signer_name}`)
+      else toast.error('Email failed — send the link manually.')
       fetchData()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send')
@@ -235,27 +236,36 @@ export default function Contracts() {
       )
       const next = r.data.next_signer
       if (next) {
-        setSigningLink(`${window.location.origin}${next.signing_url}`)
+        setHandoff({
+          url: `${window.location.origin}${next.signing_url}`,
+          name: next.name,
+          email: next.email,
+          delivered: next.delivered,
+          error: next.delivery_error,
+        })
         if (next.delivered) {
           toast.success(`Signed and locked. ${next.name} has been emailed their link.`)
         } else {
           // Never claim the couple was emailed when they were not — staff would
-          // wait on a signature that is never coming. The link is on screen, so
-          // say plainly that it has to go out by hand.
-          setDeliveryWarning(
-            `The contract is signed and locked, but we could not email ${next.name} at ` +
-            `${next.email}. Send them the link below yourself.` +
-            (next.delivery_error ? ` (${next.delivery_error})` : '')
-          )
+          // wait on a signature that is never coming.
           toast.error(`Signed, but the email to ${next.name} failed — send the link manually.`)
         }
       } else {
+        setHandoff(null)
         toast.success('Signed and locked.')
       }
       setVenueSignContract(null)
       fetchData()
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to sign')
+      const data = err.response?.data
+      // A couple who came in through the website has no partner 2 address, so
+      // this refusal is the common case rather than an edge one. Say where to
+      // fix it — a toast that only states the problem leaves staff stuck.
+      if (data?.missing_partner2_email || data?.duplicate_partner_email) {
+        setMissingEmailFor(venueSignContract)
+        setVenueSignContract(null)
+      }
+      toast.error(data?.error || 'Failed to sign')
     } finally {
       setVenueSigning(false)
     }
@@ -331,37 +341,92 @@ export default function Contracts() {
         ))}
       </div>
 
-      {/* Delivery failure — the couple is NOT waiting on a link they never got. */}
-      {deliveryWarning && (
+      {/* What just happened to the signing chain.
+          The link used to headline this banner under "Share this link with your
+          client", which read as an instruction even when the email had already
+          gone out — so staff went and sent it by hand for no reason. Sending is
+          automatic, so on success this states that plainly and keeps the link
+          only as a fallback. It becomes the call to action solely when delivery
+          actually failed. */}
+      {/* Signing refused because the couple record is incomplete. Links straight
+          to the place it gets fixed. */}
+      {missingEmailFor && (
         <div className="card p-4 border-amber-300 bg-amber-50">
-          <p className="text-sm font-semibold text-amber-900 mb-1">Email not delivered</p>
-          <p className="text-sm text-amber-800">{deliveryWarning}</p>
+          <div className="flex items-start gap-3">
+            <UserGroupIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900 mb-1">
+                {missingEmailFor.partner2_name} needs their own email address
+              </p>
+              <p className="text-sm text-amber-800 mb-2">
+                Each partner signs from their own address so the two signatures are separately
+                attributable. Add it to the couple, then sign the contract.
+              </p>
+              <a href={`/clients/${missingEmailFor.couple_id}`} className="btn-secondary text-xs">
+                Open {missingEmailFor.partner1_name} &amp; {missingEmailFor.partner2_name}
+              </a>
+            </div>
+            <button onClick={() => setMissingEmailFor(null)} className="text-amber-400 hover:text-amber-600 text-lg leading-none flex-shrink-0">×</button>
+          </div>
         </div>
       )}
 
-      {/* Signing link banner */}
-      {signingLink && (
-        <div className="card p-4 border-blue-200 bg-blue-50">
-          <div className="flex items-start gap-3">
-            <LinkIcon className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-blue-900 mb-1">Signing Link Ready</p>
-              <p className="text-xs text-blue-700 mb-2">Share this link with your client so they can review and sign the contract:</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800 font-mono truncate">{signingLink}</code>
-                <button onClick={() => copyLink(signingLink)} className="btn-secondary text-xs flex-shrink-0">
-                  <ClipboardDocumentIcon className="w-3.5 h-3.5" />
-                  Copy
-                </button>
-                <a href={signingLink} target="_blank" rel="noopener noreferrer" className="btn-ghost text-xs flex-shrink-0">
-                  <EyeIcon className="w-3.5 h-3.5" />
-                  Preview
-                </a>
+      {handoff && (
+        handoff.delivered ? (
+          <div className="card p-4 border-emerald-200 bg-emerald-50">
+            <div className="flex items-start gap-3">
+              <CheckCircleSolid className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-emerald-900 mb-1">
+                  {handoff.resent ? 'Link re-sent' : 'Signed, locked and sent'}
+                </p>
+                <p className="text-sm text-emerald-800">
+                  Emailed to <strong>{handoff.name}</strong> at {handoff.email}. You don't need to
+                  send anything — when they sign, the next signer is emailed automatically.
+                </p>
+                <details className="mt-2">
+                  <summary className="text-xs text-emerald-700 cursor-pointer hover:text-emerald-900">
+                    Need their link anyway?
+                  </summary>
+                  <div className="flex items-center gap-2 mt-2">
+                    <code className="flex-1 bg-white border border-emerald-200 rounded-lg px-3 py-2 text-xs text-emerald-800 font-mono truncate">{handoff.url}</code>
+                    <button onClick={() => copyLink(handoff.url)} className="btn-secondary text-xs flex-shrink-0">
+                      <ClipboardDocumentIcon className="w-3.5 h-3.5" />
+                      Copy
+                    </button>
+                  </div>
+                </details>
               </div>
+              <button onClick={() => setHandoff(null)} className="text-emerald-400 hover:text-emerald-600 text-lg leading-none flex-shrink-0">×</button>
             </div>
-            <button onClick={() => setSigningLink(null)} className="text-blue-400 hover:text-blue-600 text-lg leading-none flex-shrink-0">×</button>
           </div>
-        </div>
+        ) : (
+          <div className="card p-4 border-amber-300 bg-amber-50">
+            <div className="flex items-start gap-3">
+              <LinkIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-900 mb-1">Email not delivered</p>
+                <p className="text-sm text-amber-800 mb-2">
+                  The contract is signed and locked, but we could not email <strong>{handoff.name}</strong>
+                  {handoff.email ? ` at ${handoff.email}` : ''}. Send them this link yourself.
+                  {handoff.error ? ` (${handoff.error})` : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-white border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-900 font-mono truncate">{handoff.url}</code>
+                  <button onClick={() => copyLink(handoff.url)} className="btn-secondary text-xs flex-shrink-0">
+                    <ClipboardDocumentIcon className="w-3.5 h-3.5" />
+                    Copy
+                  </button>
+                  <a href={handoff.url} target="_blank" rel="noopener noreferrer" className="btn-ghost text-xs flex-shrink-0">
+                    <EyeIcon className="w-3.5 h-3.5" />
+                    Preview
+                  </a>
+                </div>
+              </div>
+              <button onClick={() => setHandoff(null)} className="text-amber-400 hover:text-amber-600 text-lg leading-none flex-shrink-0">×</button>
+            </div>
+          </div>
+        )
       )}
 
       {/* Contracts table */}
@@ -374,7 +439,11 @@ export default function Contracts() {
           <p className="text-xs text-slate-300 mt-1">Create your first contract and send it to a couple for digital signing.</p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
+        // overflow-x-auto, not overflow-hidden: this table is seven columns wide
+        // and the last one holds "Sign & Lock", the action that moves a contract
+        // forward. With overflow hidden it was simply clipped on a narrow window
+        // with no way to scroll to it.
+        <div className="card overflow-x-auto">
           <table className="table">
             <thead>
               <tr>
