@@ -128,9 +128,31 @@ export default function Contracts() {
     const [cRes, cpRes] = await Promise.all([api.get('/api/contracts'), api.get('/api/couples')])
     setContracts(cRes.data)
     setCouples(cpRes.data)
+    // The open detail modal holds a copy taken when it was opened, so re-point
+    // it at the refreshed row — otherwise it keeps showing the status the
+    // contract had before the couple signed, right above their signatures.
+    setViewContract(v => (v ? cRes.data.find(c => c.id === v.id) || v : v))
   }
 
   useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
+
+  // Contracts change without anyone touching this screen: couples sign from
+  // their own phones, minutes or days later. Fetching only on mount meant the
+  // list kept showing "Sent" for a contract that was already fully signed —
+  // and the staleness is invisible, because a wrong status looks exactly like
+  // a right one. Refresh when the tab regains focus, which is precisely when
+  // someone has come back to check, and on a slow timer while it stays open.
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') fetchData() }
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    const timer = setInterval(refresh, 60000)
+    return () => {
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+      clearInterval(timer)
+    }
+  }, [])
 
   // When couple is selected, pre-fill event details from their existing booking
   const handleCoupleChange = async (e) => {
