@@ -164,13 +164,18 @@ module.exports = {
       id: '3',
       blocks: [
         { t: 'h1', text: '3. PACKAGE SELECTION' },
+        // `sets` links the choice to the fee in Section 4, and `price` is the
+        // machine-readable form of the amount shown in the table. Both live here
+        // rather than in the form so the price is stated once: the table the
+        // couple reads and the fee they are charged cannot disagree.
         { t: 'choice', key: 'package', fill: VENUE, required: true, layout: 'table',
           label: 'Package',
+          sets: 'total_package_fee',
           columns: ['Package', '2027 Price', 'Duration'],
           options: [
-            { value: '2-day',  cells: ['2-Day (Weekday only)', '$3,000', '2 days / 1 night'] },
-            { value: '3-day',  cells: ['3-Day Weekend',        '$6,500', '3 days / 2 nights'] },
-            { value: '5-day',  cells: ['5-Day Weekend',        '$7,500', '5 days / 4 nights'] },
+            { value: '2-day',  price: 3000, cells: ['2-Day (Weekday only)', '$3,000', '2 days / 1 night'] },
+            { value: '3-day',  price: 6500, cells: ['3-Day Weekend',        '$6,500', '3 days / 2 nights'] },
+            { value: '5-day',  price: 7500, cells: ['5-Day Weekend',        '$7,500', '5 days / 4 nights'] },
           ],
         },
         { t: 'p', text: 'All packages include: Cabin, Gazebo, Picnic Tables, Ceremony Benches, self-serve Décor Shed, and all standard amenities. Clients are responsible for all setup and cleanup.' },

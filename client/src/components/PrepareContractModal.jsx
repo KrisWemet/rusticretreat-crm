@@ -64,11 +64,35 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
     return () => { cancelled = true }
   }, [contractId, api])
 
+  // Some choices carry a value into another field — picking a package fills in
+  // the package fee in Section 4. The link is declared in the template (`sets`
+  // on the choice, `price` on each option), not hardcoded here, so the price in
+  // the table the couple reads and the fee they are charged cannot disagree.
+  const linkedChoices = useMemo(() => {
+    const out = {}
+    for (const doc of data?.packet?.documents || [])
+      for (const s of doc.sections)
+        for (const b of s.blocks)
+          if (b.t === 'choice' && b.sets) out[b.key] = b
+    return out
+  }, [data?.packet])
+
   const setField = useCallback((key, value) => {
-    setValues(v => ({ ...v, [key]: value }))
+    setValues(v => {
+      const next = { ...v, [key]: value }
+      const link = linkedChoices[key]
+      // Only when the choice actually changes. Re-clicking the package already
+      // selected must not wipe a fee the venue has since adjusted for a
+      // discount — they can always edit the amount after choosing.
+      if (link && v[key] !== value) {
+        const opt = link.options.find(o => o.value === value)
+        if (opt?.price != null) next[link.sets] = String(opt.price)
+      }
+      return next
+    })
     setInvalid(f => (f[key] ? { ...f, [key]: false } : f))
     setDirty(true)
-  }, [])
+  }, [linkedChoices])
 
   const save = async ({ quiet } = {}) => {
     setSaving(true)

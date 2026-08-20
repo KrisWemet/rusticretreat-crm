@@ -72,6 +72,18 @@ function collectFields(packet, fill) {
   return out;
 }
 
+// The starting values a fresh contract should carry — currently the $1,000
+// damage deposit, which is fixed by Section 4.2 and was previously retyped on
+// every contract. Declared on the field as `default` so the amount is stated in
+// the template beside the field it belongs to, not in the creation route.
+function defaultValues(packet, fill) {
+  const out = {};
+  for (const f of collectFields(packet, fill)) {
+    if (f.default != null && f.default !== '') out[f.key] = String(f.default);
+  }
+  return out;
+}
+
 function initialsBlocks(packet) {
   const out = [];
   for (const doc of packet.documents) {
@@ -230,7 +242,7 @@ function packageLabel(packet, values) {
 module.exports = {
   TEMPLATES, PACKETS, DEFAULT_PACKET,
   getPacket, listPackets,
-  collectFields, initialsBlocks,
+  collectFields, initialsBlocks, defaultValues,
   getValues, saveValues, missingRequired,
   getInitials, initialsByBlock, saveInitials, missingInitials,
   paymentSchedule, packageLabel,

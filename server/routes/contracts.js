@@ -234,6 +234,9 @@ router.post('/', authenticateToken, (req, res) => {
       const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(couple_id);
       if (couple) {
         const seed = {
+          // Fixed amounts the template declares, such as the $1,000 damage
+          // deposit set by Section 4.2.
+          ...tpl.defaultValues(packet, 'venue'),
           client1_name:  couple.partner1_name,
           client2_name:  couple.partner2_name,
           client1_email: couple.email,
