@@ -111,8 +111,12 @@ deposit to a mailbox nobody reads.
 
 The address now lives in `server/venue.js` and is served to the portal through
 `GET /api/payments/config`, so the contract and the portal cannot drift apart.
-Override with `ETRANSFER_EMAIL`; it defaults to `info@rusticretreatalberta.ca`.
-**The mailbox half is unconfirmed — the owner confirmed the domain only.**
+Override with `ETRANSFER_EMAIL`.
+
+The confirmed recipient is **`rusticretreatalberta@gmail.com`** — a Gmail
+address, deliberately *not* on `rusticretreatalberta.ca`. That domain sends the
+venue's email; the e-Transfer account is registered to the Gmail. Do not
+"tidy" it to match the sending domain.
 
 The same contract also directed payment "online through the client portal" while
 the portal is switched off. It now only says that when `ENABLE_COUPLE_PORTAL` is
@@ -353,8 +357,8 @@ See `DEPLOY.md` for the full write-up.
   three parties labelled).
 - `GET /api/messages/unread/count` is dead code; the sidebar Messages badge is
   wired but never fed.
-- `ETRANSFER_EMAIL` is **not yet set on Railway** — the default carries the right
-  domain but an unconfirmed mailbox. Set it once the owner confirms the address.
+- `ETRANSFER_EMAIL` is **not set on Railway**. Not urgent: the built-in default
+  is the confirmed address, so the live app is already correct.
 - The two contract templates still disagree; see the trap above.
 
 ---
