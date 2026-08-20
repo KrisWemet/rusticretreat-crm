@@ -771,6 +771,10 @@ router.get('/sign/:token', signLimiter, (req, res) => {
                 .all(contract.id, signer.id)
                 .reduce((acc, r) => { acc[r.block_key] = r.initials_text; return acc; }, {})
             : {},
+          // Everyone's initials, so Client 2 sees Client 1's marks already in
+          // place rather than a document that looks untouched. The paper form
+          // shows both boxes side by side and so should this.
+          all_initials: tpl.initialsByBlock(contract.id),
           missing_client: canEditFields ? tpl.missingRequired(packet, values, 'client') : [],
         };
       }

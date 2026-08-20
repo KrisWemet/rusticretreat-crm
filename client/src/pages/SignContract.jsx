@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import axios from 'axios'
 import SignaturePad from '../components/SignaturePad'
+import ContractDocument from '../components/ContractDocument'
 import {
   HeartIcon,
   CheckCircleIcon,
@@ -25,6 +26,16 @@ export default function SignContract() {
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState(null)
 
+  // Template-packet state. `fields` are the couple's answers, `initials` the
+  // blocks this signer has stamped so far. Both start from what the server
+  // already holds so a half-finished session resumes where it left off rather
+  // than silently asking for everything again.
+  const [tplValues, setTplValues] = useState({})
+  const [myInitials, setMyInitials] = useState({})
+  const [initialsText, setInitialsText] = useState('')
+  const [invalidFields, setInvalidFields] = useState({})
+  const [highlightBlock, setHighlightBlock] = useState(null)
+
   useEffect(() => {
     axios.get(`/api/contracts/sign/${token}`)
       .then(r => {
@@ -32,6 +43,17 @@ export default function SignContract() {
         // Pre-fill with who we expect, so partners cannot sign in each
         // other's slot by accident.
         if (r.data.expected_signer_name) setSignerName(r.data.expected_signer_name)
+        if (r.data.template) {
+          setTplValues(r.data.template.values || {})
+          setMyInitials(r.data.template.my_initials || {})
+          // Seed the initials from the name we already expect. The signer can
+          // change it — plenty of people initial with something other than the
+          // first letters of their legal name — but nobody has to type it to get
+          // started.
+          const n = r.data.expected_signer_name || ''
+          const auto = n.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 4)
+          setInitialsText(prev => prev || auto)
+        }
       })
       .catch(e => {
         setExpired(Boolean(e.response?.data?.expired))
@@ -39,6 +61,38 @@ export default function SignContract() {
       })
       .finally(() => setLoading(false))
   }, [token])
+
+  const tpl = contract?.template || null
+  const canEditFields = !!tpl?.can_edit_fields
+  const iniBlocks = tpl?.initials_blocks || []
+  const iniDone = iniBlocks.filter(b => myInitials[b.key]).length
+  const iniOutstanding = iniBlocks.filter(b => !myInitials[b.key])
+  const allInitialled = iniBlocks.length > 0 && iniOutstanding.length === 0
+
+  const setField = (key, value) => {
+    setTplValues(v => ({ ...v, [key]: value }))
+    setInvalidFields(f => (f[key] ? { ...f, [key]: false } : f))
+  }
+
+  const stampInitial = (blockKey) => {
+    if (!initialsText.trim()) return
+    setMyInitials(m => ({ ...m, [blockKey]: initialsText.trim().toUpperCase() }))
+    setHighlightBlock(null)
+  }
+
+  // Scrolls to the next clause still needing initials. With twelve of them spread
+  // over twenty-one pages, "you missed one" is useless without a way to get there.
+  const jumpToNext = () => {
+    const next = iniOutstanding[0]
+    if (!next) return
+    setHighlightBlock(next.key)
+    document.getElementById(`ini-${next.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  const jumpToField = (key) => {
+    document.getElementById(`f-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    document.getElementById(`f-${key}`)?.focus?.()
+  }
 
   const handleSign = async (e) => {
     e.preventDefault()
@@ -50,16 +104,37 @@ export default function SignContract() {
       alert('Please confirm you agree to the terms.')
       return
     }
+    // Check locally first so the couple is walked to the gap rather than told
+    // about it. The server enforces the same rules regardless — this is a
+    // courtesy, not the control.
+    if (tpl && iniOutstanding.length) {
+      jumpToNext()
+      return
+    }
     setSubmitting(true)
     try {
       const r = await axios.post(`/api/contracts/sign/${token}`, {
         signer_name: signerName,
         signature_data: signatureData,
         agreed: true,
+        ...(tpl ? { fields: canEditFields ? tplValues : undefined, initials: myInitials } : {}),
       })
       setResult(r.data)
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to submit signature. Please try again.')
+      const data = err.response?.data || {}
+      if (data.missing_fields?.length) {
+        const marks = {}
+        for (const m of data.missing_fields) marks[m.key] = true
+        setInvalidFields(marks)
+        jumpToField(data.missing_fields[0].key)
+        alert(`${data.missing_fields.length} required box${data.missing_fields.length === 1 ? '' : 'es'} still need filling in. We have highlighted them for you.`)
+      } else if (data.missing_initials?.length) {
+        setMyInitials(m => m)
+        jumpToNext()
+        alert(data.error)
+      } else {
+        alert(data.error || 'Failed to submit signature. Please try again.')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -259,6 +334,37 @@ export default function SignContract() {
             Secure signing
           </div>
         </div>
+
+        {/* Initials progress. Twelve clauses spread over twenty-one pages is very
+            easy to lose track of, so the count and a jump-to-next control stay on
+            screen the whole way down. */}
+        {tpl && iniBlocks.length > 0 && (
+          <div className={`border-t ${allInitialled ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'}`}>
+            <div className="max-w-3xl mx-auto px-6 py-2.5 flex items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between text-xs font-semibold mb-1">
+                  <span className={allInitialled ? 'text-emerald-800' : 'text-amber-800'}>
+                    {allInitialled
+                      ? `All ${iniBlocks.length} clauses initialled`
+                      : `Initialled ${iniDone} of ${iniBlocks.length} clauses`}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/70 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${allInitialled ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                    style={{ width: `${Math.round((iniDone / iniBlocks.length) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              {!allInitialled && (
+                <button type="button" onClick={jumpToNext}
+                  className="flex-shrink-0 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                  Go to next
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
@@ -277,21 +383,78 @@ export default function SignContract() {
           </div>
         </div>
 
-        {/* Contract body */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
-          <div className="px-6 py-4 border-b border-slate-50 flex items-center gap-2">
-            <DocumentTextIcon className="w-4 h-4 text-slate-400" />
-            <span className="text-sm font-semibold text-slate-700">Contract Terms</span>
-          </div>
-          <div className="px-6 py-6 max-h-[520px] overflow-y-auto">
-            <div
-              className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap"
-              style={{ fontFamily: 'inherit', fontSize: '14px', lineHeight: '1.7' }}
-            >
-              {contract?.content}
+        {/* Contract body — a template packet renders its own documents; the
+            older free-text contracts keep the plain scrolling panel. */}
+        {tpl ? (
+          <>
+            {/* What this signer has to do, stated before they start scrolling. */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
+              <h2 className="text-sm font-bold text-slate-800 mb-2">What you need to do</h2>
+              <ol className="text-sm text-slate-600 space-y-1.5 list-decimal pl-5">
+                {canEditFields && <li>Fill in your details in the highlighted boxes.</li>}
+                {!canEditFields && tpl.client_fields_locked && (
+                  <li>Read through — your partner has already filled in your details.</li>
+                )}
+                <li>Initial each of the <strong>{iniBlocks.length}</strong> marked clauses.</li>
+                <li>Sign at the bottom.</li>
+              </ol>
+              {!canEditFields && tpl.client_fields_locked && (
+                <p className="text-xs text-slate-400 mt-3">
+                  The answers are locked so you and your partner sign the same document.
+                  If anything is wrong, contact Rustic Retreat before signing.
+                </p>
+              )}
+            </div>
+
+            {/* Your initials — set once, then stamped clause by clause. */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
+              <label className="block text-sm font-semibold text-slate-800 mb-1">Your initials</label>
+              <p className="text-xs text-slate-500 mb-3">
+                Set these once, then tap “Initial here” at each marked clause. Every clause is
+                acknowledged separately, so there is no way to apply them all at once.
+              </p>
+              <input
+                value={initialsText}
+                onChange={e => setInitialsText(e.target.value.toUpperCase().slice(0, 4))}
+                maxLength={4}
+                placeholder="e.g. AB"
+                className="w-32 text-center text-2xl px-3 py-2 border-2 border-amber-300 rounded-xl
+                           focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                style={{ fontFamily: "'Brush Script MT', cursive" }}
+              />
+            </div>
+
+            <ContractDocument
+              packet={tpl.packet}
+              values={tplValues}
+              onChange={setField}
+              editableFill={canEditFields ? 'client' : null}
+              paymentSchedule={tpl.payment_schedule || []}
+              initialsFor={contract.signer_role}
+              myInitials={myInitials}
+              allInitials={tpl.all_initials || {}}
+              initialsText={initialsText}
+              onInitial={stampInitial}
+              invalidFields={invalidFields}
+              highlightBlock={highlightBlock}
+            />
+          </>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-50 flex items-center gap-2">
+              <DocumentTextIcon className="w-4 h-4 text-slate-400" />
+              <span className="text-sm font-semibold text-slate-700">Contract Terms</span>
+            </div>
+            <div className="px-6 py-6 max-h-[520px] overflow-y-auto">
+              <div
+                className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap"
+                style={{ fontFamily: 'inherit', fontSize: '14px', lineHeight: '1.7' }}
+              >
+                {contract?.content}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Signing form */}
         <form onSubmit={handleSign} className="bg-white rounded-2xl border border-slate-100 shadow-sm">
@@ -360,7 +523,8 @@ export default function SignContract() {
               </p>
               <button
                 type="submit"
-                disabled={submitting || !signatureData || !signerName.trim() || !agreed}
+                disabled={submitting || !signatureData || !signerName.trim() || !agreed ||
+                          (!!tpl && !allInitialled)}
                 className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-6 py-2.5 rounded-xl transition-colors text-sm"
               >
                 {submitting ? (

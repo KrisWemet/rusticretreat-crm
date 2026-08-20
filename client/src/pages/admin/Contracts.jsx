@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
 import Input, { Select } from '../../components/ui/Input'
 import SignaturePad from '../../components/SignaturePad'
+import PrepareContractModal from '../../components/PrepareContractModal'
 import {
   PlusIcon,
   DocumentTextIcon,
@@ -97,7 +98,10 @@ ${terms}`
 }
 
 const EMPTY_FORM = {
-  couple_id: '', title: 'Event Services Agreement', terms: DEFAULT_TERMS,
+  // Default to the venue's real agreement. The free-text kind stays available
+  // for one-offs, but the 2027 packet is what an actual booking uses.
+  template_packet: 'rental-2027',
+  couple_id: '', title: 'Event Venue Rental Agreement', terms: DEFAULT_TERMS,
   wedding_date: '', start_time: '', end_time: '', guest_count: '',
   ceremony_location: '', reception_location: '', package_name: '', total_price: '',
 }
@@ -122,11 +126,20 @@ export default function Contracts() {
   const [venueSigning, setVenueSigning] = useState(false)
   const [signers, setSigners] = useState({})
   const [form, setForm] = useState(EMPTY_FORM)
+  const [packets, setPackets] = useState([])
+  const [prepContract, setPrepContract] = useState(null)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const fetchData = async () => {
     const api = getAdminAxios()
-    const [cRes, cpRes] = await Promise.all([api.get('/api/contracts'), api.get('/api/couples')])
+    const [cRes, cpRes, tpRes] = await Promise.all([
+      api.get('/api/contracts'),
+      api.get('/api/couples'),
+      // Never fatal: a failure here only costs the template picker, and the
+      // contracts list is what the page is for.
+      api.get('/api/contracts/templates').catch(() => ({ data: [] })),
+    ])
+    setPackets(tpRes.data || [])
     setContracts(cRes.data)
     setCouples(cpRes.data)
     // The open detail modal holds a copy taken when it was opened, so re-point
@@ -198,11 +211,15 @@ export default function Contracts() {
 
   const handleCreate = async (e) => {
     e.preventDefault()
-    const content = buildContent(coupleNames, form, form.terms)
+    const usingTemplate = !!form.template_packet
+    // A template packet carries its own text; only a free-text contract needs
+    // the assembled body.
+    const content = usingTemplate ? undefined : buildContent(coupleNames, form, form.terms)
     try {
-      await getAdminAxios().post('/api/contracts', {
+      const created = await getAdminAxios().post('/api/contracts', {
         couple_id: form.couple_id,
         title: form.title,
+        template_packet: form.template_packet || undefined,
         content,
         wedding_date:       form.wedding_date       || null,
         start_time:         form.start_time         || null,
@@ -213,10 +230,14 @@ export default function Contracts() {
         package_name:       form.package_name       || null,
         total_price:        form.total_price        ? Number(form.total_price) : null,
       })
-      toast.success('Contract created!')
+      toast.success('Contract created')
       setShowCreate(false)
       setForm(EMPTY_FORM)
-      fetchData()
+      await fetchData()
+      // Straight into the prep screen. A template contract is unusable until the
+      // venue's own details are in it, so dropping the user back on the list
+      // would just hide the next required step.
+      if (usingTemplate && created?.data?.id) setPrepContract(created.data)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to create contract')
     }
@@ -555,6 +576,17 @@ export default function Contracts() {
                       <button onClick={() => printContract(c)} className="btn-ghost py-1 px-2 text-xs" title="Download / print PDF">
                         <ArrowDownTrayIcon className="w-3.5 h-3.5" />
                       </button>
+                      {/* A template contract needs its venue details before it
+                          can be signed, so that action comes first. */}
+                      {c.template_key && !c.locked_at && c.status !== 'signed' && (
+                        <button
+                          onClick={() => setPrepContract(c)}
+                          className="btn-ghost py-1 px-2 text-xs text-emerald-700 hover:bg-emerald-50 font-semibold"
+                          title="Fill in the venue's details before sending"
+                        >
+                          Prepare
+                        </button>
+                      )}
                       {/* Before the venue signs there is nothing to send — the
                           couple's links do not exist yet. Show the action that
                           actually moves the contract forward. */}
@@ -590,9 +622,55 @@ export default function Contracts() {
         </div>
       )}
 
+      {/* ── Venue prep for template contracts ──────────────────────────── */}
+      <PrepareContractModal
+        contract={prepContract}
+        api={getAdminAxios()}
+        onClose={() => setPrepContract(null)}
+        onSaved={fetchData}
+      />
+
       {/* ── Create modal ───────────────────────────────────────────────── */}
       <Modal isOpen={showCreate} onClose={() => { setShowCreate(false); setForm(EMPTY_FORM) }} title="New Contract" size="xl">
         <form onSubmit={handleCreate} className="space-y-5">
+
+          {/* Which kind of contract. The venue's real agreement is a fixed
+              template; the free-text option is kept for one-offs that the
+              template does not cover. */}
+          <div className="space-y-2">
+            <label className="label">Contract type</label>
+            {packets.map(pk => (
+              <label key={pk.key}
+                className={`flex items-start gap-3 border rounded-xl px-4 py-3 cursor-pointer transition-colors
+                  ${form.template_packet === pk.key ? 'border-rose-400 bg-rose-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                <input type="radio" name="ctype" className="mt-1 w-4 h-4 text-rose-600 focus:ring-rose-400"
+                  checked={form.template_packet === pk.key}
+                  onChange={() => setForm(v => ({ ...v, template_packet: pk.key, title: 'Event Venue Rental Agreement' }))} />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900">{pk.title}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {pk.documents.map(d => d.title).join(' + ')}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    You fill in the dates, package and price; the couple fills in their details,
+                    initials 12 clauses and signs.
+                  </div>
+                </div>
+              </label>
+            ))}
+            <label className={`flex items-start gap-3 border rounded-xl px-4 py-3 cursor-pointer transition-colors
+              ${!form.template_packet ? 'border-rose-400 bg-rose-50' : 'border-slate-200 hover:border-slate-300'}`}>
+              <input type="radio" name="ctype" className="mt-1 w-4 h-4 text-rose-600 focus:ring-rose-400"
+                checked={!form.template_packet}
+                onChange={() => setForm(v => ({ ...v, template_packet: '', title: 'Event Services Agreement' }))} />
+              <div>
+                <div className="text-sm font-semibold text-slate-900">Free-text contract</div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  Type your own terms. No initials, no fill-in boxes — one signature per party.
+                </div>
+              </div>
+            </label>
+          </div>
 
           {/* Basic info */}
           <div className="grid grid-cols-2 gap-4">
@@ -613,6 +691,15 @@ export default function Contracts() {
             <Input label="Contract Title" value={form.title} onChange={f('title')} required />
           </div>
 
+          {form.template_packet ? (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+              <p className="text-sm text-slate-600">
+                Event dates, package, price and payment schedule are part of the agreement itself —
+                you will fill them in on the next screen.
+              </p>
+            </div>
+          ) : (
+          <>
           {/* Event details */}
           <div className="border border-slate-200 rounded-xl overflow-hidden">
             <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
@@ -654,7 +741,7 @@ export default function Contracts() {
             <textarea
               value={form.terms}
               onChange={f('terms')}
-              required
+              required={!form.template_packet}
               rows={12}
               className="input-field font-mono text-xs resize-y leading-relaxed"
             />
@@ -662,6 +749,8 @@ export default function Contracts() {
               The event details above will be automatically inserted at the top of the contract. Edit the legal terms here as needed.
             </p>
           </div>
+          </>
+          )}
 
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
             <button type="button" className="btn-secondary" onClick={() => { setShowCreate(false); setForm(EMPTY_FORM) }}>Cancel</button>
