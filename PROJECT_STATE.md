@@ -254,6 +254,40 @@ use `display: none !important`. Verify with Playwright's `emulateMedia({media:
 'print'})` and read the *computed* style — `isVisible()` on a screen-media page
 tells you nothing about what lands on paper.
 
+### The Railway build silently skips devDependencies
+
+`NODE_ENV=production` is set as a Railway variable, so Nixpacks passes
+`NPM_CONFIG_PRODUCTION=true` into the build and `npm install` installs **only
+production dependencies**. `vite` is a devDependency, so the client build dies
+with `sh: 1: vite: not found` and the whole deploy fails. It happened twice on
+2026-08-20 (14:16 and 14:21).
+
+The dangerous part is what a failed build looks like from outside: **nothing**.
+Railway keeps serving the previous deployment, so the site stays up and the
+commit simply never ships. If a change seems not to have taken effect, check
+the deploy status before re-reading the code.
+
+`railway.json` now pins `npm install --include=dev --prefix client`, which
+overrides the inherited setting. Reproduced and verified locally:
+
+```bash
+NODE_ENV=production NPM_CONFIG_PRODUCTION=true npm install --prefix client
+#   → added 40 packages, no vite            (matches the failed build exactly)
+NODE_ENV=production NPM_CONFIG_PRODUCTION=true npm install --include=dev --prefix client
+#   → added 160 packages, vite present, build succeeds
+```
+
+### Deploys have a real outage window, because of the volume
+
+A Railway volume attaches to one container at a time, so the old container must
+stop before the new one starts — every deploy is a brief total outage where the
+edge answers **502**. The logs show it as `Stopping Container` on the old
+deployment one second before `Starting Container` on the new one.
+
+Do not read a 502 during a deploy as a crash. Check the deploy log first: a
+crash shows the process exiting and restarting, whereas a switchover shows a
+clean `SIGTERM` and a single handover.
+
 ### An async route handler without try/catch kills the whole server
 
 Express 4 does not catch a rejected `async` handler. The rejection escapes to
