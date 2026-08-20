@@ -115,6 +115,7 @@ export default function Contracts() {
   // changes what staff are being asked to do — nothing, or send it by hand.
   const [handoff, setHandoff] = useState(null)
   const [missingEmailFor, setMissingEmailFor] = useState(null)
+  const [signatureView, setSignatureView] = useState(null)
   const [venueSignContract, setVenueSignContract] = useState(null)
   const [venueSig, setVenueSig] = useState(null)
   const [venueAgreed, setVenueAgreed] = useState(false)
@@ -290,6 +291,20 @@ export default function Contracts() {
       toast.error(data?.error || 'Failed to sign')
     } finally {
       setVenueSigning(false)
+    }
+  }
+
+  // Fetched on demand rather than sent with the list: signature images are
+  // base64 PNGs, and shipping one per signer per row would bloat every load of
+  // this page for something staff open occasionally.
+  const viewSignature = async (contract, signer) => {
+    setSignatureView({ loading: true, contract, signer })
+    try {
+      const r = await getAdminAxios().get(`/api/contracts/${contract.id}/signers/${signer.id}`)
+      setSignatureView({ loading: false, contract, signer, detail: r.data })
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not load that signature')
+      setSignatureView(null)
     }
   }
 
@@ -499,7 +514,36 @@ export default function Contracts() {
                       {c.status}
                     </span>
                   </td>
-                  <td className="text-slate-600">{c.signer_name || <span className="text-slate-300">—</span>}</td>
+                  {/* Every signer, not just the last one. contracts.signer_name
+                      holds whoever signed most recently, so this column used to
+                      credit a three-party agreement to partner 2 alone. */}
+                  <td className="text-slate-600">
+                    {c.signers?.length ? (
+                      <div className="space-y-0.5">
+                        {c.signers.map(s => (
+                          <div key={s.id} className="flex items-center gap-1.5 whitespace-nowrap">
+                            {s.status === 'signed' ? (
+                              <>
+                                <CheckCircleSolid className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                                <button
+                                  onClick={() => viewSignature(c, s)}
+                                  className="text-rose-600 hover:text-rose-700 hover:underline text-sm"
+                                  title={`View ${s.name}'s signature`}
+                                >
+                                  {s.name}
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <ClockIcon className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+                                <span className="text-slate-400 text-sm">{s.name}</span>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (c.signer_name || <span className="text-slate-300">—</span>)}
+                  </td>
                   <td className="text-slate-500 text-xs">
                     {c.signed_at ? format(parseISO(c.signed_at), 'MMM d, yyyy h:mm a') : <span className="text-slate-300">—</span>}
                   </td>
@@ -757,6 +801,87 @@ export default function Contracts() {
                   Re-send Current Link
                 </button>
               )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── One signer's signature and audit trail ──────────────────────── */}
+      <Modal
+        isOpen={!!signatureView}
+        onClose={() => setSignatureView(null)}
+        title={signatureView ? `${signatureView.signer.name}'s signature` : ''}
+      >
+        {signatureView?.loading && (
+          <div className="flex justify-center py-10">
+            <div className="animate-spin rounded-full h-7 w-7 border-2 border-rose-200 border-t-rose-600" />
+          </div>
+        )}
+        {signatureView?.detail && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">
+                {signatureView.detail.role === 'venue' ? 'For the venue'
+                  : signatureView.detail.role === 'partner1' ? 'Client — Partner 1'
+                  : 'Client — Partner 2'}
+              </p>
+              <p className="font-semibold text-slate-900">{signatureView.detail.name}</p>
+              {signatureView.detail.email && (
+                <p className="text-sm text-slate-500">{signatureView.detail.email}</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              {/^data:image\/(png|jpeg);base64,/.test(signatureView.detail.signature_data || '') ? (
+                <img
+                  src={signatureView.detail.signature_data}
+                  alt={`Signature of ${signatureView.detail.name}`}
+                  className="max-h-28 mx-auto"
+                />
+              ) : (
+                <p className="text-sm text-slate-400 text-center py-6">No signature image recorded</p>
+              )}
+              <div className="border-t border-slate-200 mt-3 pt-2 text-center">
+                <span className="text-xs text-slate-400">{signatureView.detail.name}</span>
+              </div>
+            </div>
+
+            {signatureView.detail.consent_text && (
+              <div className="bg-slate-50 border-l-2 border-rose-400 px-3 py-2">
+                <p className="text-xs font-semibold text-slate-600 mb-1">Consent recorded at signing</p>
+                <p className="text-xs text-slate-600 leading-relaxed">{signatureView.detail.consent_text}</p>
+              </div>
+            )}
+
+            {/* The evidence that makes the signature defensible if it is ever
+                questioned — kept beside it rather than buried in the PDF. */}
+            <table className="text-xs text-slate-500 w-full">
+              <tbody>
+                {[
+                  ['Signed', signatureView.detail.signed_at],
+                  ['First viewed', signatureView.detail.viewed_at],
+                  ['Link sent', signatureView.detail.sent_at],
+                ].filter(([, v]) => v).map(([k, v]) => (
+                  <tr key={k}>
+                    <td className="py-0.5 pr-4 text-slate-400 whitespace-nowrap">{k}</td>
+                    <td>{format(parseISO(String(v).replace(' ', 'T') + 'Z'), 'MMM d, yyyy h:mm a')}</td>
+                  </tr>
+                ))}
+                {signatureView.detail.signer_ip && (
+                  <tr><td className="py-0.5 pr-4 text-slate-400">IP address</td><td>{signatureView.detail.signer_ip}</td></tr>
+                )}
+                {signatureView.detail.signer_user_agent && (
+                  <tr><td className="py-0.5 pr-4 text-slate-400 align-top">Device</td><td className="break-all">{signatureView.detail.signer_user_agent}</td></tr>
+                )}
+              </tbody>
+            </table>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button className="btn-secondary" onClick={() => setSignatureView(null)}>Close</button>
+              <button className="btn-primary" onClick={() => { const c = signatureView.contract; setSignatureView(null); printContract(c) }}>
+                <ArrowDownTrayIcon className="w-4 h-4" />
+                Full signed contract
+              </button>
             </div>
           </div>
         )}

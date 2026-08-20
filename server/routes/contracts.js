@@ -118,7 +118,22 @@ router.get('/', authenticateToken, (req, res) => {
       JOIN couples co ON co.id = c.couple_id
       ORDER BY c.created_at DESC
     `).all();
-    res.json(rows);
+
+    // Attach every signer, because contracts.signer_name only ever holds
+    // whoever signed last — the list was crediting the whole agreement to
+    // partner 2 and showing no sign of the venue or partner 1 having signed it.
+    // One query for all contracts rather than one per row.
+    const all = db.prepare(`
+      SELECT id, contract_id, sign_order, role, name, email, status, signed_at
+      FROM contract_signers ORDER BY contract_id, sign_order
+    `).all();
+    const byContract = new Map();
+    for (const s of all) {
+      if (!byContract.has(s.contract_id)) byContract.set(s.contract_id, []);
+      byContract.get(s.contract_id).push(s);
+    }
+
+    res.json(rows.map(r => ({ ...r, signers: byContract.get(r.id) || [] })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -326,6 +341,27 @@ router.get('/:id/signers', authenticateToken, (req, res) => {
       signature_data: undefined,
     }));
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: one signer's signature and audit trail ────────────────────────────
+// The list links each name here, so staff can see who actually signed and what
+// was recorded against them without opening the whole printed contract.
+router.get('/:id/signers/:signerId', authenticateToken, (req, res) => {
+  try {
+    const s = db.prepare(
+      'SELECT * FROM contract_signers WHERE id = ? AND contract_id = ?'
+    ).get(req.params.signerId, req.params.id);
+    if (!s) return res.status(404).json({ error: 'Signer not found' });
+    if (s.status !== 'signed') {
+      return res.status(404).json({ error: `${s.name} has not signed yet` });
+    }
+    // The token stays out of this: it is a bearer credential for signing, and
+    // viewing a completed signature never needs it.
+    const { signing_token, ...rest } = s;
+    res.json(rest);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
