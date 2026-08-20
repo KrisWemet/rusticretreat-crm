@@ -39,14 +39,42 @@ if (GATE_KEY && /[$][{(]/.test(GATE_KEY)) {
   throw new Error('CRM_GATE_KEY looks like an un-evaluated shell expression — paste the generated value, not the command');
 }
 
+// Paths the gate must let through, because the people who use them are not
+// staff and will never hold the cookie.
+//
+// A contract signing link is emailed to a couple. Before this list existed the
+// gate answered them with "Not found" — the link worked perfectly for staff,
+// whose browser already had the cookie, and was a dead end for every couple it
+// was actually sent to. The same applied to proposal links and the public
+// enquiry form.
+//
+// The built assets have to be here too: these pages are served by the SPA
+// shell, so blocking /assets would leave the couple staring at a blank page
+// having fetched an HTML file it could not run. Those files are client-side
+// bundles with no secrets in them; the gate exists to keep the CRM itself
+// unbrowsable, and the app root, the login page and every authenticated route
+// stay behind it.
+//
+// Each of these paths carries its own protection: signing and proposal links
+// require an unguessable token, and the enquiry form is rate-limited.
+const PUBLIC_PATHS = [
+  /^\/api\/health$/,                 // platform healthcheck — probers send no cookies
+  /^\/api\/payments\/webhook$/,      // Stripe authenticates by signature instead
+  /^\/sign\//,                       // couple opening their contract signing link
+  /^\/api\/contracts\/sign\//,       // …and the API that page calls, incl. /print
+  /^\/proposal\//,                   // couple reviewing a proposal
+  /^\/api\/proposals\/public\//,
+  /^\/inquire\/?$/,                  // public enquiry form
+  /^\/api\/inquire/,
+  /^\/assets\//,                     // JS/CSS the above pages need to render
+  /^\/favicon\.(ico|svg|png)$/,
+];
+
 app.use((req, res, next) => {
   res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
   if (!GATE_KEY) return next();
 
-  // Exempt the platform healthcheck (probers send no cookies; a 404 here would
-  // fail the deploy) and the Stripe webhook (Stripe cannot present a cookie —
-  // it authenticates by signature, which payments.js now requires).
-  if (req.path === '/api/health' || req.path === '/api/payments/webhook') return next();
+  if (PUBLIC_PATHS.some(p => p.test(req.path))) return next();
 
   const cookies = req.headers.cookie || '';
   if (cookies.split(';').some(c => c.trim() === 'crm_gate=' + GATE_KEY)) return next();
