@@ -132,6 +132,29 @@ collects one and the client detail page had no field — so every couple arrivin
 through the website could never be given a contract, with nowhere to fix it.
 When you make something required, check every path that creates the record.
 
+### Print stylesheets: `@media print` goes last, with `!important`
+
+The printable contract and proposal both carry a red toolbar marked `.noprint`.
+It **printed onto the page anyway** — the venue's signed business record came out
+with a "Save as PDF / Print" button on it. Neither rule was wrong: `.noprint`
+inside `@media print` and `.bar { display:flex }` have identical specificity
+(0,1,0), and `.bar` was written *later* in the stylesheet, so source order gave
+it the win. A media query grants no extra weight.
+
+Both files now put the `@media print` block at the **end** of the stylesheet and
+use `display: none !important`. Verify with Playwright's `emulateMedia({media:
+'print'})` and read the *computed* style — `isVisible()` on a screen-media page
+tells you nothing about what lands on paper.
+
+### Never put a backtick inside HTML that lives in a template literal
+
+While fixing the above I wrote a CSS comment containing `` `.noprint` ``. Those
+backticks closed the surrounding JS template literal, and both print routes
+started returning 500 (`esc(...).noprint is not a function`). The file still
+*parsed* — `node -e "require('./routes/contracts.js')"` passed happily — because
+the result was syntactically valid JavaScript, just nonsense. A parse check is
+not a smoke test; fetch the route.
+
 ### `better-sqlite3` and Node 22
 
 Version 9 has no Node 22 prebuilt binary and falls back to compiling with
@@ -269,7 +292,9 @@ See `DEPLOY.md` for the full write-up.
   `npm run reset-data --prefix server -- --yes` (keeps logins and venue setup;
   `--everything` also clears packages/add-ons/forms; refuses without `--yes`).
 - No off-site backup — snapshots are downloaded by hand today.
-- The printable executed contract has never been eyeballed by the owner.
+- The printable executed contract has never been eyeballed by the owner in
+  production (verified locally: toolbar hidden, three signature blocks, all
+  three parties labelled).
 - `GET /api/messages/unread/count` is dead code; the sidebar Messages badge is
   wired but never fed.
 

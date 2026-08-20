@@ -287,7 +287,7 @@ function renderContractHtml(c) {
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(c.title)}</title>
 <style>
-  @media print { .noprint { display:none } @page { margin: 18mm } }
+  @page { margin: 18mm }
   body { font-family: Georgia, 'Times New Roman', serif; color:#1e293b; max-width:760px; margin:32px auto; padding:0 24px; line-height:1.55 }
   .bar { background:#e11d48; color:#fff; padding:10px 16px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:12px; font-family:system-ui,sans-serif; margin-bottom:24px }
   .bar button { background:#fff; color:#e11d48; border:0; padding:8px 16px; border-radius:6px; font-weight:700; cursor:pointer; white-space:nowrap }
@@ -307,12 +307,24 @@ function renderContractHtml(c) {
   .audit td { padding:3px 14px 3px 0; vertical-align:top; word-break:break-word }
   .audit td:first-child { color:#94a3b8; white-space:nowrap }
   .unsigned { margin-top:32px; color:#b45309; font-style:italic }
+  .hint { font-family:system-ui,sans-serif; font-size:12px; color:#64748b; background:#f8fafc; border-radius:6px; padding:8px 12px; margin:-16px 0 24px }
+
+  /* Print rules go last and use !important on purpose: .noprint and .bar have
+     the same specificity, so source order alone would decide the winner. The
+     toolbar used to print onto the page because .bar came afterwards. */
+  @media print {
+    .noprint { display: none !important }
+    body { margin: 0 auto; max-width: none }
+  }
 </style></head>
 <body>
   <div class="bar noprint">
     <span>Rustic Retreat Weddings — Contract</span>
-    <button onclick="window.print()">Save as PDF / Print</button>
+    <button onclick="window.print()">Print</button>
   </div>
+  <p class="hint noprint">Pick your printer under <strong>Destination</strong> in the
+  print dialog. <strong>Save as PDF</strong> is just one destination in that list — if
+  it is the only one offered, no printer is set up on this computer.</p>
   <div class="content">${esc(c.content)}</div>
   ${signedBlock}
 </body></html>`;

@@ -167,7 +167,7 @@ router.get('/:id/print', authenticateToken, (req, res) => {
   res.set('Content-Type', 'text/html').send(`<!doctype html>
 <html><head><meta charset="utf-8"><title>${esc(proposal.title)}</title>
 <style>
-  @media print { .noprint{display:none} @page{margin:18mm} }
+  @page { margin: 18mm }
   *{box-sizing:border-box}
   body{font-family:system-ui,-apple-system,sans-serif;color:#1e293b;max-width:760px;margin:32px auto;padding:0 24px;font-size:14px;line-height:1.5}
   .bar{background:#e11d48;color:#fff;padding:10px 16px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
@@ -198,12 +198,24 @@ router.get('/:id/print', authenticateToken, (req, res) => {
   .notes{margin-top:20px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px}
   .notes h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#d97706;font-weight:700;margin:0 0 8px}
   .footer{margin-top:32px;border-top:1px solid #e2e8f0;padding-top:16px;font-size:11px;color:#94a3b8;display:flex;justify-content:space-between}
+  .hint{font-size:12px;color:#64748b;background:#f8fafc;border-radius:6px;padding:8px 12px;margin:-16px 0 24px}
+
+  /* Print rules go last and use !important on purpose: .noprint and .bar have
+     the same specificity, so source order alone would decide the winner. The
+     toolbar used to print onto the page because .bar came afterwards. */
+  @media print {
+    .noprint { display: none !important }
+    body { margin: 0 auto; max-width: none }
+  }
 </style></head>
 <body>
   <div class="bar noprint">
     <span>Rustic Retreat — Proposal</span>
-    <button onclick="window.print()">Save as PDF / Print</button>
+    <button onclick="window.print()">Print</button>
   </div>
+  <p class="hint noprint">Pick your printer under <strong>Destination</strong> in the
+  print dialog. <strong>Save as PDF</strong> is just one destination in that list — if
+  it is the only one offered, no printer is set up on this computer.</p>
 
   <div class="header">
     <div>
