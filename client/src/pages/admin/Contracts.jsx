@@ -19,6 +19,7 @@ import {
   MapPinIcon,
   CurrencyDollarIcon,
   ArrowDownTrayIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid'
 import toast from 'react-hot-toast'
@@ -128,24 +129,38 @@ export default function Contracts() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [packets, setPackets] = useState([])
   const [prepContract, setPrepContract] = useState(null)
+  const [unreachable, setUnreachable] = useState(false)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const fetchData = async () => {
     const api = getAdminAxios()
-    const [cRes, cpRes, tpRes] = await Promise.all([
-      api.get('/api/contracts'),
-      api.get('/api/couples'),
-      // Never fatal: a failure here only costs the template picker, and the
-      // contracts list is what the page is for.
-      api.get('/api/contracts/templates').catch(() => ({ data: [] })),
-    ])
-    setPackets(tpRes.data || [])
-    setContracts(cRes.data)
-    setCouples(cpRes.data)
-    // The open detail modal holds a copy taken when it was opened, so re-point
-    // it at the refreshed row — otherwise it keeps showing the status the
-    // contract had before the couple signed, right above their signatures.
-    setViewContract(v => (v ? cRes.data.find(c => c.id === v.id) || v : v))
+    try {
+      const [cRes, cpRes, tpRes] = await Promise.all([
+        api.get('/api/contracts'),
+        api.get('/api/couples'),
+        // Never fatal: a failure here only costs the template picker, and the
+        // contracts list is what the page is for.
+        api.get('/api/contracts/templates').catch(() => ({ data: [] })),
+      ])
+      setPackets(tpRes.data || [])
+      setContracts(cRes.data)
+      setCouples(cpRes.data)
+      setUnreachable(false)
+      // The open detail modal holds a copy taken when it was opened, so re-point
+      // it at the refreshed row — otherwise it keeps showing the status the
+      // contract had before the couple signed, right above their signatures.
+      setViewContract(v => (v ? cRes.data.find(c => c.id === v.id) || v : v))
+    } catch (err) {
+      // This runs on a 60-second timer. Left unhandled, every tick threw an
+      // uncaught rejection, so a server that was down for twenty minutes buried
+      // the console under ~90 errors — and the screen still showed a normal
+      // contracts list, just a stale one. Say it on the page instead.
+      //
+      // 401 is not this: the axios interceptor ends the session and redirects to
+      // the login page, so an expired login must not be reported as an outage.
+      if (err.response?.status === 401) return
+      setUnreachable(true)
+    }
   }
 
   useEffect(() => { fetchData().finally(() => setLoading(false)) }, [])
@@ -383,6 +398,26 @@ export default function Contracts() {
           New Contract
         </button>
       </div>
+
+      {/* The server being unreachable used to be silent on screen and loud in
+          the console. A stale contract list looks exactly like a current one,
+          so it has to be said here, where the person actually is. */}
+      {unreachable && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+          <ExclamationTriangleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-amber-900">Can’t reach the server</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              What you see below may be out of date, and changes will not save. Retrying every
+              minute — if this does not clear, the site may be restarting.
+            </p>
+          </div>
+          <button onClick={() => fetchData()}
+            className="ml-auto flex-shrink-0 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+            Retry now
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
