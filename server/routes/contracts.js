@@ -7,6 +7,8 @@ const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
 const rateLimit = require('../middleware/rateLimit');
 const { ETRANSFER_EMAIL } = require('../venue');
+const tpl = require('../services/contractTemplate');
+const { renderPacketHtml } = require('../services/contractRender');
 
 // Public signing endpoints share one limiter: generous enough for normal
 // reading/signing, tight enough to stop token brute-forcing.
@@ -27,14 +29,31 @@ const SIGNING_LINK_DAYS = Number(process.env.SIGNING_LINK_DAYS || 45);
 // page so the couple reads exactly the sentence that gets stored against their
 // signature. If the client sent its own text, the record would attest to
 // whatever the browser chose to post rather than what we actually presented.
-function consentStatement(signerName, contractTitle) {
+function consentStatement(signerName, contractTitle, docTitles) {
+  // A packet is several documents signed in one ceremony, and the consent has to
+  // name each of them. Saying "this agreement" while two documents are being
+  // executed would leave the record vaguer than what the signer actually agreed
+  // to — and Schedule A is precisely the document the rental agreement says the
+  // booking is incomplete without.
+  const titles = (docTitles && docTitles.length)
+    ? docTitles.map(t => `"${t}"`).join(' and ')
+    : `"${contractTitle}"`;
+  const plural = docTitles && docTitles.length > 1;
   return (
-    `I, ${signerName}, have read and understood "${contractTitle}" in its entirety ` +
-    'and agree to be legally bound by its terms and conditions. I confirm that the ' +
+    `I, ${signerName}, have read and understood ${titles} in ${plural ? 'their' : 'its'} entirety ` +
+    `and agree to be legally bound by ${plural ? 'their' : 'its'} terms and conditions. I confirm that the ` +
     'signature I have drawn is my legally binding electronic signature, and I consent ' +
-    'to signing this agreement electronically under Alberta\'s Electronic Transactions ' +
+    `to signing ${plural ? 'these documents' : 'this agreement'} electronically under Alberta's Electronic Transactions ` +
     'Act, SA 2001, c E-5.5.'
   );
+}
+
+// The documents a contract covers: the packet's when it is template-backed, and
+// its own single title when it is one of the older free-text contracts.
+function docTitlesFor(contract) {
+  if (!contract.template_key) return [contract.title];
+  const packet = tpl.getPacket(contract.template_key);
+  return packet ? packet.documents.map(d => d.title) : [contract.title];
 }
 
 // ── Signing chain ────────────────────────────────────────────────────────────
@@ -141,6 +160,13 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // ── Admin: get single contract ───────────────────────────────────────────────
+// ── Admin: available contract packets ────────────────────────────────────────
+// Registered before /:id on purpose — Express matches in order, and /:id would
+// otherwise swallow "templates" as a contract id and answer 404.
+router.get('/templates', authenticateToken, (req, res) => {
+  res.json(tpl.listPackets());
+});
+
 router.get('/:id', authenticateToken, (req, res) => {
   try {
     const row = db.prepare(`
@@ -158,21 +184,43 @@ router.get('/:id', authenticateToken, (req, res) => {
 // ── Admin: create contract ───────────────────────────────────────────────────
 router.post('/', authenticateToken, (req, res) => {
   const {
-    couple_id, title, content,
+    couple_id, title, content, template_packet,
     wedding_date, start_time, end_time, guest_count,
     ceremony_location, reception_location, package_name, total_price,
   } = req.body;
-  if (!couple_id || !title || !content) {
-    return res.status(400).json({ error: 'couple_id, title and content are required' });
+
+  // Two kinds of contract live side by side. A template packet carries its own
+  // text, so no content is posted; a free-text contract still requires it.
+  const packet = template_packet ? tpl.getPacket(template_packet) : null;
+  if (template_packet && !packet) {
+    return res.status(400).json({ error: `Unknown contract template "${template_packet}"` });
   }
+  if (!couple_id || !title) {
+    return res.status(400).json({ error: 'couple_id and title are required' });
+  }
+  if (!packet && !content) {
+    return res.status(400).json({ error: 'content is required for a free-text contract' });
+  }
+
+  // contracts.content is NOT NULL and every legacy code path reads it. For a
+  // template contract it holds a one-line synopsis rather than the terms, which
+  // keeps list views and search readable without pretending to be the document.
+  const storedContent = packet
+    ? `${packet.title}\n\nThis contract is generated from the ${packet.documents.length}-document ` +
+      `packet: ${packet.documents.map(d => d.title).join('; ')}.`
+    : content;
+
   try {
     const result = db.prepare(`
       INSERT INTO contracts
-        (couple_id, title, content, wedding_date, start_time, end_time,
+        (couple_id, title, content, template_key, template_version,
+         wedding_date, start_time, end_time,
          guest_count, ceremony_location, reception_location, package_name, total_price)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      couple_id, title, content,
+      couple_id, title, storedContent,
+      packet ? packet.key : null,
+      packet ? packet.documents[0].version : null,
       wedding_date || null, start_time || null, end_time || null,
       guest_count || null, ceremony_location || null, reception_location || null,
       package_name || null, total_price || null,
@@ -219,6 +267,87 @@ router.delete('/:id', authenticateToken, (req, res) => {
   try {
     db.prepare('DELETE FROM contracts WHERE id = ?').run(req.params.id);
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: the template packet, its current answers, and what is outstanding ──
+// One endpoint rather than three: the prep screen needs the definition, the
+// values and the gaps together, and splitting them guarantees a render where the
+// form and its completeness banner disagree.
+router.get('/:id/template', authenticateToken, (req, res) => {
+  try {
+    const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
+    if (!contract) return res.status(404).json({ error: 'Not found' });
+    if (!contract.template_key) {
+      return res.status(400).json({ error: 'This is a free-text contract, not a template', not_template: true });
+    }
+    const packet = tpl.getPacket(contract.template_key);
+    if (!packet) return res.status(500).json({ error: `Template "${contract.template_key}" is no longer available` });
+
+    const { values, meta } = tpl.getValues(contract.id);
+    res.json({
+      packet: {
+        key: packet.key, title: packet.title,
+        documents: packet.documents.map(d => ({
+          key: d.key, title: d.title, subtitle: d.subtitle, preamble: d.preamble,
+          venueBlock: d.venueBlock, sections: d.sections, appendix: d.appendix,
+          signatures: d.signatures,
+        })),
+      },
+      values, meta,
+      locked: !!contract.locked_at,
+      client_fields_locked: !!contract.client_fields_locked_at,
+      payment_schedule: tpl.paymentSchedule(packet, values),
+      missing_venue: tpl.missingRequired(packet, values, 'venue'),
+      missing_client: tpl.missingRequired(packet, values, 'client'),
+      initials_blocks: tpl.initialsBlocks(packet),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin: fill in the venue's own fields before sending ─────────────────────
+router.put('/:id/fields', authenticateToken, (req, res) => {
+  try {
+    const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
+    if (!contract) return res.status(404).json({ error: 'Not found' });
+    if (!contract.template_key) {
+      return res.status(400).json({ error: 'This is a free-text contract, not a template' });
+    }
+    // Same rule as editing the terms: once the venue has signed, the document the
+    // couple is reading must not move. The couple's own fields stay open — those
+    // are answers to the contract, not changes to it.
+    if (contract.locked_at) {
+      return res.status(400).json({
+        error: 'This contract was locked when the venue signed it. Venue details can no longer be changed.',
+        locked: true,
+      });
+    }
+    const packet = tpl.getPacket(contract.template_key);
+    if (!packet) return res.status(500).json({ error: 'Template no longer available' });
+
+    const { written, ignored } = tpl.saveValues(contract.id, req.body?.fields, 'venue', packet);
+    const { values } = tpl.getValues(contract.id);
+
+    // Mirror the two answers the rest of the CRM reads onto the contract row, so
+    // the calendar and the invoice list keep working without every consumer
+    // learning how to walk a template.
+    const label = tpl.packageLabel(packet, values);
+    const total = parseFloat(String(values.total_package_fee || '').replace(/[^0-9.]/g, ''));
+    db.prepare('UPDATE contracts SET wedding_date = ?, package_name = ?, total_price = ? WHERE id = ?')
+      .run(values.event_date || contract.wedding_date || null,
+           label || contract.package_name || null,
+           Number.isFinite(total) ? total : contract.total_price,
+           contract.id);
+
+    res.json({
+      success: true, written, ignored, values,
+      payment_schedule: tpl.paymentSchedule(packet, values),
+      missing_venue: tpl.missingRequired(packet, values, 'venue'),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -332,6 +461,25 @@ function renderContractHtml(c) {
 }
 
 // ── Admin: printable contract (open in browser, Save as PDF) ─────────────────
+// Build the executed document for a contract of either kind. Template contracts
+// go through the packet renderer, which needs the answers and the initials as
+// well as the signatures; free-text ones keep the original renderer untouched so
+// every already-signed agreement still prints exactly as it did.
+function renderAnyContract(c) {
+  if (!c.template_key) return renderContractHtml(c);
+  const packet = tpl.getPacket(c.template_key);
+  if (!packet) return renderContractHtml(c);
+  const { values } = tpl.getValues(c.id);
+  return renderPacketHtml({
+    packet,
+    values,
+    signers: signersFor(c.id),
+    initials: tpl.initialsByBlock(c.id),
+    initialsRows: tpl.getInitials(c.id),
+    title: c.title,
+  });
+}
+
 router.get('/:id/print', authenticateToken, (req, res) => {
   const c = db.prepare(`
     SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
@@ -339,7 +487,7 @@ router.get('/:id/print', authenticateToken, (req, res) => {
     WHERE c.id = ?
   `).get(req.params.id);
   if (!c) return res.status(404).send('Contract not found');
-  res.set('Content-Type', 'text/html').send(renderContractHtml({ ...c, signers: signersFor(c.id) }));
+  res.set('Content-Type', 'text/html').send(renderAnyContract({ ...c, signers: signersFor(c.id) }));
 });
 
 // ── Admin: signer list for a contract ────────────────────────────────────────
@@ -416,6 +564,23 @@ router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
       });
     }
 
+    // Signing locks the venue's own fields. Anything still blank would be blank
+    // forever on a document the couple is about to be legally bound by, and the
+    // lock is one-way — so this is checked before it happens, not after.
+    if (contract.template_key) {
+      const packet = tpl.getPacket(contract.template_key);
+      if (!packet) return res.status(500).json({ error: 'Template no longer available' });
+      const { values } = tpl.getValues(contract.id);
+      const missing = tpl.missingRequired(packet, values, 'venue');
+      if (missing.length) {
+        return res.status(400).json({
+          error: `Fill in the venue's details before signing — ${missing.length} still blank: ` +
+                 missing.map(m => m.label).join(', ') + '.',
+          missing_venue_fields: missing,
+        });
+      }
+    }
+
     const venueName = signer_name || req.user?.name || VENUE_SIGNER_NAME;
     const ip = req.ip || req.socket.remoteAddress || '';
     const ua = String(req.headers['user-agent'] || '').slice(0, 500);
@@ -441,7 +606,7 @@ router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
             signer_ip = ?, signer_user_agent = ?, consent_text = ?
         WHERE contract_id = ? AND sign_order = 1
       `).run(signature_data, ip, ua,
-             consentStatement(venueName, contract.title), contract.id);
+             consentStatement(venueName, contract.title, docTitlesFor(contract)), contract.id);
 
       // locked_at is what the edit endpoint checks. Once the venue has committed
       // to these terms the couple must be signing the same document we did.
@@ -518,6 +683,7 @@ router.get('/sign/:token', signLimiter, (req, res) => {
     const contract = db.prepare(`
       SELECT c.id, c.title, c.content, c.status, c.signer_name, c.signed_at,
              c.signing_expires_at, c.viewed_at, c.locked_at,
+             c.template_key, c.template_version, c.client_fields_locked_at,
              CASE WHEN c.signing_expires_at IS NOT NULL
                        AND datetime('now') > c.signing_expires_at
                   THEN 1 ELSE 0 END AS is_expired,
@@ -574,6 +740,42 @@ router.get('/sign/:token', signLimiter, (req, res) => {
         .run(contract.id);
     }
 
+    // Template contracts carry their own text, their answers so far, and the
+    // work this particular signer still owes.
+    let templatePayload = null;
+    if (contract.template_key) {
+      const packet = tpl.getPacket(contract.template_key);
+      if (packet) {
+        const { values } = tpl.getValues(contract.id);
+        // Client 1 fills the couple's details in; Client 2 reads what Client 1
+        // entered and cannot change it. Two people editing the same answers
+        // after the terms are locked is how a contract ends up saying something
+        // neither of them signed.
+        const canEditFields = signer && signer.role === 'partner1' && !contract.client_fields_locked_at;
+        templatePayload = {
+          packet: {
+            key: packet.key, title: packet.title,
+            documents: packet.documents.map(d => ({
+              key: d.key, title: d.title, subtitle: d.subtitle, preamble: d.preamble,
+              venueBlock: d.venueBlock, sections: d.sections, appendix: d.appendix,
+              signatures: d.signatures,
+            })),
+          },
+          values,
+          payment_schedule: tpl.paymentSchedule(packet, values),
+          can_edit_fields: !!canEditFields,
+          client_fields_locked: !!contract.client_fields_locked_at,
+          initials_blocks: tpl.initialsBlocks(packet),
+          my_initials: signer
+            ? db.prepare('SELECT block_key, initials_text FROM contract_initials WHERE contract_id = ? AND signer_id = ?')
+                .all(contract.id, signer.id)
+                .reduce((acc, r) => { acc[r.block_key] = r.initials_text; return acc; }, {})
+            : {},
+          missing_client: canEditFields ? tpl.missingRequired(packet, values, 'client') : [],
+        };
+      }
+    }
+
     res.json({
       ...contract,
       signers: progress,
@@ -581,7 +783,8 @@ router.get('/sign/:token', signLimiter, (req, res) => {
       // Pre-fill the name field with who we believe is signing, so a couple
       // cannot accidentally sign in each other's slot.
       expected_signer_name: signer ? signer.name : null,
-      consent_statement: consentStatement('[your name]', contract.title),
+      consent_statement: consentStatement('[your name]', contract.title, docTitlesFor(contract)),
+      template: templatePayload,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -590,7 +793,7 @@ router.get('/sign/:token', signLimiter, (req, res) => {
 
 // ── Public: submit signature ─────────────────────────────────────────────────
 router.post('/sign/:token', signLimiter, async (req, res) => {
-  const { signer_name, signature_data, agreed } = req.body;
+  const { signer_name, signature_data, agreed, fields, initials } = req.body;
   if (!signer_name || !signature_data) {
     return res.status(400).json({ error: 'Signer name and signature are required' });
   }
@@ -643,7 +846,53 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
     // recorded against their own signature by sending X-Forwarded-For.
     const signer_ip = req.ip || req.socket.remoteAddress || '';
     const user_agent = String(req.headers['user-agent'] || '').slice(0, 500);
-    const consent_text = consentStatement(signer_name, contract.title);
+    const consent_text = consentStatement(signer_name, contract.title, docTitlesFor(contract));
+
+    // ── Template contracts: the answers and the initials are part of signing ──
+    // All of it is validated before anything is written. A signature recorded
+    // against a contract with half its initials missing is worse than a refused
+    // submission: it looks executed and is not.
+    let packet = null;
+    if (contract.template_key && signer) {
+      packet = tpl.getPacket(contract.template_key);
+      if (!packet) return res.status(500).json({ error: 'Template no longer available' });
+
+      const canEditFields = signer.role === 'partner1' && !contract.client_fields_locked_at;
+      if (canEditFields) {
+        tpl.saveValues(contract.id, fields, 'client', packet);
+      }
+
+      const { values } = tpl.getValues(contract.id);
+      const missingFields = tpl.missingRequired(packet, values, 'client');
+      if (canEditFields && missingFields.length) {
+        return res.status(400).json({
+          error: `Please complete every required box before signing — ${missingFields.length} still blank.`,
+          missing_fields: missingFields,
+        });
+      }
+
+      // Both clients initial every clause themselves. The venue does not: the
+      // paper contract asks only the clients to initial, and inventing a venue
+      // initial would put a mark on the record nobody agreed to make.
+      if (signer.role === 'partner1' || signer.role === 'partner2') {
+        tpl.saveInitials(contract.id, signer.id, initials, signer_ip, user_agent, packet);
+        const missingInitials = tpl.missingInitials(contract.id, signer.id, packet);
+        if (missingInitials.length) {
+          return res.status(400).json({
+            error: `Please initial all ${tpl.initialsBlocks(packet).length} marked clauses — ` +
+                   `${missingInitials.length} still outstanding.`,
+            missing_initials: missingInitials,
+          });
+        }
+      }
+
+      // Client 1 has answered; from here the couple's details are fixed too, so
+      // Client 2 initials and signs the same document rather than a moving one.
+      if (canEditFields) {
+        db.prepare("UPDATE contracts SET client_fields_locked_at = datetime('now') WHERE id = ? AND client_fields_locked_at IS NULL")
+          .run(contract.id);
+      }
+    }
 
     // Record this person's signature. Everyone signed is what completes the
     // contract — one signature no longer finishes it.
@@ -816,7 +1065,7 @@ router.get('/sign/:token/print', signLimiter, (req, res) => {
   if (c.status !== 'signed') {
     return res.status(404).send('This contract has not been signed yet.');
   }
-  res.set('Content-Type', 'text/html').send(renderContractHtml({ ...c, signers: signersFor(c.id) }));
+  res.set('Content-Type', 'text/html').send(renderAnyContract({ ...c, signers: signersFor(c.id) }));
 });
 
 // ── Admin: generate contract pre-filled from an accepted proposal ─────────────

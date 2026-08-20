@@ -324,7 +324,58 @@ for (const col of [
   // contract cannot be edited — that is the whole point of signing first.
   'ALTER TABLE contracts ADD COLUMN locked_at DATETIME',
   'ALTER TABLE couples ADD COLUMN partner2_email TEXT',
+  // Template-backed contracts. A NULL template_key means the old free-text
+  // kind, which still renders from contracts.content — both forms coexist and
+  // every already-executed agreement keeps rendering exactly as it did.
+  'ALTER TABLE contracts ADD COLUMN template_key TEXT',
+  'ALTER TABLE contracts ADD COLUMN template_version INTEGER',
+  // Set when Client 1 submits. From then on the client-fill fields are fixed,
+  // the same way locked_at fixes the terms when the venue signs.
+  'ALTER TABLE contracts ADD COLUMN client_fields_locked_at DATETIME',
 ]) { try { db.exec(col); } catch (_) {} }
+
+// ── Template-backed contract data ────────────────────────────────────────────
+// Answers live one row per field rather than as a JSON blob on the contract, so
+// a value can be traced to who typed it and when. The venue's answers and the
+// couple's answers land in the same table and are told apart by filled_by —
+// which is what makes "the venue filled this in before sending" provable rather
+// than merely asserted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS contract_field_values (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+    field_key TEXT NOT NULL,
+    value TEXT,
+    -- 'venue' or 'client'. Mirrors the template's fill attribute; stored rather
+    -- than looked up so the record still reads correctly if a later template
+    -- version moves a field from one side to the other.
+    filled_by TEXT NOT NULL CHECK(filled_by IN ('venue', 'client')),
+    filled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (contract_id, field_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_contract_field_values_contract
+    ON contract_field_values(contract_id);
+
+  -- One row per (signer, initials block). The contract has twelve blocks and
+  -- two clients, so a fully executed agreement carries twenty-four rows. Each
+  -- keeps its own timestamp, IP and user agent: the whole point of separate
+  -- initials is that each clause was separately acknowledged by each person, so
+  -- a single blanket timestamp would defeat the exercise.
+  CREATE TABLE IF NOT EXISTS contract_initials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+    signer_id INTEGER NOT NULL REFERENCES contract_signers(id) ON DELETE CASCADE,
+    block_key TEXT NOT NULL,
+    -- The typed or drawn initials as they appeared to the signer.
+    initials_text TEXT,
+    initialled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    signer_ip TEXT,
+    signer_user_agent TEXT,
+    UNIQUE (contract_id, signer_id, block_key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_contract_initials_contract
+    ON contract_initials(contract_id);
+`);
 
 // Backfill signer rows for contracts signed before multi-party signing existed.
 // Without this an already-executed agreement would show an empty signer list and
