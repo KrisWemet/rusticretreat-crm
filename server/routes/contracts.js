@@ -9,6 +9,7 @@ const rateLimit = require('../middleware/rateLimit');
 const { ETRANSFER_EMAIL } = require('../venue');
 const tpl = require('../services/contractTemplate');
 const { renderPacketHtml } = require('../services/contractRender');
+const { findConflicts, describeConflicts } = require('../services/availability');
 
 // Public signing endpoints share one limiter: generous enough for normal
 // reading/signing, tight enough to stop token brute-forcing.
@@ -1033,8 +1034,32 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       WHERE id = ?
     `).run(contract.wedding_date || null, contract.package_name || null, contract.couple_id);
 
-    // Upsert booking with event details from the signed contract
+    // Upsert booking with event details from the signed contract.
+    //
+    // Signing must never fail over a date clash — by this point the signature
+    // is captured and the agreement is executed. So on conflict we skip the
+    // auto-booking and raise a high-priority task instead of silently
+    // double-booking the weekend.
+    let dateConflict = null;
     if (contract.wedding_date) {
+      const c = findConflicts(contract.wedding_date, null, {
+        excludeCoupleId: contract.couple_id,
+      });
+      if (c.hasConflict) dateConflict = c;
+    }
+
+    if (dateConflict) {
+      db.prepare(`
+        INSERT INTO tasks (title, description, couple_id, priority, due_date)
+        VALUES (?, ?, ?, 'high', date('now'))
+      `).run(
+        `Resolve date conflict: contract signed for ${contract.wedding_date}`,
+        `${contract.partner1_name} & ${contract.partner2_name} signed "${contract.title}" ` +
+        `but ${contract.wedding_date} conflicts with: ${describeConflicts(dateConflict)}. ` +
+        'No booking was created — resolve this with the couple.',
+        contract.couple_id,
+      );
+    } else if (contract.wedding_date) {
       const existing = db.prepare(
         'SELECT id FROM bookings WHERE couple_id = ? ORDER BY id LIMIT 1'
       ).get(contract.couple_id);

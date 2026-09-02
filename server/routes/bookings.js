@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const { findConflicts, describeConflicts } = require('../services/availability');
 
 // Get all bookings
 router.get('/', authenticateToken, (req, res) => {
@@ -44,6 +45,16 @@ router.post('/', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Couple ID and event date are required' });
   }
 
+  // One wedding per weekend — the same rule the public inquiry form shows.
+  // `force: true` is a deliberate staff override for an intentional overlap.
+  const conflicts = findConflicts(event_date, end_date, { excludeCoupleId: couple_id });
+  if (conflicts.hasConflict && req.body.force !== true) {
+    return res.status(409).json({
+      error: `Date not available: ${describeConflicts(conflicts)}`,
+      conflicts: conflicts.hits,
+    });
+  }
+
   const result = db.prepare(`
     INSERT INTO bookings (couple_id, event_date, end_date, start_time, end_time, package_name, guest_count,
       ceremony_location, reception_location, catering_type, special_requests,
@@ -68,6 +79,22 @@ router.put('/:id', authenticateToken, (req, res) => {
     ceremony_location, reception_location, catering_type, special_requests,
     payment_status, deposit_paid, total_price, add_ons
   } = req.body;
+
+  // Re-check availability only when the dates actually move.
+  const newStart = event_date || booking.event_date;
+  const newEnd = end_date !== undefined ? end_date : booking.end_date;
+  if (newStart !== booking.event_date || newEnd !== booking.end_date) {
+    const conflicts = findConflicts(newStart, newEnd, {
+      excludeBookingId: booking.id,
+      excludeCoupleId: booking.couple_id,
+    });
+    if (conflicts.hasConflict && req.body.force !== true) {
+      return res.status(409).json({
+        error: `Date not available: ${describeConflicts(conflicts)}`,
+        conflicts: conflicts.hits,
+      });
+    }
+  }
 
   db.prepare(`
     UPDATE bookings SET

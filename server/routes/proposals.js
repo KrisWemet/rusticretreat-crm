@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
+const { findConflicts } = require('../services/availability');
 
 // Recompute subtotal/tax/total from a proposal's line items.
 function recomputeTotals(proposalId) {
@@ -305,6 +306,19 @@ router.post('/public/:token/accept', (req, res) => {
   if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
   if (proposal.status === 'accepted') return res.status(400).json({ error: 'This proposal has already been accepted' });
   if (proposal.status === 'expired') return res.status(400).json({ error: 'This proposal has expired — please contact us for an updated quote' });
+
+  // Another couple can book the weekend between this proposal going out and
+  // the couple getting round to accepting it.
+  if (proposal.event_date) {
+    const conflicts = findConflicts(proposal.event_date, proposal.end_date, {
+      excludeCoupleId: proposal.couple_id,
+    });
+    if (conflicts.hasConflict) {
+      return res.status(409).json({
+        error: 'These dates are no longer available. Please contact us and we will find you a new date or send an updated proposal.',
+      });
+    }
+  }
 
   const tx = db.transaction(() => {
     db.prepare(`UPDATE proposals SET status = 'accepted', accepted_at = datetime('now'), accepted_name = ? WHERE id = ?`)
