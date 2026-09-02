@@ -926,12 +926,29 @@ function applyCredentialBootstrap() {
     throw new Error('ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters');
   }
   const email = process.env.ADMIN_EMAIL_LOGIN || 'admin@rusticretreat.com';
+  const hash = bcrypt.hashSync(pw, 10);
   const result = db.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
-    .run(bcrypt.hashSync(pw, 10), email);
+    .run(hash, email);
   if (result.changes > 0) {
     console.log(`[bootstrap] Reset password for ${email}. Unset ADMIN_BOOTSTRAP_PASSWORD now.`);
   } else {
-    console.warn(`[bootstrap] No user matched ${email} — password NOT changed.`);
+    // Nothing at that address. The ordinary reason is that ADMIN_EMAIL_LOGIN has
+    // just been pointed at the company's real address while the account still
+    // carries the seeded demo one — and no screen in the app can rename a staff
+    // login, so the operator is locked out of the address they just configured
+    // with no way to correct it from inside the app.
+    //
+    // Rename the existing admin instead, but only when there is exactly one.
+    // With several admins, which one was meant is a guess, and silently moving
+    // the wrong person's login is worse than changing nothing and saying so.
+    const admins = db.prepare("SELECT id, email FROM users WHERE role = 'admin'").all();
+    if (admins.length === 1) {
+      db.prepare('UPDATE users SET email = ?, password_hash = ? WHERE id = ?')
+        .run(email, hash, admins[0].id);
+      console.log(`[bootstrap] Renamed admin ${admins[0].email} to ${email} and reset its password. Unset ADMIN_BOOTSTRAP_PASSWORD now.`);
+    } else {
+      console.warn(`[bootstrap] No user matched ${email}, and ${admins.length} admin accounts exist so none was renamed — password NOT changed.`);
+    }
   }
 
   // The other seeded staff account and the seeded couple portal logins share
