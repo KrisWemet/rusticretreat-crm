@@ -629,7 +629,19 @@ try {
   }
 } catch (_) {}
 
-// Seed data function
+// Seed data function — fills an empty database with a demo world (staff,
+// couples, bookings, contracts) so the screens have something in them.
+//
+// This must not run in production. Clearing it afterwards is a manual step
+// (npm run reset-data), and a step that has to be remembered on every fresh
+// deploy is one that eventually is not: the venue would be keeping real books
+// alongside fake couples, with admin123 — published in this repo's history —
+// as a working login until someone noticed. An empty production database
+// instead gets exactly one real admin (see createAdminIfEmpty below).
+//
+// SEED_DEMO=1 forces the demo world in anyway, for a throwaway demo deploy.
+const WANT_DEMO_SEED = process.env.NODE_ENV !== 'production' || process.env.SEED_DEMO === '1';
+
 function seedDatabase() {
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count > 0) return;
@@ -908,8 +920,35 @@ IN WITNESS WHEREOF, the Clients confirm they have read and agree to be legally b
   console.log('Database seeded successfully!');
 }
 
-seedDatabase();
+if (WANT_DEMO_SEED) seedDatabase();
 backfillContractSigners();
+
+// ── First-boot admin (production) ────────────────────────────────────────────
+// With the demo seed off, a fresh production database has no users at all and
+// nobody could ever log in. Create the one real admin from the environment,
+// and fail the boot loudly rather than starting a CRM with no working login.
+function createAdminIfEmpty() {
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+  if (userCount.count > 0) return;
+
+  const pw = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+  if (!pw) {
+    throw new Error(
+      'Database has no users and demo seeding is off. Set ADMIN_BOOTSTRAP_PASSWORD ' +
+      '(optionally ADMIN_EMAIL_LOGIN / ADMIN_NAME) to create the admin account, ' +
+      'or set SEED_DEMO=1 for a demo deployment.'
+    );
+  }
+  if (pw.length < 12) {
+    throw new Error('ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters');
+  }
+  const email = process.env.ADMIN_EMAIL_LOGIN || 'admin@rusticretreat.com';
+  const name = process.env.ADMIN_NAME || 'Admin';
+  db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
+    .run(name, email, bcrypt.hashSync(pw, 10), 'admin');
+  console.log(`[bootstrap] Created admin account ${email}. Unset ADMIN_BOOTSTRAP_PASSWORD now.`);
+}
+createAdminIfEmpty();
 
 // ── Credential bootstrap ─────────────────────────────────────────────────────
 // The seeded staff logins (admin123 / staff123) are published in this repo's
@@ -944,7 +983,14 @@ function applyCredentialBootstrap() {
   ).run(unusable, email);
   if (staff.changes > 0) console.log('[bootstrap] Disabled seeded staff login sarah@rusticretreat.com.');
 
-  const couples = db.prepare('UPDATE couples SET password_hash = NULL WHERE password_hash IS NOT NULL').run();
+  // Scoped to the seeded demo couples (all on @example.com). This ran against
+  // every couple, and the bootstrap variable is documented as applying on each
+  // boot while set — so leaving it set for a few deploys would have silently
+  // cleared the portal password of every real couple, over and over.
+  const couples = db.prepare(
+    `UPDATE couples SET password_hash = NULL
+     WHERE password_hash IS NOT NULL AND email LIKE '%@example.com'`
+  ).run();
   if (couples.changes > 0) {
     console.log(`[bootstrap] Disabled ${couples.changes} seeded portal login(s).`);
   }

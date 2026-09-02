@@ -59,17 +59,22 @@ it.
 gate, set `CRM_PUBLIC=1` instead — but note the seeded staff passwords are in
 this repo's git history, so do the password rotation below first.
 
-### 4. Rotate the seeded passwords on first boot
+### 4. Set the admin password on first boot
 
-The repo ships with `admin@rusticretreat.com` / `admin123`, which is public in
-git history. On your first deploy:
+A production deploy does **not** get the demo data or the published
+`admin123` login — an empty database in production is seeded with nothing but
+the one admin account you specify. So this step is required, not optional:
 
 1. Set `ADMIN_BOOTSTRAP_PASSWORD` to a strong password (12+ characters).
-2. Deploy and log in.
+   Optionally set `ADMIN_EMAIL_LOGIN` and `ADMIN_NAME` for a different identity.
+2. Deploy and log in. The server refuses to boot without this on an empty
+   database, rather than starting a CRM nobody can get into.
 3. **Unset the variable** — it reapplies on every boot while set.
 
-That bootstrap also disables the second seeded staff login and the seeded couple
-portal logins, so no published credential stays usable.
+On a database that *was* seeded (an older deploy, or `SEED_DEMO=1`), the same
+variable resets the admin password, disables the second seeded staff login and
+clears the seeded couple portal logins, so no published credential stays usable.
+Real couples' portal passwords are left alone.
 
 ### 5. Confirm email actually sends
 
@@ -85,13 +90,17 @@ the server.
 To verify: create a test contract against a couple whose two email addresses you
 control, sign it as the venue, and check that partner 1 receives the link.
 
-### 6. Clear the demo data when you are ready for real books
+### 6. Demo data
 
-The app deploys seeded with sample couples, bookings and invoices so every
-screen has something in it while you click through. That fake revenue will
-otherwise sit in your analytics and revenue totals next to real bookings.
+A production deploy starts empty — no sample couples, bookings or invoices — so
+there is no fake revenue sitting in your analytics next to real bookings, and
+nothing to remember to clear.
 
-When you are ready to start entering real data:
+If you *want* a populated demo (a throwaway deploy to show someone around), set
+`SEED_DEMO=1` and redeploy onto an empty database.
+
+To clear data from a database that already has demo records in it — an older
+deploy, or a local one:
 
 ```bash
 # in a Railway shell on the service, with DB_PATH set as above

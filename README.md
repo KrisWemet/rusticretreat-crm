@@ -72,13 +72,18 @@ See **[DEPLOY.md](DEPLOY.md)**. Two things there matter more than the rest:
 - **Attach a persistent volume and set `DB_PATH` to it.** Hosted platforms
   replace the app directory on every deploy; a database written there is wiped
   on the next push. The server refuses to boot in production if this is wrong.
-- **Rotate the seeded passwords.** `admin123` is in this repo's git history.
-  Set `ADMIN_BOOTSTRAP_PASSWORD` on first boot, then unset it.
+- **Set `ADMIN_BOOTSTRAP_PASSWORD` on first boot**, then unset it. A production
+  database starts with no users at all, so this is how your admin account gets
+  created — the server refuses to boot without it.
 
-## Clearing the demo data
+## Demo data
 
-The app ships seeded with sample couples and bookings so the screens have
-something in them. Before you start keeping real books:
+The demo world above (sample couples, bookings, contracts) is seeded into an
+empty database **in development only**. Production starts empty, so `admin123`
+never exists there and there is no fake revenue to remember to clear. Set
+`SEED_DEMO=1` to seed a throwaway demo deploy on purpose.
+
+To clear demo records from a database that already has them:
 
 ```bash
 npm run reset-data --prefix server -- --yes
