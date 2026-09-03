@@ -596,6 +596,25 @@ Two environment limits worth knowing: this sandbox's egress proxy **blocks
 here and email can only be tested against the stub. Google Fonts is blocked too,
 which produces a harmless `ERR_CONNECTION_RESET` in every browser test.
 
+### SMS
+
+Three scripts cover the SMS feature and run with no provider account, no
+network and no money spent. They live in the scratchpad rather than the repo,
+matching how the accessibility audits were handled:
+
+- `sms-test.js` — phone normalisation, Telnyx Ed25519 and Twilio HMAC signature
+  verification (valid, tampered, replayed), payload parsing, and the real
+  outbound HTTP path against a local stub. 30 assertions.
+- `sms-int-test.js` — the inbound webhook against a real SQLite database:
+  a text from either partner's number in a different stored format, an unknown
+  number, a forged signature, STOP/START, and a delivery receipt. 18 assertions.
+- `sms-out-test.js` — staff sending through the real `/api/messages` route with
+  real auth: text vs portal message, no number on file, a couple who replied
+  STOP, and a provider failure being reported rather than hidden. 18 assertions.
+
+The stub trick is the same one email uses — `SMS_API_URL` overrides the provider
+endpoint, so the genuine send path runs against `localhost`.
+
 Railway and Resend are reachable through their MCP connectors — deploy status,
 logs, variables, and Resend's delivery log are all readable, which is how the
 live configuration above was verified. The Railway connector drops and needs

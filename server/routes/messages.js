@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { authenticateToken, authenticateCouple } = require('../middleware/auth');
 const email = require('../services/email');
+const sms = require('../services/sms');
 
 // Get all conversations (grouped by couple) - admin view
 router.get('/', authenticateToken, (req, res) => {
@@ -10,6 +11,9 @@ router.get('/', authenticateToken, (req, res) => {
     SELECT
       c.id as couple_id,
       c.partner1_name, c.partner2_name, c.email,
+      -- The composer needs these to know whether texting is even possible for
+      -- this couple, and to grey it out once they have replied STOP.
+      c.phone, c.partner2_phone, c.sms_opted_out_at,
       COUNT(m.id) as message_count,
       MAX(m.created_at) as last_message_at,
       SUM(CASE WHEN m.read_at IS NULL AND m.sender_type = 'couple' THEN 1 ELSE 0 END) as unread_count,
@@ -58,30 +62,66 @@ router.get('/:coupleId', authenticateToken, (req, res) => {
 });
 
 // Send message (admin/staff)
-router.post('/:coupleId', authenticateToken, (req, res) => {
-  const { content } = req.body;
+router.post('/:coupleId', authenticateToken, async (req, res) => {
+  const { content, channel } = req.body;
   if (!content) return res.status(400).json({ error: 'Message content required' });
 
   const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.coupleId);
   if (!couple) return res.status(404).json({ error: 'Couple not found' });
 
+  // Text and portal message are genuinely different acts, not two renderings of
+  // one. A portal message is stored and announced by a short "you have a
+  // message" email; a text IS the delivery, and the words go to the phone.
+  const wantsSms = channel === 'sms';
+
+  if (wantsSms) {
+    if (couple.sms_opted_out_at) {
+      // Refuse rather than record. Sending after STOP is the one thing carriers
+      // will not tolerate, and a row saved here would read as though the couple
+      // had been contacted when they deliberately had not been.
+      return res.status(409).json({ error: 'This couple has opted out of texts (replied STOP).' });
+    }
+    if (!sms.normalizePhone(couple.phone) && !sms.normalizePhone(couple.partner2_phone)) {
+      return res.status(400).json({ error: 'No usable phone number on file for this couple.' });
+    }
+  }
+
+  let delivery = null;
+  if (wantsSms) {
+    delivery = await sms.sendSms({ to: couple.phone || couple.partner2_phone, body: content });
+  }
+
   const result = db.prepare(`
-    INSERT INTO messages (couple_id, sender_type, sender_name, content)
-    VALUES (?, 'staff', ?, ?)
-  `).run(req.params.coupleId, req.user.name, content);
+    INSERT INTO messages (couple_id, sender_type, sender_name, content, channel, from_number, provider_sid, delivery_status)
+    VALUES (?, 'staff', ?, ?, ?, ?, ?, ?)
+  `).run(
+    req.params.coupleId,
+    req.user.name,
+    content,
+    wantsSms ? 'sms' : 'portal',
+    wantsSms ? (delivery.to || null) : null,
+    wantsSms ? (delivery.sid || null) : null,
+    // Recorded as it actually went, so a text that never left is visible as
+    // such instead of sitting in the thread looking sent.
+    wantsSms ? (delivery.delivered ? 'sent' : 'failed') : null,
+  );
 
   const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
 
-  // Notify couple by email
-  const preview = content.length > 200 ? content.slice(0, 197) + '...' : content;
-  email.sendNewMessageCouple({
-    to: couple.email,
-    coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
-    senderName: req.user.name,
-    preview,
-  });
+  if (!wantsSms) {
+    // Notify couple by email
+    const preview = content.length > 200 ? content.slice(0, 197) + '...' : content;
+    email.sendNewMessageCouple({
+      to: couple.email,
+      coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
+      senderName: req.user.name,
+      preview,
+    });
+  }
 
-  res.status(201).json(message);
+  // The result travels with the message so the composer can say plainly that a
+  // text failed, rather than reporting success for something that never sent.
+  res.status(201).json({ ...message, delivery });
 });
 
 // Couple portal: get messages

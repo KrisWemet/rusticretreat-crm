@@ -12,6 +12,9 @@ export default function Messages() {
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  // 'sms' sends the words to their phone; 'portal' stores the message and only
+  // emails a short "you have a message" nudge. Defaulted per couple on select.
+  const [channel, setChannel] = useState('portal')
   const messagesEndRef = useRef(null)
 
   const fetchConversations = async () => {
@@ -24,6 +27,10 @@ export default function Messages() {
 
   const selectCouple = async (conv) => {
     setSelectedCouple(conv)
+    // Prefer texting when we hold a number and they have not opted out —
+    // that is the channel couples actually answer on.
+    const canText = (conv.phone || conv.partner2_phone) && !conv.sms_opted_out_at
+    setChannel(canText ? 'sms' : 'portal')
     const api = getAdminAxios()
     const r = await api.get(`/api/messages/${conv.couple_id}`)
     setMessages(r.data)
@@ -37,16 +44,24 @@ export default function Messages() {
     if (!newMessage.trim() || !selectedCouple) return
     try {
       const api = getAdminAxios()
-      const r = await api.post(`/api/messages/${selectedCouple.couple_id}`, { content: newMessage })
+      const r = await api.post(`/api/messages/${selectedCouple.couple_id}`, { content: newMessage, channel })
       setMessages(prev => [...prev, r.data])
       setNewMessage('')
-    } catch { toast.error('Failed to send') }
+      // A text can be saved to the thread and still never have reached the
+      // phone. Saying so beats letting it sit there looking delivered.
+      if (channel === 'sms' && r.data.delivery && !r.data.delivery.delivered) {
+        toast.error(`Saved, but the text did not send: ${r.data.delivery.error}`)
+      }
+    } catch (err) { toast.error(err?.response?.data?.error || 'Failed to send') }
   }
 
   const filtered = conversations.filter(c =>
     !search || `${c.partner1_name} ${c.partner2_name}`.toLowerCase().includes(search.toLowerCase())
   )
   const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0)
+  const hasPhone = !!(selectedCouple?.phone || selectedCouple?.partner2_phone)
+  const optedOut = !!selectedCouple?.sms_opted_out_at
+  const canText = hasPhone && !optedOut
 
   return (
     <div className="p-6 flex flex-col max-w-7xl" style={{ height: 'calc(100vh - 0px)' }}>
@@ -151,6 +166,11 @@ export default function Messages() {
                     <div className="max-w-sm lg:max-w-lg">
                       <p className={`text-xs mb-1 text-slate-400 ${msg.sender_type === 'staff' ? 'text-right' : ''}`}>
                         {msg.sender_name}
+                        {msg.channel === 'sms' && (
+                          <span className="ml-1.5 px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-medium align-middle">
+                            SMS
+                          </span>
+                        )}
                       </p>
                       <div className={`rounded-2xl px-4 py-2.5 ${
                         msg.sender_type === 'staff'
@@ -161,6 +181,11 @@ export default function Messages() {
                       </div>
                       <p className={`text-xs mt-1 text-slate-400 ${msg.sender_type === 'staff' ? 'text-right' : ''}`}>
                         {msg.created_at ? format(parseISO(msg.created_at), 'MMM d, h:mm a') : ''}
+                        {msg.sender_type === 'staff' && msg.channel === 'sms' && msg.delivery_status && (
+                          <span className={msg.delivery_status === 'failed' ? 'ml-1.5 text-rose-500' : 'ml-1.5'}>
+                            · {msg.delivery_status}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -169,21 +194,53 @@ export default function Messages() {
               </div>
 
               {/* Input */}
-              <form onSubmit={sendMessage} className="p-4 border-t border-slate-100 flex gap-3 flex-shrink-0">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={e => setNewMessage(e.target.value)}
-                  placeholder={`Message ${selectedCouple.partner1_name} & ${selectedCouple.partner2_name}...`}
-                  className="flex-1 input-field"
-                />
-                <button
-                  type="submit"
-                  disabled={!newMessage.trim()}
-                  className="bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white p-2.5 rounded-lg transition-colors flex-shrink-0"
-                >
-                  <PaperAirplaneIcon className="w-4 h-4" />
-                </button>
+              <form onSubmit={sendMessage} className="p-4 border-t border-slate-100 flex-shrink-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setChannel('sms')}
+                    disabled={!canText}
+                    title={canText ? 'Send to their phone' : 'No phone number on file for this couple'}
+                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-40 ${
+                      channel === 'sms' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Text
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChannel('portal')}
+                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                      channel === 'portal' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Portal message
+                  </button>
+                  {optedOut && (
+                    <span className="text-xs text-amber-600">Replied STOP — texts are blocked</span>
+                  )}
+                  {!optedOut && !hasPhone && (
+                    <span className="text-xs text-slate-400">No phone number on file</span>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={e => setNewMessage(e.target.value)}
+                    placeholder={channel === 'sms'
+                      ? `Text ${selectedCouple.partner1_name} & ${selectedCouple.partner2_name}...`
+                      : `Message ${selectedCouple.partner1_name} & ${selectedCouple.partner2_name}...`}
+                    className="flex-1 input-field"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newMessage.trim()}
+                    className="bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white p-2.5 rounded-lg transition-colors flex-shrink-0"
+                  >
+                    <PaperAirplaneIcon className="w-4 h-4" />
+                  </button>
+                </div>
               </form>
             </>
           )}

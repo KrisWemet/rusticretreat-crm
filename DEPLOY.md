@@ -49,6 +49,11 @@ it.
 | `SMTP_FROM` | **yes** | Sender address, on a domain verified with your email provider — e.g. `Rustic Retreat <noreply@rusticretreatalberta.ca>`. |
 | `ADMIN_EMAIL` | recommended | Where staff notifications go when a contract completes. |
 | `SMTP_*` | alternative | Your own SMTP server, used only when `RESEND_API_KEY` is unset. Many hosts block outbound SMTP, which is why Resend's HTTPS API is the default. |
+| `SMS_PROVIDER` | optional | `telnyx` (default) or `twilio`. Texting is off until the credentials below are set; messages still record in the CRM, they just do not reach a phone. |
+| `SMS_FROM_NUMBER` | for texting | The venue's provider number in E.164, e.g. `+15875550100`. Every text is sent from it. |
+| `TELNYX_API_KEY` | for texting | Telnyx API key. Use `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` instead when `SMS_PROVIDER=twilio`. |
+| `TELNYX_PUBLIC_KEY` | for texting | Base64 Ed25519 key from the Telnyx portal, used to verify inbound webhooks. Without it every inbound text is refused, which is the safe failure. |
+| `SMS_WEBHOOK_URL` | twilio only | The exact public webhook URL configured at Twilio. Twilio signs the URL it was given, and behind Railway's proxy the request arrives as http, so the https URL is stated rather than inferred. |
 | `STRIPE_*` | optional | Card payments. Unset, the portal falls back to e-Transfer. |
 | `SIGNING_LINK_DAYS` | optional | How long a contract signing link stays valid. Defaults to 45 days. |
 | `ENABLE_COUPLE_PORTAL` | leave unset | The couple portal is switched off. Signing does not create portal logins and the confirmation email omits the portal link. Set to `1` when you are ready to run it. |

@@ -61,6 +61,7 @@ if (GATE_KEY && /[$][{(]/.test(GATE_KEY)) {
 const PUBLIC_PATHS = [
   /^\/api\/health$/,                 // platform healthcheck — probers send no cookies
   /^\/api\/payments\/webhook$/,      // Stripe authenticates by signature instead
+  /^\/api\/sms\/inbound$/,           // the SMS provider signs its webhooks too
   /^\/sign\//,                       // couple opening their contract signing link
   /^\/api\/contracts\/sign\//,       // …and the API that page calls, incl. /print
   /^\/proposal\//,                   // couple reviewing a proposal
@@ -101,6 +102,11 @@ app.use(cors({
 // BEFORE the JSON body parser.
 const { webhookHandler } = require('./routes/payments');
 app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), webhookHandler);
+// Same reasoning for inbound SMS: the signature covers the bytes as sent, so
+// the body must not be parsed and re-serialised first. type '*/*' because the
+// two supported providers disagree — Telnyx posts JSON, Twilio form-encoded.
+const { inboundHandler } = require('./routes/sms');
+app.post('/api/sms/inbound', express.raw({ type: '*/*' }), inboundHandler);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

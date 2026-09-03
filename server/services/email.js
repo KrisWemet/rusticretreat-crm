@@ -303,7 +303,29 @@ async function sendProposalAcceptedAdmin({ coupleNames, title, total, acceptedNa
   });
 }
 
+// ── Text from a number we do not recognise ───────────────────────────────────
+// An inbound text that matches no couple must not be swallowed. It is most
+// likely a real person — a lead texting the number off the website, or a couple
+// using a phone we never recorded — and dropping it silently means nobody ever
+// learns they wrote in.
+async function sendUnmatchedSmsAdmin({ fromNumber, text, receivedAt }) {
+  if (!ADMIN_EMAIL) return;
+  await send({
+    to: ADMIN_EMAIL,
+    subject: `Text from an unknown number (${fromNumber})`,
+    text: `A text arrived from a number that matches no couple in the CRM.\n\nFrom: ${fromNumber}\nReceived: ${receivedAt}\n\nMessage:\n${text}\n\nAdd this number to the right couple to have future texts thread automatically.`,
+    html: `<p><strong>A text arrived from a number that matches no couple in the CRM.</strong></p>
+<table cellpadding="6" style="border-collapse:collapse">
+<tr><td style="color:#666">From:</td><td><strong>${fromNumber}</strong></td></tr>
+<tr><td style="color:#666">Received:</td><td>${receivedAt}</td></tr>
+</table>
+<p><strong>Message:</strong><br>${text}</p>
+<p style="color:#666">Add this number to the right couple to have future texts thread automatically.</p>`,
+  });
+}
+
 module.exports = {
+  sendUnmatchedSmsAdmin,
   sendProposal,
   sendProposalAcceptedAdmin,
   sendContractLink,

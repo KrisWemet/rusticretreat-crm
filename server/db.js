@@ -332,6 +332,25 @@ for (const col of [
   // Set when Client 1 submits. From then on the client-fill fields are fixed,
   // the same way locked_at fixes the terms when the venue signs.
   'ALTER TABLE contracts ADD COLUMN client_fields_locked_at DATETIME',
+  // SMS. A couple is two people with two phones, and either of them will text
+  // the venue — so a second number is stored for the same reason partner2_email
+  // exists: an inbound message from the partner whose number we did not hold
+  // would otherwise match no couple and arrive detached from their record.
+  'ALTER TABLE couples ADD COLUMN partner2_phone TEXT',
+  // Set when a number replies STOP. Carriers require honouring that, and it is
+  // per-couple rather than global so one opt-out cannot silence everyone.
+  'ALTER TABLE couples ADD COLUMN sms_opted_out_at DATETIME',
+  // Which way a message travelled. Existing rows are portal messages, which is
+  // what the default backfills them to; sender_type still says who wrote it.
+  "ALTER TABLE messages ADD COLUMN channel TEXT DEFAULT 'portal'",
+  // The provider's own id for the message, kept so a delivery receipt arriving
+  // later can be matched back to the row it belongs to.
+  'ALTER TABLE messages ADD COLUMN provider_sid TEXT',
+  'ALTER TABLE messages ADD COLUMN delivery_status TEXT',
+  // The E.164 number this came from or went to. Stored per message rather than
+  // read from the couple, so the record still shows the number actually used
+  // after someone changes their phone.
+  'ALTER TABLE messages ADD COLUMN from_number TEXT',
 ]) { try { db.exec(col); } catch (_) {} }
 
 // ── Template-backed contract data ────────────────────────────────────────────
