@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { assertBookable, sendRuleError } = require('../services/bookingRules');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
@@ -638,6 +639,23 @@ router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
                'their signatures are separately attributable.',
         duplicate_partner_email: true,
       });
+    }
+
+    // Countersigning locks the terms and starts the couple's signing chain, and
+    // the final signature books the date. Refuse now if another couple already
+    // holds it, rather than after two people have signed. The couple's own
+    // booking (created when they accepted a proposal) is not a clash.
+    if (contract.wedding_date) {
+      try {
+        assertBookable(db, {
+          event_date: contract.wedding_date,
+          package_name: contract.package_name,
+          guest_count: contract.guest_count,
+        }, { excludeCoupleId: contract.couple_id, checkPackage: false });
+      } catch (err) {
+        if (sendRuleError(res, err)) return;
+        throw err;
+      }
     }
 
     // Signing locks the venue's own fields. Anything still blank would be blank

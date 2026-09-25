@@ -155,7 +155,7 @@ export default function Proposals() {
       await api.post(`/api/proposals/${p.id}/send`)
       toast.success('Proposal sent')
       load()
-    } catch { toast.error('Failed to send') }
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed to send') }
   }
 
   // Fetch the HTML through axios rather than linking straight to the endpoint:
