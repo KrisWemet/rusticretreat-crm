@@ -434,6 +434,29 @@ node-gyp, which needs Python that the build image lacks. Pinned to **12.11.1**.
 Do not blindly upgrade: **13.x also has no Node 22 binary** and reintroduces the
 identical build failure. Verify the release asset exists before bumping.
 
+### Every path that books a date goes through `services/bookingRules.js`
+
+Bookings are created in three places: staff saving a booking
+(`routes/bookings.js`), a couple accepting a proposal online
+(`routes/proposals.js`), and the final contract signature
+(`routes/contracts.js`). Before the rules module, none of them checked
+availability, so two couples holding proposals for the same weekend could both
+click Accept and both be booked, each with a deposit invoice.
+
+`assertBookable()` enforces the one-wedding-at-a-time calendar (dates plus the
+following reset day, owner-blocked dates, cancelled couples ignored), the
+package windows (3-Day Friday–Sunday; 5-Day Wed–Sun, Thu–Mon or Fri–Tue), the
+retired 2-Day package and the 100-guest reception cap. Call it **inside the same
+`db.transaction()` as the insert** — better-sqlite3 serialises transactions, so
+that is what makes two simultaneous accepts safe. A new booking path must call it
+too, and `server/test/bookingRules.test.js` should gain a case for it.
+
+Edits only re-check what they change, so bookings made before a rule existed
+stay editable. The public accept message never names the couple holding the
+date; staff messages do. Contracts are checked when the venue countersigns,
+excluding the couple's own booking, because the final signature is too late to
+refuse. Run the tests with `npm test --prefix server`.
+
 ---
 
 ## Architecture notes

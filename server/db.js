@@ -938,6 +938,14 @@ backfillContractSigners();
 //
 // Set ADMIN_BOOTSTRAP_PASSWORD to reset the admin account on the next boot.
 // It applies every boot while set, so unset it once you are in.
+// Portal logins created by seedDatabase(), all sharing the published password.
+const SEEDED_COUPLE_EMAILS = [
+  'sarah.jake@example.com',
+  'megan.ryan@example.com',
+  'kayla.jordan@example.com',
+  'amanda.cole@example.com',
+];
+
 function applyCredentialBootstrap() {
   const pw = process.env.ADMIN_BOOTSTRAP_PASSWORD;
   if (!pw) return;
@@ -980,7 +988,13 @@ function applyCredentialBootstrap() {
   ).run(unusable, email);
   if (staff.changes > 0) console.log('[bootstrap] Disabled seeded staff login sarah@rusticretreat.com.');
 
-  const couples = db.prepare('UPDATE couples SET password_hash = NULL WHERE password_hash IS NOT NULL').run();
+  // Only the seeded demo couples share the published password. This runs on
+  // every boot while the variable is set, so clearing every couple here wiped
+  // real couples' portal logins on each deploy.
+  const couples = db.prepare(
+    `UPDATE couples SET password_hash = NULL
+     WHERE password_hash IS NOT NULL AND email IN (${SEEDED_COUPLE_EMAILS.map(() => '?').join(', ')})`
+  ).run(...SEEDED_COUPLE_EMAILS);
   if (couples.changes > 0) {
     console.log(`[bootstrap] Disabled ${couples.changes} seeded portal login(s).`);
   }

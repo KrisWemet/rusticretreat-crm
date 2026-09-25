@@ -161,7 +161,7 @@ export default function Bookings() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Package" value={form.package_name} onChange={f('package_name')} placeholder="e.g. 3-Day Weekend" />
-            <Input label="Guest Count" type="number" min="1" max="80" value={form.guest_count} onChange={f('guest_count')} />
+            <Input label="Guest Count" type="number" min="1" max="100" value={form.guest_count} onChange={f('guest_count')} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Ceremony Location" value={form.ceremony_location} onChange={f('ceremony_location')} placeholder="e.g. Forest Clearing" />

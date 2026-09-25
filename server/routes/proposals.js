@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
+const { assertBookable, sendRuleError, BookingRuleError } = require('../services/bookingRules');
 
 // Recompute subtotal/tax/total from a proposal's line items.
 function recomputeTotals(proposalId) {
@@ -113,6 +114,20 @@ router.post('/:id/send', authenticateToken, async (req, res) => {
   try {
     const proposal = getFullProposal(req.params.id);
     if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+    if (proposal.status === 'accepted') return res.status(400).json({ error: 'This proposal has already been accepted' });
+
+    // Do not offer dates the couple could not actually book. Proposals without
+    // a date yet (a season, not a weekend) are checked when a date is set.
+    if (proposal.event_date) {
+      try {
+        // The couple's own booking (entered by hand before this proposal) is
+        // not a clash; another couple's is.
+        assertBookable(db, proposal, { excludeCoupleId: proposal.couple_id });
+      } catch (err) {
+        if (sendRuleError(res, err)) return;
+        throw err;
+      }
+    }
 
     const token = proposal.public_token || crypto.randomBytes(24).toString('hex');
     db.prepare(`UPDATE proposals SET status = 'sent', public_token = ?, sent_at = datetime('now') WHERE id = ?`)
@@ -304,9 +319,22 @@ router.post('/public/:token/accept', (req, res) => {
   const proposal = db.prepare('SELECT * FROM proposals WHERE public_token = ?').get(req.params.token);
   if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
   if (proposal.status === 'accepted') return res.status(400).json({ error: 'This proposal has already been accepted' });
-  if (proposal.status === 'expired') return res.status(400).json({ error: 'This proposal has expired — please contact us for an updated quote' });
+  const pastValidity = proposal.valid_until && new Date(proposal.valid_until + 'T23:59:59') < new Date();
+  if (proposal.status === 'expired' || (proposal.status === 'sent' && pastValidity)) {
+    return res.status(400).json({ error: 'This proposal has expired — please contact us for an updated quote' });
+  }
+  // Only a proposal the venue actually sent can be accepted. A declined one, or
+  // a draft whose link was shared early, must go back through staff first.
+  if (proposal.status !== 'sent') {
+    return res.status(400).json({ error: 'This proposal is no longer open — please contact us for an updated quote' });
+  }
 
   const tx = db.transaction(() => {
+    // Checked inside the transaction that creates the booking: better-sqlite3
+    // serialises transactions, so two couples accepting proposals for the same
+    // weekend cannot both pass.
+    if (proposal.event_date) assertBookable(db, proposal, { excludeCoupleId: proposal.couple_id });
+
     db.prepare(`UPDATE proposals SET status = 'accepted', accepted_at = datetime('now'), accepted_name = ? WHERE id = ?`)
       .run(accepted_name, proposal.id);
 
@@ -345,7 +373,19 @@ router.post('/public/:token/accept', (req, res) => {
     insertInvoice.run(proposal.couple_id, booking.lastInsertRowid,
       'Final Balance — 30 days before event', balance, balanceDue);
   });
-  tx();
+  try {
+    tx();
+  } catch (err) {
+    if (!(err instanceof BookingRuleError)) throw err;
+    // The person accepting is a member of the public: never tell them who else
+    // holds the weekend. Staff get the detail in the log and can see it by
+    // re-sending the proposal, which runs the same check.
+    console.warn(`[proposals] Accept refused for proposal ${proposal.id}: ${err.message}`);
+    return res.status(409).json({
+      error: 'Sorry — these dates are no longer available. Your proposal is saved; please contact us and we will find you another weekend.',
+      booking_rule: true,
+    });
+  }
 
   // Notify staff that the proposal was accepted (booking + invoices now exist).
   const couple = db.prepare('SELECT partner1_name, partner2_name FROM couples WHERE id = ?').get(proposal.couple_id);

@@ -1,0 +1,30 @@
+name: Server tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: npm ci --prefix server
+
+      - name: Booking rules and credential bootstrap tests
+        run: npm test --prefix server
+
+      - name: Client build
+        run: |
+          npm ci --prefix client
+          npm run build --prefix client
