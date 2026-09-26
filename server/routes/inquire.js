@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const email = require('../services/email');
 const rateLimit = require('../middleware/rateLimit');
+const { recordWebsiteEnquiry } = require('../services/websiteEnquiry');
 
 // Rustic Retreat hosts weddings June through September only.
 const SEASON_MONTHS = [6, 7, 8, 9];
@@ -127,6 +128,16 @@ router.post('/', rateLimit({ windowMs: 3600000, max: 5 }), (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Public: copy of the website's contact form (rusticretreatalberta.ca) ───────
+// The website posts its Formspree form here as well, so the couple becomes an
+// inquiry client with a follow-up task (and a tour request if they suggested
+// dates). Formspree still sends the email, so this one sends none.
+router.post('/website', rateLimit({ windowMs: 3600000, max: 10, name: 'website-enquiry' }), (req, res) => {
+  const result = recordWebsiteEnquiry(req.body);
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ success: true });
 });
 
 module.exports = router;
