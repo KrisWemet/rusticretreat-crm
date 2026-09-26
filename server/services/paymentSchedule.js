@@ -55,4 +55,37 @@ function buildPaymentSchedule({ total, checkIn = null, depositDue = null, deposi
   ];
 }
 
-module.exports = { buildPaymentSchedule, SECOND_DAYS, BALANCE_DAYS };
+/**
+ * Staff sometimes agree a different plan with a couple (e.g. the deposit in two
+ * payments two weeks apart). Check such a list before it replaces the invoices:
+ * every row needs a description and a positive amount, dates must be real, and
+ * the rows plus anything already paid must add up to the booking total, so
+ * nothing is over- or under-billed.
+ * @returns rows ready to insert; throws Error(message for staff) otherwise
+ */
+function normaliseCustomSchedule(items, total, alreadyPaid = 0) {
+  if (!Array.isArray(items) || items.length === 0) throw new Error('Add at least one payment');
+  if (items.length > 12) throw new Error('A schedule can have at most 12 payments');
+  const rows = items.map((item, i) => {
+    const n = i + 1;
+    const description = String(item?.description || '').trim();
+    if (!description) throw new Error(`Payment ${n} needs a description`);
+    const amount = round2(Number(item.amount));
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error(`Payment ${n} needs an amount above $0`);
+    let due_date = null;
+    if (item.due_date) {
+      due_date = isoDay(item.due_date);
+      if (!due_date || Number.isNaN(Date.parse(due_date + 'T00:00:00Z'))) throw new Error(`Payment ${n} has an invalid due date`);
+    }
+    return { description, amount, due_date };
+  });
+  const sum = round2(rows.reduce((s, r) => s + r.amount, 0));
+  const owed = round2(Number(total) - Number(alreadyPaid));
+  if (Math.abs(sum - owed) > 0.005) {
+    const paidNote = alreadyPaid > 0 ? ` still owed after $${round2(alreadyPaid).toFixed(2)} already paid` : ' total';
+    throw new Error(`Payments add up to $${sum.toFixed(2)} but the${paidNote} is $${owed.toFixed(2)}`);
+  }
+  return rows;
+}
+
+module.exports = { buildPaymentSchedule, normaliseCustomSchedule, SECOND_DAYS, BALANCE_DAYS };
