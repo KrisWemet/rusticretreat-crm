@@ -14,7 +14,7 @@ process.env.NODE_ENV = 'test';
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
-const { buildPaymentSchedule } = require('../services/paymentSchedule');
+const { buildPaymentSchedule, normaliseCustomSchedule } = require('../services/paymentSchedule');
 const { priceFor, normaliseSeasonPrices } = require('../services/packagePricing');
 const tpl = require('../services/contractTemplate');
 
@@ -23,6 +23,7 @@ app.use(express.json());
 app.use('/api/proposals', require('../routes/proposals'));
 app.use('/api/packages', require('../routes/packages'));
 app.use('/api/contracts', require('../routes/contracts'));
+app.use('/api/invoices', require('../routes/invoices'));
 let server, base;
 const staff = 'Bearer ' + jwt.sign({ userId: 1, email: 'a@test', name: 'Admin', role: 'admin' }, process.env.JWT_SECRET);
 async function call(method, url, body, auth = staff) {
@@ -117,6 +118,53 @@ test('accepting a proposal creates the three agreement instalments', async () =>
   assert.deepEqual(inv.slice(1).map(i => [i.amount, i.due_date]), [[1968.75, '2027-12-05'], [3937.5, '2028-03-04']]);
   assert.match(inv[1].description, /180 days/);
   assert.match(inv[2].description, /90 days/);
+});
+
+test('a custom plan must add up to the total, and every row must be valid', () => {
+  const split = [
+    { description: 'Deposit — part 1 of 2', amount: 853.13, due_date: '2026-10-01' },
+    { description: 'Deposit — part 2 of 2', amount: 853.12, due_date: '2026-10-15' },
+    { description: 'Second', amount: 1706.25, due_date: '2027-01-24' },
+    { description: 'Balance', amount: 3412.5, due_date: '2027-04-24' },
+  ];
+  assert.equal(normaliseCustomSchedule(split, 6825).length, 4);
+  assert.throws(() => normaliseCustomSchedule(split.slice(1), 6825), /add up to \$5971\.87 but the total is \$6825\.00/);
+  assert.throws(() => normaliseCustomSchedule([{ ...split[0], description: ' ' }, ...split.slice(1)], 6825), /Payment 1 needs a description/);
+  assert.throws(() => normaliseCustomSchedule([{ ...split[0], amount: 0 }], 6825), /above \$0/);
+  assert.throws(() => normaliseCustomSchedule([{ ...split[0], due_date: '2026-13-40' }], 6825), /invalid due date/);
+  assert.throws(() => normaliseCustomSchedule([], 6825), /at least one/);
+  // With the deposit already paid, the plan covers only what is left.
+  assert.equal(normaliseCustomSchedule(split.slice(2), 6825, 1706.25).length, 2);
+});
+
+test('staff can save a split-deposit schedule; paid invoices stay and a bad plan changes nothing', async () => {
+  const couple = db.prepare("INSERT INTO couples (partner1_name, partner2_name, email, status) VALUES ('S', 'T', 'st@test.invalid', 'booked')").run().lastInsertRowid;
+  const rows = () => db.prepare('SELECT description, amount, due_date, paid FROM invoices WHERE couple_id = ? ORDER BY due_date, id').all(couple);
+
+  const preview = await call('POST', '/api/invoices/schedule-preview', { total_price: 6825, wedding_date: '2027-07-23' });
+  assert.equal(preview.status, 200);
+  assert.deepEqual(preview.body.map(p => p.amount), [1706.25, 1706.25, 3412.5]);
+
+  const items = [
+    { description: 'Deposit — part 1 of 2', amount: 853.13, due_date: '2026-10-01' },
+    { description: 'Deposit — part 2 of 2', amount: 853.12, due_date: '2026-10-15' },
+    { description: preview.body[1].label, amount: 1706.25, due_date: preview.body[1].due_date },
+    { description: preview.body[2].label, amount: 3412.5, due_date: preview.body[2].due_date },
+  ];
+  const saved = await call('POST', `/api/invoices/schedule/${couple}`, { total_price: 6825, wedding_date: '2027-07-23', items });
+  assert.equal(saved.status, 201, JSON.stringify(saved.body));
+  assert.deepEqual(rows().map(r => [r.amount, r.due_date]), [[853.13, '2026-10-01'], [853.12, '2026-10-15'], [1706.25, '2027-01-24'], [3412.5, '2027-04-24']]);
+
+  // First half of the deposit comes in; the rest is re-planned around it.
+  db.prepare("UPDATE invoices SET paid = 1 WHERE couple_id = ? AND due_date = '2026-10-01'").run(couple);
+  const short = await call('POST', `/api/invoices/schedule/${couple}`, { total_price: 6825, items: items.slice(2) });
+  assert.equal(short.status, 400);
+  assert.match(short.body.error, /still owed after \$853\.13 already paid is \$5971\.87/);
+  assert.equal(rows().length, 4, 'a refused plan leaves the invoices alone');
+
+  const rest = await call('POST', `/api/invoices/schedule/${couple}`, { total_price: 6825, items: items.slice(1) });
+  assert.equal(rest.status, 201, JSON.stringify(rest.body));
+  assert.deepEqual(rows().map(r => [r.amount, r.paid]), [[853.13, 1], [853.12, 0], [1706.25, 0], [3412.5, 0]]);
 });
 
 // Separate processes: the demo clean-up runs at boot, and only in production.

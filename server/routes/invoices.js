@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { buildPaymentSchedule } = require('../services/paymentSchedule');
+const { buildPaymentSchedule, normaliseCustomSchedule } = require('../services/paymentSchedule');
 const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
 
@@ -115,29 +115,48 @@ router.delete('/:id', authenticateToken, (req, res) => {
   res.json({ success: true });
 });
 
-// ── Admin: auto-create standard payment schedule from booking total ───────────
+// ── Admin: the standard schedule for a total and check-in, without saving ─────
+// The Payments page shows it so staff can adjust it (e.g. split the deposit).
+router.post('/schedule-preview', authenticateToken, (req, res) => {
+  const { total_price, wedding_date } = req.body;
+  if (!total_price || total_price <= 0) return res.status(400).json({ error: 'total_price required' });
+  res.json(buildPaymentSchedule({ total: Number(total_price), checkIn: wedding_date || null }));
+});
+
+// ── Admin: replace a couple's unpaid invoices with a payment schedule ─────────
+// Without `items` this is the standard agreement schedule; with `items` it is
+// the plan staff agreed with the couple, which must cover what is still owed.
 router.post('/schedule/:coupleId', authenticateToken, (req, res) => {
-  const { booking_id, total_price, wedding_date } = req.body;
+  const { booking_id, total_price, wedding_date, items: custom } = req.body;
   if (!total_price || total_price <= 0) {
     return res.status(400).json({ error: 'total_price required' });
   }
 
-  // Delete existing unpaid invoices for this couple first
-  db.prepare(`DELETE FROM invoices WHERE couple_id = ? AND paid = 0`).run(req.params.coupleId);
+  let items;
+  if (custom !== undefined) {
+    // Paid invoices are kept, so the new plan only has to cover what's left.
+    const { paid } = coupleStatement(req.params.coupleId);
+    try { items = normaliseCustomSchedule(custom, total_price, paid); }
+    catch (err) { return res.status(400).json({ error: err.message }); }
+  } else {
+    // Same instalments and dates as Section 4 of the signed agreement.
+    items = buildPaymentSchedule({ total: Number(total_price), checkIn: wedding_date })
+      .map(p => ({ description: p.label, amount: p.amount, due_date: p.due_date }));
+  }
 
-  // Same instalments and dates as Section 4 of the signed agreement.
-  const items = buildPaymentSchedule({ total: Number(total_price), checkIn: wedding_date })
-    .map(p => ({ description: p.label, amount: p.amount, due_date: p.due_date }));
-
-  const inserted = items.map(item => {
-    const r = db.prepare(`
-      INSERT INTO invoices (couple_id, booking_id, description, amount, due_date)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(req.params.coupleId, booking_id || null, item.description, item.amount, item.due_date);
-    return db.prepare('SELECT * FROM invoices WHERE id = ?').get(r.lastInsertRowid);
+  // One transaction, so a failure never leaves the couple with no invoices.
+  const replace = db.transaction(() => {
+    db.prepare(`DELETE FROM invoices WHERE couple_id = ? AND paid = 0`).run(req.params.coupleId);
+    return items.map(item => {
+      const r = db.prepare(`
+        INSERT INTO invoices (couple_id, booking_id, description, amount, due_date)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(req.params.coupleId, booking_id || null, item.description, item.amount, item.due_date);
+      return db.prepare('SELECT * FROM invoices WHERE id = ?').get(r.lastInsertRowid);
+    });
   });
 
-  res.status(201).json(inserted);
+  res.status(201).json(replace());
 });
 
 module.exports = router;
