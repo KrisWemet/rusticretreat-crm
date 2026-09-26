@@ -108,7 +108,7 @@ export default function Tasks() {
           <p className="text-slate-400">{filter === 'incomplete' ? 'All caught up! No pending tasks.' : 'No tasks found'}</p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto">
           <table className="table">
             <thead>
               <tr>

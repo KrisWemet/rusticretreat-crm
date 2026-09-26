@@ -301,7 +301,7 @@ export default function Payments() {
           <p className="text-xs text-slate-300 mt-1">Use "Auto Schedule" to generate a standard 3-payment schedule, or add invoices manually.</p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto">
           <table className="table">
             <thead>
               <tr>
