@@ -130,23 +130,30 @@ router.post('/', rateLimit({ windowMs: 3600000, max: 5 }), (req, res) => {
   }
 });
 
+// The website asks the CRM to email the venue by sending _notify=1. Older
+// versions of the site (which still email through Formspree themselves) don't,
+// so the venue never gets the same enquiry twice while the two update. The
+// reply says whether that email went out; if it didn't, the site falls back to
+// Formspree so the venue is always told.
+async function respondToWebsite(req, res, kind, result) {
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  if (result.ignored || req.body._notify !== '1') return res.status(201).json({ success: true, notified: !!result.ignored });
+  const mail = await email.sendWebsiteSubmissionAdmin({ kind, coupleId: result.coupleId, ...result.notice });
+  if (!mail.delivered) console.error(`[website ${kind}] saved couple ${result.coupleId} but the notification email failed: ${mail.error}`);
+  res.status(201).json({ success: true, notified: !!mail.delivered });
+}
+
 // ── Public: copy of the website's contact form (rusticretreatalberta.ca) ───────
 // The website posts its Formspree form here as well, so the couple becomes an
 // inquiry client with a requested tour and a follow-up task. Formspree still
 // sends the email, so this one sends none.
-router.post('/website', rateLimit({ windowMs: 3600000, max: 10, name: 'website-enquiry' }), (req, res) => {
-  const result = recordWebsiteEnquiry(req.body);
-  if (!result.ok) return res.status(result.status).json({ error: result.error });
-  res.status(201).json({ success: true });
-});
+router.post('/website', rateLimit({ windowMs: 3600000, max: 10, name: 'website-enquiry' }), (req, res) =>
+  respondToWebsite(req, res, 'website-enquiry', recordWebsiteEnquiry(req.body)));
 
 // ── Public: copy of the website's 2026/2027 booking-request forms ─────────────
 // Same arrangement as the contact form: Formspree emails the venue, and this
 // records the couple as an inquiry with a "review and send proposal" task.
-router.post('/booking-request', rateLimit({ windowMs: 3600000, max: 10, name: 'website-booking-request' }), (req, res) => {
-  const result = recordBookingRequest(req.body);
-  if (!result.ok) return res.status(result.status).json({ error: result.error });
-  res.status(201).json({ success: true });
-});
+router.post('/booking-request', rateLimit({ windowMs: 3600000, max: 10, name: 'website-booking-request' }), (req, res) =>
+  respondToWebsite(req, res, 'booking-request', recordBookingRequest(req.body)));
 
 module.exports = router;

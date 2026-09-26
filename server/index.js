@@ -94,12 +94,7 @@ app.use((req, res, next) => {
 });
 
 // Middleware
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.BASE_URL
-    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
-  credentials: true
-}));
+app.use(cors(require('./middleware/corsPolicy').corsPolicy()));
 // Stripe webhook needs the raw body for signature verification — mount it
 // BEFORE the JSON body parser.
 const { webhookHandler } = require('./routes/payments');

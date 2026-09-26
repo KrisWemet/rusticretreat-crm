@@ -78,6 +78,13 @@ function recordWebsiteEnquiry(body = {}, now = new Date()) {
     message && `Message: ${message}`,
   ].filter(Boolean).join('\n');
 
+  // The same answers, labelled, for the venue's notification email.
+  const answers = [
+    ['Couple', `${partner1} & ${partner2}`], ['Email', email], phone && ['Phone', phone],
+    prefers && ['Prefers to be contacted by', prefers], weddingText && ['Wedding date', weddingText],
+    guests && ['Guests', guests], tourDates && ['Tour dates suggested', tourDates], message && ['Message', message],
+  ].filter(Boolean);
+
   const record = db.transaction(() => {
     const existing = db.prepare('SELECT * FROM couples WHERE LOWER(email) = ?').get(email);
     let coupleId, created;
@@ -118,7 +125,7 @@ function recordWebsiteEnquiry(body = {}, now = new Date()) {
     return { coupleId, created };
   });
 
-  return { ok: true, ...record() };
+  return { ok: true, ...record(), notice: { coupleNames: `${partner1} & ${partner2}`, email, answers } };
 }
 
 // ── Booking requests (the 2026 and 2027 booking-request pages) ────────────────
@@ -250,7 +257,9 @@ function recordBookingRequest(body = {}, now = new Date()) {
     return { coupleId, created };
   });
 
-  return { ok: true, ...record() };
+  const mailAnswers = [['Couple', `${partner1} & ${partner2}`], ['Email', email], year && ['Booking form', year],
+    ...BOOKING_FIELDS.map(([key, label]) => [label, clip(body[key], 2000)]).filter(([, v]) => v)].filter(Boolean);
+  return { ok: true, ...record(), notice: { coupleNames: `${partner1} & ${partner2}`, email, answers: mailAnswers } };
 }
 
 module.exports = { recordWebsiteEnquiry, recordBookingRequest, parseWeddingDate, parseDayFirst };
