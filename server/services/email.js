@@ -39,14 +39,15 @@ const transporter = smtpConfigured
     })
   : null;
 
-async function sendViaResend({ to, subject, html, text }) {
+async function sendViaResend({ to, subject, html, text, replyTo }) {
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${RESEND_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: SMTP_FROM, to: [to], subject, html, text }),
+    body: JSON.stringify({ from: SMTP_FROM, to: Array.isArray(to) ? to : [to], subject, html, text,
+      ...(replyTo ? { reply_to: replyTo } : {}) }),
   });
   // Read the body exactly once. A response body is a single-use stream, so
   // parsing it as JSON and then falling back to text() on failure throws
@@ -69,15 +70,17 @@ async function sendViaResend({ to, subject, html, text }) {
 // that never left is how a couple ends up waiting on a link that is not coming.
 // Incidental notifications just ignore the result and carry on, since a failed
 // courtesy email must not roll back a signature that is already recorded.
-async function send({ to, subject, html, text }) {
-  if (!to) return { delivered: false, error: 'No recipient address' };
+// `to` may be one address or a list; replyTo, when given, is where a reply goes.
+async function send({ to, subject, html, text, replyTo }) {
+  if (Array.isArray(to)) to = to.filter(Boolean);
+  if (!to || to.length === 0) return { delivered: false, error: 'No recipient address' };
   if (!configured) {
     console.log(`[EMAIL – not configured] To: ${to} | Subject: ${subject}`);
     return { delivered: false, error: 'Email is not configured on this server' };
   }
   try {
-    if (RESEND_API_KEY) await sendViaResend({ to, subject, html, text });
-    else await transporter.sendMail({ from: SMTP_FROM, to, subject, html, text });
+    if (RESEND_API_KEY) await sendViaResend({ to, subject, html, text, replyTo });
+    else await transporter.sendMail({ from: SMTP_FROM, to, subject, html, text, ...(replyTo ? { replyTo } : {}) });
     return { delivered: true };
   } catch (err) {
     console.error('[EMAIL send error]', to, err.message);
@@ -106,6 +109,59 @@ async function sendContractLink({ to, coupleNames, contractTitle, signingUrl, si
 <p>Or copy this link: <a href="${fullUrl}">${fullUrl}</a></p>
 <p>If you have any questions, just reply to this email.</p>
 <p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
+// ── Forms ────────────────────────────────────────────────────────────────────
+// Names and titles are typed by people, so they are escaped before going into
+// the HTML body.
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function sendFormLink({ to, cc, coupleNames, formTitle, path }) {
+  const url = `${BASE_URL}${path}`;
+  const recipients = [...new Set([to, cc].filter(Boolean))];
+  return send({
+    to: recipients,
+    subject: `Please fill in: ${formTitle}`,
+    text: `Hi ${coupleNames},\n\nRustic Retreat has a short form for you: "${formTitle}".\n\nFill it in here: ${url}\n\nYou can come back to this link to change your answers. If you have any questions, just reply to this email.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
+<p>Rustic Retreat has a short form for you: <strong>"${esc(formTitle)}"</strong>.</p>
+<p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Fill in the form</a></p>
+<p>Or copy this link: <a href="${esc(url)}">${esc(url)}</a></p>
+<p style="color:#64748b;font-size:14px">You can come back to this link to change your answers.</p>
+<p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
+async function sendFormCompletedAdmin({ coupleNames, formTitle }) {
+  if (!ADMIN_EMAIL) return { delivered: false };
+  return send({
+    to: ADMIN_EMAIL,
+    subject: `${coupleNames} filled in ${formTitle}`,
+    text: `${coupleNames} have filled in "${formTitle}". Their answers are on their client page in the CRM.`,
+    html: `<p><strong>${esc(coupleNames)}</strong> have filled in <strong>"${esc(formTitle)}"</strong>.</p><p>Their answers are on their client page in the CRM.</p>`,
+  });
+}
+
+// ── Website enquiry / booking request → the venue ────────────────────────────
+// Replaces the Formspree email once the website sends its forms to the CRM.
+// Every answer is listed, the couple's page is linked, and replying goes
+// straight to the couple.
+async function sendWebsiteSubmissionAdmin({ kind, coupleNames, email: coupleEmail, answers, coupleId }) {
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  const url = `${BASE_URL}/clients/${coupleId}`;
+  const heading = kind === 'booking-request' ? 'New booking request' : 'New website enquiry';
+  const rows = answers.map(([label, value]) =>
+    `<tr><td style="color:#666;vertical-align:top;padding:4px 12px 4px 0">${esc(label)}</td><td style="padding:4px 0;white-space:pre-wrap">${esc(value)}</td></tr>`).join('');
+  return send({
+    to: ADMIN_EMAIL,
+    replyTo: coupleEmail,
+    subject: `${heading}: ${coupleNames}`,
+    text: `${heading} from ${coupleNames} (${coupleEmail}).\n\n${answers.map(([l, v]) => `${l}: ${v}`).join('\n')}\n\nOpen in the CRM: ${url}\n\nReply to this email to answer the couple.`,
+    html: `<p><strong>${esc(heading)}</strong> from <strong>${esc(coupleNames)}</strong> (<a href="mailto:${esc(coupleEmail)}">${esc(coupleEmail)}</a>).</p>
+<table cellpadding="0" style="border-collapse:collapse;font-size:14px">${rows}</table>
+<p style="margin:20px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">Open in the CRM</a></p>
+<p style="color:#64748b;font-size:13px">Reply to this email to answer the couple directly. The couple, a follow-up task and their answers are already in the CRM.</p>`,
   });
 }
 
@@ -333,6 +389,9 @@ module.exports = {
   sendContractSignedAdmin,
   sendNewMessageCouple,
   sendNewLeadAdmin,
+  sendFormLink,
+  sendFormCompletedAdmin,
+  sendWebsiteSubmissionAdmin,
   sendPaymentReminder,
   sendPaymentReceipt,
   sendTourRequestAdmin,

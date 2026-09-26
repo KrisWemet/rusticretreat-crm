@@ -66,6 +66,8 @@ const PUBLIC_PATHS = [
   /^\/api\/contracts\/sign\//,       // …and the API that page calls, incl. /print
   /^\/proposal\//,                   // couple reviewing a proposal
   /^\/api\/proposals\/public\//,
+  /^\/form\//,                       // couple filling in a form from their private link
+  /^\/api\/forms\/public\//,          // …and the API that page calls (token + rate limit)
   /^\/inquire\/?$/,                  // public enquiry form
   /^\/api\/inquire/,
   /^\/assets\//,                     // JS/CSS the above pages need to render
@@ -92,12 +94,7 @@ app.use((req, res, next) => {
 });
 
 // Middleware
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.BASE_URL
-    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
-  credentials: true
-}));
+app.use(cors(require('./middleware/corsPolicy').corsPolicy()));
 // Stripe webhook needs the raw body for signature verification — mount it
 // BEFORE the JSON body parser.
 const { webhookHandler } = require('./routes/payments');

@@ -10,6 +10,7 @@ import {
   PrinterIcon, DocumentCheckIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
+import CoupleForms from '../../components/CoupleForms'
 import axios from 'axios'
 import { format, parseISO } from 'date-fns'
 import { REFERRAL_SOURCES, withCurrent } from '../../utils/options'
@@ -278,6 +279,8 @@ export default function ClientDetail() {
           </div>
         )}
       </div>
+
+      <CoupleForms coupleId={id} api={getAdminAxios()} />
 
       {/* Notes */}
       {couple.notes && (

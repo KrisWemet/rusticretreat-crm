@@ -12,6 +12,7 @@
 // is copied into wedding_date.
 
 const db = require('../db');
+const { recordSystemSubmission } = require('./forms');
 
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
   'august', 'september', 'october', 'november', 'december'];
@@ -77,6 +78,13 @@ function recordWebsiteEnquiry(body = {}, now = new Date()) {
     message && `Message: ${message}`,
   ].filter(Boolean).join('\n');
 
+  // The same answers, labelled, for the venue's notification email.
+  const answers = [
+    ['Couple', `${partner1} & ${partner2}`], ['Email', email], phone && ['Phone', phone],
+    prefers && ['Prefers to be contacted by', prefers], weddingText && ['Wedding date', weddingText],
+    guests && ['Guests', guests], tourDates && ['Tour dates suggested', tourDates], message && ['Message', message],
+  ].filter(Boolean);
+
   const record = db.transaction(() => {
     const existing = db.prepare('SELECT * FROM couples WHERE LOWER(email) = ?').get(email);
     let coupleId, created;
@@ -112,10 +120,146 @@ function recordWebsiteEnquiry(body = {}, now = new Date()) {
       .run('Follow up on website enquiry and book their tour',
         `${names} wrote in through the website contact form. The website promises a reply within 24 hours${prefers ? `; they prefer ${prefers}` : ''}.`,
         coupleId, tomorrow);
+    // The answers as an editable form response on the couple's record.
+    recordSystemSubmission('website-enquiry', coupleId, body);
     return { coupleId, created };
   });
 
-  return { ok: true, ...record() };
+  return { ok: true, ...record(), notice: { coupleNames: `${partner1} & ${partner2}`, email, answers } };
 }
 
-module.exports = { recordWebsiteEnquiry, parseWeddingDate };
+// ── Booking requests (the 2026 and 2027 booking-request pages) ────────────────
+// A fuller questionnaire from a couple ready to book. It records every answer,
+// moves the couple to 'inquiry' and asks staff to review it and send a
+// proposal; it books nothing, since dates and price are confirmed by staff.
+
+// Labels as the website shows them, so the notes read the way the couple saw
+// the questions. Fields not listed here are ignored.
+const BOOKING_FIELDS = [
+  ['package', 'Package'],
+  ['eventDate', 'Wedding / event date'],
+  ['backupDate', 'Second-choice date'],
+  ['checkinDate', 'Check-in date'],
+  ['checkoutDate', 'Check-out date'],
+  ['eventType', 'Event type'],
+  ['eventTypeOther', 'Event type (other)'],
+  ['guestCount', 'Ceremony & reception guests'],
+  ['totalGuestCount', 'Total guests'],
+  ['over80', 'More than 80 ceremony/reception guests?'],
+  ['over80Count', 'Approximate total if over 80'],
+  ['overnightGuests', 'Overnight camping guests'],
+  ['tents', 'Tents'],
+  ['rvs', 'RVs'],
+  ['client1Phone', 'Client 1 phone'],
+  ['client2Phone', 'Client 2 phone'],
+  ['contactPref', 'Preferred contact method'],
+  ['contactPhone', 'Best phone for texts'],
+  ['contactEmail', 'Best email'],
+  ['address', 'Mailing address'],
+  ['city', 'City'],
+  ['province', 'Province'],
+  ['postal', 'Postal code'],
+  ['contact1Name', 'Day-of contact 1'],
+  ['contact1Role', 'Contact 1 role'],
+  ['contact1Phone', 'Contact 1 phone'],
+  ['contact2Name', 'Day-of contact 2'],
+  ['contact2Role', 'Contact 2 role'],
+  ['contact2Phone', 'Contact 2 phone'],
+  ['activities', 'Special guest activities?'],
+  ['activitiesDetail', 'Activities'],
+  ['drones', 'Drones?'],
+  ['structures', 'Temporary structures?'],
+  ['structuresDetail', 'Structures'],
+  ['pets', 'Pets attending?'],
+  ['dj', 'DJ or band?'],
+  ['caterer', 'Caterer?'],
+  ['generator', 'Generator needed?'],
+  ['powerOther', 'Other items needing power'],
+  ['fireworks', 'Fireworks?'],
+  ['fireworksBudget', 'Fireworks budget'],
+  ['heardAbout', 'Heard about us'],
+  ['vision', 'Their vision'],
+  ['photoPermission', 'Photo & story permission'],
+  ['anythingElse', 'Anything else'],
+];
+
+// The booking form asks for DD/MM/YYYY; its check-in picker gives YYYY-MM-DD.
+function parseDayFirst(text) {
+  const s = clip(text, 40);
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return isoDate(+m[1], +m[2], +m[3]);
+  m = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
+  if (m) return isoDate(+m[3], +m[2], +m[1]);
+  return parseWeddingDate(s);
+}
+
+// "3-Day Weekend ($6,500)" → the CRM's package of that length, e.g. "5-Day
+// Weekend ($7,500)" → "5-Day Experience". Unmatched text is left out.
+function matchPackage(text) {
+  const m = clip(text, 100).match(/(\d+)\s*-?\s*Day/i);
+  if (!m) return null;
+  const row = db.prepare("SELECT name FROM packages WHERE name LIKE ? ORDER BY is_active DESC, id LIMIT 1").get(`${m[1]}-Day%`);
+  return row ? row.name : null;
+}
+
+function recordBookingRequest(body = {}, now = new Date()) {
+  if (clip(body._gotcha, 200)) return { ok: true, coupleId: null, created: false, ignored: true };
+
+  const partner1 = clip(body.client1Name, 120);
+  const partner2 = clip(body.client2Name, 120);
+  const email = clip(body.email, 200).toLowerCase();
+  if (!partner1 || !partner2) return { ok: false, status: 400, error: 'Both clients’ names are required' };
+  if (!EMAIL_RE.test(email)) return { ok: false, status: 400, error: 'A valid email address is required' };
+
+  const year = /^\d{4}$/.test(clip(body.bookingForm, 10)) ? clip(body.bookingForm, 10) : null;
+  const phone = clip(body.client1Phone, 40) || clip(body.contactPhone, 40) || null;
+  const phone2 = clip(body.client2Phone, 40) || null;
+  const weddingDate = parseDayFirst(body.eventDate) || parseDayFirst(body.checkinDate);
+  const pkg = matchPackage(body.package);
+  const heard = clip(body.heardAbout, 200) || null;
+  const today = now.toISOString().slice(0, 10);
+
+  const answers = BOOKING_FIELDS
+    .map(([key, label]) => [label, clip(body[key], 2000)])
+    .filter(([, v]) => v)
+    .map(([label, v]) => `${label}: ${v}`);
+  const note = [`Website booking request${year ? ` (${year} form)` : ''}, ${today}:`, ...answers].join('\n');
+
+  const record = db.transaction(() => {
+    const existing = db.prepare('SELECT * FROM couples WHERE LOWER(email) = ?').get(email);
+    let coupleId, created;
+    if (existing) {
+      coupleId = existing.id; created = false;
+      // A lead who now asks to book is an inquiry; later stages are left alone.
+      db.prepare(`UPDATE couples SET notes = ?, phone = COALESCE(phone, ?), partner2_phone = COALESCE(partner2_phone, ?),
+                  wedding_date = COALESCE(wedding_date, ?), venue_package = COALESCE(venue_package, ?),
+                  referral_source = COALESCE(referral_source, ?),
+                  status = CASE WHEN status = 'lead' THEN 'inquiry' ELSE status END WHERE id = ?`)
+        .run(existing.notes ? `${existing.notes}\n\n${note}` : note, phone, phone2, weddingDate, pkg, heard, coupleId);
+    } else {
+      created = true;
+      coupleId = db.prepare(`
+        INSERT INTO couples (partner1_name, partner2_name, email, phone, partner2_phone, wedding_date, venue_package,
+                             status, notes, budget_total, referral_source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'inquiry', ?, 0, ?)
+      `).run(partner1, partner2, email, phone, phone2, weddingDate, pkg, note, heard).lastInsertRowid;
+    }
+
+    const summary = [clip(body.package, 100), clip(body.checkinDate, 20) && `check-in ${clip(body.checkinDate, 20)}`,
+      clip(body.guestCount, 60) && `${clip(body.guestCount, 60)} guests`].filter(Boolean).join(', ');
+    const tomorrow = new Date(now.getTime() + 86400000).toISOString().slice(0, 10);
+    db.prepare(`INSERT INTO tasks (title, description, couple_id, due_date, priority) VALUES (?, ?, ?, ?, 'high')`)
+      .run('Review booking request and send proposal',
+        `${partner1} & ${partner2} sent a booking request through the website${summary ? ` (${summary})` : ''}. Check the dates are free, then send a proposal. Their answers are in the client notes.`,
+        coupleId, tomorrow);
+    recordSystemSubmission('booking-request', coupleId, body,
+      BOOKING_FIELDS.map(([key, label]) => [key, label]));
+    return { coupleId, created };
+  });
+
+  const mailAnswers = [['Couple', `${partner1} & ${partner2}`], ['Email', email], year && ['Booking form', year],
+    ...BOOKING_FIELDS.map(([key, label]) => [label, clip(body[key], 2000)]).filter(([, v]) => v)].filter(Boolean);
+  return { ok: true, ...record(), notice: { coupleNames: `${partner1} & ${partner2}`, email, answers: mailAnswers } };
+}
+
+module.exports = { recordWebsiteEnquiry, recordBookingRequest, parseWeddingDate, parseDayFirst };

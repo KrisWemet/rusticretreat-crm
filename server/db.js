@@ -353,6 +353,26 @@ for (const col of [
   'ALTER TABLE messages ADD COLUMN from_number TEXT',
 ]) { try { db.exec(col); } catch (_) {} }
 
+// ── Contracts signed outside the CRM, and files attached to any contract ──────
+// source is 'external' for a contract recorded after the fact (paper, another
+// e-sign service); NULL means it was created and signed here. Files live in the
+// database rather than on disk so they are on the Railway volume and in every
+// backup, and they are only ever served to signed-in staff.
+try { db.exec('ALTER TABLE contracts ADD COLUMN source TEXT'); } catch (_) {}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS contract_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    uploaded_by TEXT,
+    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_contract_files_contract ON contract_files(contract_id);
+`);
+
 // ── Template-backed contract data ────────────────────────────────────────────
 // Answers live one row per field rather than as a JSON blob on the contract, so
 // a value can be traced to who typed it and when. The venue's answers and the
@@ -569,6 +589,27 @@ db.exec(`
     field_id INTEGER NOT NULL REFERENCES form_fields(id) ON DELETE CASCADE,
     value TEXT
   );
+`);
+
+// ── Forms: staff entry, private links, and website submissions ────────────────
+// An assignment can now be filled in by staff, by the couple through a private
+// link (access_token, like a contract signing link), or by the website. forms.
+// system_key marks the forms the website fills; form_fields.field_key ties a
+// question to the website's field name so its answers land in the right place.
+for (const col of [
+  'ALTER TABLE form_assignments ADD COLUMN access_token TEXT',
+  'ALTER TABLE form_assignments ADD COLUMN token_expires_at DATETIME',
+  'ALTER TABLE form_assignments ADD COLUMN link_sent_at DATETIME',
+  'ALTER TABLE form_assignments ADD COLUMN filled_by TEXT',
+  'ALTER TABLE form_assignments ADD COLUMN updated_by TEXT',
+  'ALTER TABLE form_assignments ADD COLUMN updated_at DATETIME',
+  'ALTER TABLE forms ADD COLUMN system_key TEXT',
+  'ALTER TABLE form_fields ADD COLUMN field_key TEXT',
+]) { try { db.exec(col); } catch (_) {} }
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_form_assignments_token ON form_assignments(access_token) WHERE access_token IS NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_forms_system_key ON forms(system_key) WHERE system_key IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_form_assignments_couple ON form_assignments(couple_id);
 `);
 
 // Pipeline stage for the visual sales board + Stripe payment columns on invoices

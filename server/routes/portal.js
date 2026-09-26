@@ -178,7 +178,8 @@ router.post('/forms/:assignmentId', authenticateCouple, (req, res) => {
       if (!validFieldIds.has(Number(fieldId))) continue;
       insert.run(assignment.id, Number(fieldId), value == null ? null : String(value));
     }
-    db.prepare(`UPDATE form_assignments SET status = 'completed', submitted_at = datetime('now') WHERE id = ?`).run(assignment.id);
+    db.prepare(`UPDATE form_assignments SET status = 'completed', submitted_at = datetime('now'),
+                filled_by = COALESCE(filled_by, 'couple'), updated_by = 'couple', updated_at = datetime('now') WHERE id = ?`).run(assignment.id);
   });
   tx();
   res.json({ success: true });

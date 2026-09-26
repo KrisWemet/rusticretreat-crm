@@ -2,25 +2,48 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const rateLimit = require('../middleware/rateLimit');
+const email = require('../services/email');
+const forms = require('../services/forms');
+const { saveFields } = forms;
+
+const staffName = (req) => `staff: ${req.user?.name || req.user?.email || 'staff'}`;
+
+// ── Public: a couple filling in a form from their private link ───────────────
+// Registered before the staff routes, and needing no login, like a contract
+// signing link. The token is the only key, so it is long, random and expires.
+const publicLimiter = rateLimit({ windowMs: 600000, max: 60, name: 'form-link' });
+router.get('/public/:token', publicLimiter, (req, res) => {
+  const a = forms.assignmentForToken(req.params.token);
+  if (!a) return res.status(404).json({ error: 'This link has expired or is no longer valid. Please ask Rustic Retreat for a new one.' });
+  const full = forms.fullAssignment(a.id);
+  res.json({
+    form: { title: full.form.title, description: full.form.description },
+    couple: `${full.assignment.partner1_name} & ${full.assignment.partner2_name}`,
+    status: full.assignment.status,
+    fields: full.fields.map(({ field_key, ...f }) => f),
+  });
+});
+
+router.post('/public/:token', publicLimiter, (req, res) => {
+  const a = forms.assignmentForToken(req.params.token);
+  if (!a) return res.status(404).json({ error: 'This link has expired or is no longer valid. Please ask Rustic Retreat for a new one.' });
+  const result = forms.saveAnswers(a, req.body.answers, { by: 'couple', complete: true });
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  const full = forms.fullAssignment(a.id);
+  // Tell staff a form came back; a mail failure never fails the couple's save.
+  Promise.resolve(email.sendFormCompletedAdmin({
+    coupleNames: `${full.assignment.partner1_name} & ${full.assignment.partner2_name}`,
+    formTitle: full.form.title,
+  })).catch(() => {});
+  res.json({ success: true });
+});
 
 function getFullForm(id) {
   const form = db.prepare('SELECT * FROM forms WHERE id = ?').get(id);
   if (!form) return null;
   form.fields = db.prepare('SELECT * FROM form_fields WHERE form_id = ? ORDER BY order_index, id').all(id);
   return form;
-}
-
-function saveFields(formId, fields) {
-  db.prepare('DELETE FROM form_fields WHERE form_id = ?').run(formId);
-  const insert = db.prepare(`
-    INSERT INTO form_fields (form_id, label, field_type, options, required, order_index)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  (fields || []).forEach((f, idx) => {
-    const type = ['text', 'textarea', 'number', 'date', 'select', 'checkbox'].includes(f.field_type) ? f.field_type : 'text';
-    const options = f.options ? (typeof f.options === 'string' ? f.options : JSON.stringify(f.options)) : null;
-    insert.run(formId, f.label || 'Question', type, options, f.required ? 1 : 0, idx);
-  });
 }
 
 // ── Admin: list forms with field + assignment counts ─────────────────────────
@@ -84,7 +107,7 @@ router.post('/:id/assign', authenticateToken, (req, res) => {
   if (!couple_id) return res.status(400).json({ error: 'couple_id is required' });
   const existing = db.prepare('SELECT id FROM form_assignments WHERE form_id = ? AND couple_id = ?')
     .get(req.params.id, couple_id);
-  if (existing) return res.status(409).json({ error: 'Form already assigned to this couple' });
+  if (existing) return res.status(409).json({ error: 'Form already assigned to this couple', assignment_id: existing.id });
   const result = db.prepare('INSERT INTO form_assignments (form_id, couple_id) VALUES (?, ?)')
     .run(req.params.id, couple_id);
   res.status(201).json(db.prepare('SELECT * FROM form_assignments WHERE id = ?').get(result.lastInsertRowid));
@@ -102,6 +125,55 @@ router.get('/assignments/:assignmentId/responses', authenticateToken, (req, res)
     ORDER BY ff.order_index, ff.id
   `).all(req.params.assignmentId, assignment.form_id);
   res.json({ assignment, responses: rows });
+});
+
+// ── Admin: every form a couple has (for their client page) ───────────────────
+router.get('/couple/:coupleId', authenticateToken, (req, res) => {
+  res.json(db.prepare(`
+    SELECT fa.id, fa.form_id, fa.status, fa.submitted_at, fa.filled_by, fa.updated_by, fa.updated_at,
+           fa.link_sent_at, fa.token_expires_at, fa.created_at, f.title, f.system_key,
+           (SELECT COUNT(*) FROM form_responses r WHERE r.assignment_id = fa.id) AS answer_count
+    FROM form_assignments fa JOIN forms f ON f.id = fa.form_id
+    WHERE fa.couple_id = ? ORDER BY COALESCE(fa.submitted_at, fa.created_at) DESC, fa.id DESC
+  `).all(req.params.coupleId));
+});
+
+// ── Admin: one assignment with its questions and answers, for editing ────────
+router.get('/assignments/:assignmentId', authenticateToken, (req, res) => {
+  const full = forms.fullAssignment(req.params.assignmentId);
+  if (!full) return res.status(404).json({ error: 'Assignment not found' });
+  res.json(full);
+});
+
+// ── Admin: staff fill in or correct a couple's answers ───────────────────────
+// complete: false saves a partial answer set without checking required
+// questions, so staff can fill in what they have and come back.
+router.put('/assignments/:assignmentId/responses', authenticateToken, (req, res) => {
+  const a = db.prepare('SELECT * FROM form_assignments WHERE id = ?').get(req.params.assignmentId);
+  if (!a) return res.status(404).json({ error: 'Assignment not found' });
+  const result = forms.saveAnswers(a, req.body.answers, { by: staffName(req), complete: req.body.complete !== false });
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  res.json(forms.fullAssignment(a.id));
+});
+
+// ── Admin: send (or re-send) the couple a private link to fill the form in ───
+// Returns the link either way, so staff can text or paste it if the email
+// did not go out.
+router.post('/assignments/:assignmentId/link', authenticateToken, async (req, res) => {
+  const full = forms.fullAssignment(req.params.assignmentId);
+  if (!full) return res.status(404).json({ error: 'Assignment not found' });
+  const { token, expires } = forms.issueLink(full.assignment.id);
+  const path = `/form/${token}`;
+  let delivery = { delivered: false, error: 'Not sent' };
+  if (req.body.send !== false) {
+    delivery = await email.sendFormLink({
+      to: full.assignment.couple_email,
+      cc: full.assignment.partner2_email,
+      coupleNames: `${full.assignment.partner1_name} & ${full.assignment.partner2_name}`,
+      formTitle: full.form.title, path,
+    });
+  }
+  res.json({ path, expires_at: expires, sent: !!delivery.delivered, sent_to: full.assignment.couple_email, error: delivery.delivered ? null : delivery.error });
 });
 
 router.delete('/assignments/:assignmentId', authenticateToken, (req, res) => {
