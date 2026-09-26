@@ -5,6 +5,7 @@ const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
 const { assertBookable, sendRuleError, BookingRuleError } = require('../services/bookingRules');
+const { buildPaymentSchedule } = require('../services/paymentSchedule');
 
 // Recompute subtotal/tax/total from a proposal's line items.
 function recomputeTotals(proposalId) {
@@ -171,8 +172,11 @@ router.get('/:id/print', authenticateToken, (req, res) => {
   const fmtCAD = (n) => `$${Number(n || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
 
-  const deposit = Math.round(proposal.total * (proposal.deposit_pct / 100) * 100) / 100;
-  const balance = Math.round((proposal.total - deposit) * 100) / 100;
+  // Dates are indicative until the proposal is accepted; the invoices are
+  // created from the same schedule then.
+  const schedule = buildPaymentSchedule({
+    total: proposal.total, checkIn: proposal.event_date, depositPct: proposal.deposit_pct,
+  });
 
   const kindLabel = { package: 'Package', addon: 'Add-On', custom: 'Other', discount: 'Discount' };
   const rowsHtml = proposal.items.map(it => `
@@ -281,8 +285,7 @@ router.get('/:id/print', authenticateToken, (req, res) => {
 
   <div class="payment">
     <h3>Payment Schedule</h3>
-    <div class="payment-row"><span>Deposit (${proposal.deposit_pct}%)</span><strong>${fmtCAD(deposit)}</strong></div>
-    <div class="payment-row"><span>Final Balance</span><strong>${fmtCAD(balance)}</strong></div>
+    ${schedule.map(p => `<div class="payment-row"><span>${esc(p.key === 'deposit' ? `${p.label} — due on acceptance` : `${p.label}${p.due_date ? ` · ${fmtDate(p.due_date)}` : ''}`)}</span><strong>${fmtCAD(p.amount)}</strong></div>`).join('')}
   </div>
 
   ${proposal.notes ? `<div class="notes"><h3>Notes</h3><p style="margin:0;font-size:13px;white-space:pre-wrap">${esc(proposal.notes)}</p></div>` : ''}
@@ -353,25 +356,16 @@ router.post('/public/:token/accept', (req, res) => {
     `).run(proposal.couple_id, proposal.event_date, proposal.end_date, proposal.package_name,
       proposal.guest_count, proposal.total, addOnLabels || null);
 
-    // Build a deposit + balance payment schedule from the accepted total
-    const deposit = Math.round(proposal.total * (proposal.deposit_pct / 100) * 100) / 100;
-    const balance = Math.round((proposal.total - deposit) * 100) / 100;
+    // Deposit, 2nd payment and balance, on the dates the signed agreement uses.
     const insertInvoice = db.prepare(`
       INSERT INTO invoices (couple_id, booking_id, description, amount, due_date) VALUES (?, ?, ?, ?, ?)
     `);
-    const today = new Date();
-    const depositDue = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
-    insertInvoice.run(proposal.couple_id, booking.lastInsertRowid,
-      `Booking Deposit (${proposal.deposit_pct}%)`, deposit, depositDue);
-    // Final balance due 30 days before the event (or in 60 days if no date)
-    let balanceDue;
-    if (proposal.event_date) {
-      balanceDue = new Date(new Date(proposal.event_date).getTime() - 30 * 86400000).toISOString().slice(0, 10);
-    } else {
-      balanceDue = new Date(today.getTime() + 60 * 86400000).toISOString().slice(0, 10);
+    const depositDue = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    for (const p of buildPaymentSchedule({
+      total: proposal.total, checkIn: proposal.event_date, depositDue, depositPct: proposal.deposit_pct,
+    })) {
+      insertInvoice.run(proposal.couple_id, booking.lastInsertRowid, p.label, p.amount, p.due_date);
     }
-    insertInvoice.run(proposal.couple_id, booking.lastInsertRowid,
-      'Final Balance — 30 days before event', balance, balanceDue);
   });
   try {
     tx();

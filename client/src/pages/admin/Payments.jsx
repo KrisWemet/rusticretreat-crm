@@ -328,7 +328,7 @@ export default function Payments() {
       {/* Auto schedule modal */}
       <Modal isOpen={showSchedule} onClose={() => setShowSchedule(false)} title="Generate Payment Schedule">
         <form onSubmit={handleSchedule} className="space-y-4">
-          <p className="text-sm text-slate-500">Creates three standard invoices: 25% deposit, 25% at 90 days before event, and 50% final balance at 30 days before event.</p>
+          <p className="text-sm text-slate-500">Creates the three invoices in the signed agreement: 25% deposit now, 25% at 180 days before check-in, and the 50% balance at 90 days before check-in.</p>
           <div>
             <label htmlFor="schedule-couple" className="label">Client Couple <span className="text-red-500">*</span></label>
             <select

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { buildPaymentSchedule } = require('../services/paymentSchedule');
 const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
 
@@ -124,19 +125,9 @@ router.post('/schedule/:coupleId', authenticateToken, (req, res) => {
   // Delete existing unpaid invoices for this couple first
   db.prepare(`DELETE FROM invoices WHERE couple_id = ? AND paid = 0`).run(req.params.coupleId);
 
-  const deposit      = Math.round(total_price * 0.25 * 100) / 100;
-  const midPayment   = Math.round(total_price * 0.25 * 100) / 100;
-  const finalPayment = Math.round((total_price - deposit - midPayment) * 100) / 100;
-
-  const wDate = wedding_date ? new Date(wedding_date) : null;
-  const midDate   = wDate ? new Date(wDate.getTime() - 90 * 86400000).toISOString().slice(0, 10) : null;
-  const finalDate = wDate ? new Date(wDate.getTime() - 30 * 86400000).toISOString().slice(0, 10) : null;
-
-  const items = [
-    { description: 'Booking Deposit (25%)',        amount: deposit,      due_date: null },
-    { description: 'Second Payment (25%) — 90 days before event', amount: midPayment,   due_date: midDate },
-    { description: 'Final Balance (50%) — 30 days before event',  amount: finalPayment, due_date: finalDate },
-  ];
+  // Same instalments and dates as Section 4 of the signed agreement.
+  const items = buildPaymentSchedule({ total: Number(total_price), checkIn: wedding_date })
+    .map(p => ({ description: p.label, amount: p.amount, due_date: p.due_date }));
 
   const inserted = items.map(item => {
     const r = db.prepare(`

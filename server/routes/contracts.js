@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { assertBookable, sendRuleError } = require('../services/bookingRules');
+const { buildPaymentSchedule } = require('../services/paymentSchedule');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
@@ -207,6 +208,19 @@ router.post('/', authenticateToken, (req, res) => {
   const packet = template_packet ? tpl.getPacket(template_packet) : null;
   if (template_packet && !packet) {
     return res.status(400).json({ error: `Unknown contract template "${template_packet}"` });
+  }
+  // Each packet carries one year's prices. Refuse a mismatch outright rather
+  // than let a couple sign a price list for the wrong season.
+  if (packet && packet.season && wedding_date && /^\d{4}/.test(wedding_date)) {
+    const year = Number(String(wedding_date).slice(0, 4));
+    if (year !== packet.season) {
+      const right = Object.values(tpl.PACKETS).find(p => p.season === year);
+      return res.status(400).json({
+        error: right
+          ? `This wedding is in ${year}. Use "${right.title}" — the ${packet.season} agreement carries ${packet.season} prices.`
+          : `There is no ${year} agreement yet, so this contract cannot be prepared for a ${year} wedding.`,
+      });
+    }
   }
   if (!couple_id || !title) {
     return res.status(400).json({ error: 'couple_id and title are required' });
@@ -1185,16 +1199,15 @@ router.post('/from-proposal/:proposalId', authenticateToken, (req, res) => {
       ? new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
       : 'TBD';
 
-    const deposit = Math.round(proposal.total * (proposal.deposit_pct / 100) * 100) / 100;
-    const balance = Math.round((proposal.total - deposit) * 100) / 100;
-    const today = new Date();
-    const depositDue = new Date(today.getTime() + 7 * 86400000)
+    const longDate = (iso) => new Date(iso + 'T00:00:00')
       .toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
-    const balanceDue = proposal.event_date
-      ? new Date(new Date(proposal.event_date + 'T00:00:00').getTime() - 30 * 86400000)
-          .toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
-      : new Date(today.getTime() + 60 * 86400000)
-          .toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+    // Same instalments as the invoices created on acceptance.
+    const scheduleLines = buildPaymentSchedule({
+      total: proposal.total,
+      checkIn: proposal.event_date,
+      depositDue: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+      depositPct: proposal.deposit_pct,
+    }).map(p => `   ${p.label}:  ${fmtCAD(p.amount)} — due by ${p.due_date ? longDate(p.due_date) : 'TBD (set once the date is confirmed)'}`).join('\n');
 
     // Build itemized section
     const byKind = { package: [], addon: [], custom: [], discount: [] };
@@ -1266,8 +1279,7 @@ ${itemLines}
 
 3. PAYMENT SCHEDULE
 
-   Deposit (${proposal.deposit_pct}%):  ${fmtCAD(deposit)} — due by ${depositDue}
-   Final Balance:  ${fmtCAD(balance)} — due by ${balanceDue}
+${scheduleLines}
 
    Payments accepted by Interac e-Transfer to ${ETRANSFER_EMAIL}${PORTAL_ENABLED ? ' or online through the client portal' : ''}.
 

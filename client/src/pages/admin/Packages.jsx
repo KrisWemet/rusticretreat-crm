@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { PlusIcon, PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
-const EMPTY = { name: '', description: '', price: '', max_guests: '', includes: '', is_active: true }
+const EMPTY = { name: '', description: '', price: '', max_guests: '', includes: '', is_active: true, seasons: [] }
 const EMPTY_ADDON = { name: '', description: '', price: '', unit: 'flat' }
 const UNIT_LABEL = { flat: 'flat', per_guest: 'per guest', per_night: 'per night' }
 
@@ -58,6 +58,7 @@ export default function Packages() {
       max_guests: pkg.max_guests || '',
       includes: pkg.includes || '',
       is_active: pkg.is_active === 1,
+      seasons: Object.entries(pkg.season_prices || {}).map(([year, price]) => ({ year, price })),
     })
     setModal(pkg)
   }
@@ -73,6 +74,9 @@ export default function Packages() {
         max_guests: form.max_guests ? parseInt(form.max_guests) : null,
         includes: form.includes || null,
         is_active: form.is_active,
+        season_prices: Object.fromEntries(
+          form.seasons.filter(r => r.year && r.price !== '').map(r => [String(r.year), parseFloat(r.price)])
+        ),
       }
       if (modal === 'add') {
         await api.post('/api/packages', payload)
@@ -83,8 +87,8 @@ export default function Packages() {
       }
       setModal(null)
       load()
-    } catch {
-      toast.error('Failed to save package')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save package')
     } finally {
       setSaving(false)
     }
@@ -146,6 +150,11 @@ export default function Packages() {
                     ${Number(pkg.price).toLocaleString()} CAD
                   </div>
                   {pkg.max_guests && <p className="text-xs text-slate-400 mt-0.5">Up to {pkg.max_guests} guests</p>}
+                  {Object.keys(pkg.season_prices || {}).length > 0 && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      {Object.entries(pkg.season_prices).sort().map(([y, p]) => `${y} weddings: $${Number(p).toLocaleString()}`).join(' · ')}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => openEdit(pkg)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
@@ -276,6 +285,23 @@ export default function Packages() {
                 <div>
                   <label htmlFor="packages-max-guests-7" className="label">Max Guests</label>
                   <input id="packages-max-guests-7" name="packages-max-guests-7" className="input" type="number" min="1" value={form.max_guests} onChange={e => setForm(f => ({ ...f, max_guests: e.target.value }))} placeholder="200" />
+                </div>
+              </div>
+              <div>
+                <p className="label">Prices by wedding year <span className="text-slate-400 font-normal">(before GST — overrides the price above for that year)</span></p>
+                <div className="space-y-2">
+                  {form.seasons.map((row, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input aria-label={`Season ${i + 1} year`} className="input w-24" type="number" min="2020" max="2100" placeholder="2028" value={row.year}
+                        onChange={e => setForm(f => ({ ...f, seasons: f.seasons.map((r, j) => j === i ? { ...r, year: e.target.value } : r) }))} />
+                      <input aria-label={`Season ${i + 1} price`} className="input flex-1" type="number" min="0" placeholder="7500" value={row.price}
+                        onChange={e => setForm(f => ({ ...f, seasons: f.seasons.map((r, j) => j === i ? { ...r, price: e.target.value } : r) }))} />
+                      <button type="button" onClick={() => setForm(f => ({ ...f, seasons: f.seasons.filter((_, j) => j !== i) }))}
+                        className="text-xs text-red-500 hover:text-red-700 px-2">Remove</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setForm(f => ({ ...f, seasons: [...f.seasons, { year: '', price: '' }] }))}
+                    className="text-xs text-rose-600 hover:text-rose-700 font-medium">+ Add a year</button>
                 </div>
               </div>
               <div>

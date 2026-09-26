@@ -173,7 +173,9 @@ module.exports = {
           sets: 'total_package_fee',
           columns: ['Package', '2027 Price', 'Duration'],
           options: [
-            { value: '2-day',  price: 3000, cells: ['2-Day (Weekday only)', '$3,000', '2 days / 1 night'] },
+            // Retired: no longer offered. Kept so contracts that already chose it
+            // still render; the prep and signing screens hide it otherwise.
+            { value: '2-day',  price: 3000, retired: true, cells: ['2-Day (Weekday only)', '$3,000', '2 days / 1 night'] },
             { value: '3-day',  price: 6500, cells: ['3-Day Weekend',        '$6,500', '3 days / 2 nights'] },
             { value: '5-day',  price: 7500, cells: ['5-Day Weekend',        '$7,500', '5 days / 4 nights'] },
           ],

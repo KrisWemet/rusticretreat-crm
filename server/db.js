@@ -463,6 +463,8 @@ for (const col of [
   // Cold-lead nurture: track which automated follow-ups have gone out
   'ALTER TABLE couples ADD COLUMN nurture_3d_sent INTEGER DEFAULT 0',
   'ALTER TABLE couples ADD COLUMN nurture_7d_sent INTEGER DEFAULT 0',
+  // Price by wedding year, JSON {"2028": 7500}; see services/packagePricing.js
+  'ALTER TABLE packages ADD COLUMN season_prices TEXT',
 ]) { try { db.exec(col); } catch (_) {} }
 
 // Site tours — requested from the public inquiry form, scheduled by staff
@@ -1000,5 +1002,67 @@ function applyCredentialBootstrap() {
   }
 }
 applyCredentialBootstrap();
+
+// ── One-time data changes ────────────────────────────────────────────────────
+// Recorded in app_migrations so each runs exactly once per database, however
+// many times the server restarts. Unlike an environment variable, nothing has
+// to be remembered and unset afterwards.
+db.exec(`CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
+
+function runOnce(name, fn) {
+  if (db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(name)) return;
+  try {
+    db.transaction(() => {
+      fn();
+      db.prepare('INSERT INTO app_migrations (name) VALUES (?)').run(name);
+    })();
+  } catch (err) {
+    // Rolled back and not recorded, so it retries on the next boot. A failed
+    // clean-up must not keep the CRM from starting.
+    console.error(`[migrate] ${name} failed and was rolled back: ${err.message}`);
+  }
+}
+
+// 2028 package prices, confirmed by the owner. The existing price stays the
+// default for other years. Only fills a package that has no season prices yet.
+runOnce('package-season-prices-2028', () => {
+  const set = db.prepare(`UPDATE packages SET season_prices = ? WHERE season_prices IS NULL AND name LIKE ?`);
+  const n = set.run(JSON.stringify({ 2028: 7500 }), '%3-Day%').changes
+          + set.run(JSON.stringify({ 2028: 8500 }), '%5-Day%').changes;
+  if (n) console.log(`[migrate] Set 2028 prices on ${n} package(s).`);
+});
+
+// The owner retired the 2-Day Weekday Escape. Switched off once; it can be
+// re-activated from the Packages page, and this will not undo that.
+runOnce('retire-2-day-package', () => {
+  const n = db.prepare(`UPDATE packages SET is_active = 0 WHERE is_active = 1 AND name LIKE '%2-Day%'`).run().changes;
+  if (n) console.log(`[migrate] Deactivated ${n} 2-Day package(s).`);
+});
+
+// Remove the demo couples seedDatabase() created, on the live database only —
+// local development keeps them to click through. A couple is removed only if
+// both its seeded email and seeded names are unchanged, so a demo record that
+// was reused for a real couple survives. Their bookings, invoices, contracts,
+// proposals, messages, guests, budget, vendors, timeline, checklist, tours and
+// forms cascade; tasks only lose the couple, so theirs are deleted explicitly.
+// The nightly backup on the volume holds the previous state.
+const DEMO_COUPLES = [
+  ['sarah.jake@example.com', 'Sarah Larsson', 'Jake Novak'],
+  ['megan.ryan@example.com', 'Megan Sinclair', "Ryan O'Brien"],
+  ['kayla.jordan@example.com', 'Kayla Park', 'Jordan Walsh'],
+  ['amanda.cole@example.com', 'Amanda Tremblay', 'Cole Girard'],
+];
+if (process.env.NODE_ENV === 'production') {
+  runOnce('remove-demo-couples-2026-09', () => {
+    const find = db.prepare('SELECT id FROM couples WHERE email = ? AND partner1_name = ? AND partner2_name = ?');
+    const ids = DEMO_COUPLES.map(c => find.get(...c)?.id).filter(Boolean);
+    let tasks = 0;
+    for (const id of ids) tasks += db.prepare('DELETE FROM tasks WHERE couple_id = ?').run(id).changes;
+    tasks += db.prepare(`DELETE FROM tasks WHERE couple_id IS NULL AND title = 'Update 2027 pricing guide'
+      AND description = 'Create updated one-pager with 2027 package prices and inclusions to send to inquiries.'`).run().changes;
+    for (const id of ids) db.prepare('DELETE FROM couples WHERE id = ?').run(id);
+    console.log(`[migrate] Removed ${ids.length} demo couple(s) and ${tasks} demo task(s).`);
+  });
+}
 
 module.exports = db;

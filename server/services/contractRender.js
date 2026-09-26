@@ -68,7 +68,8 @@ function renderFieldsBlock(block, values) {
 
 function renderChoiceBlock(block, values) {
   const chosen = values[block.key];
-  const rows = block.options.map(o => {
+  // A retired option appears only on a contract that already chose it.
+  const rows = block.options.filter(o => !o.retired || o.value === chosen).map(o => {
     const on = o.value === chosen;
     const cells = o.cells.map(c => `<td>${esc(c)}</td>`).join('');
     return `<tr class="${on ? 'chosen' : 'unchosen'}">
