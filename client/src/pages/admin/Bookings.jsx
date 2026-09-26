@@ -124,7 +124,7 @@ export default function Bookings() {
           <p className="text-slate-400">No bookings yet. Create your first booking above.</p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto">
           <table className="table">
             <thead>
               <tr>

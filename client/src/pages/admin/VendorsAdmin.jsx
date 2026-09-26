@@ -90,7 +90,7 @@ export default function VendorsAdmin() {
       ) : (
         <div className="space-y-5">
           {Object.entries(byCouple).map(([coupleId, { name, vendors: cvs }]) => (
-            <div key={coupleId} className="card overflow-hidden">
+            <div key={coupleId} className="card overflow-x-auto">
               <div className="px-5 py-3.5 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-800">{name}</h2>
                 <span className="text-xs text-slate-400">{cvs.length} vendor{cvs.length !== 1 ? 's' : ''}</span>

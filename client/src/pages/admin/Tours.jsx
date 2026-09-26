@@ -105,7 +105,7 @@ export default function Tours() {
           <p className="text-xs text-slate-300 mt-1">Tour requests from the website inquiry form will appear here.</p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto">
           <table className="table">
             <thead>
               <tr>

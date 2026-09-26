@@ -214,7 +214,7 @@ export default function Proposals() {
           <p className="text-xs text-slate-300 mt-1">Build a quote from a package + add-ons and send it for online acceptance.</p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto">
           <table className="table">
             <thead><tr><th>Proposal</th><th>Couple</th><th>Event</th><th>Total</th><th>Status</th><th></th></tr></thead>
             <tbody>

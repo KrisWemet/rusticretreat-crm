@@ -115,7 +115,7 @@ export default function Budget() {
       ) : (
         <div className="space-y-4">
           {Object.entries(byCategory).map(([category, catItems]) => (
-            <div key={category} className="card overflow-hidden">
+            <div key={category} className="card overflow-x-auto">
               <div className="px-5 py-3.5 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-slate-800">{category}</h3>
                 <span className="text-xs text-slate-500">

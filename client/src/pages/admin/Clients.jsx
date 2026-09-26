@@ -124,7 +124,7 @@ export default function Clients() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-7 w-7 border-2 border-rose-200 border-t-rose-600" />
