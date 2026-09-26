@@ -66,7 +66,28 @@ test('a repeat enquiry adds to the same client instead of making a duplicate', a
   assert.equal(rows.length, 1);
   assert.match(rows[0].notes, /Forest ceremony please[\s\S]*Second note/);
   assert.equal(db.prepare('SELECT COUNT(*) n FROM tasks WHERE couple_id = ?').get(rows[0].id).n, 2);
-  assert.equal(db.prepare('SELECT COUNT(*) n FROM tours WHERE couple_id = ?').get(rows[0].id).n, 1, 'no tour without dates');
+  const tours = db.prepare('SELECT * FROM tours WHERE couple_id = ?').all(rows[0].id);
+  assert.equal(tours.length, 1, 'a repeat enquiry reuses the open tour request');
+  assert.match(tours[0].notes, /Oct 4 or Oct 11\nRequested on the website; no dates suggested yet\./);
+});
+
+test('an enquiry without tour dates is still a requested tour', async () => {
+  const r = await send({ ...form, email: 'nodates@test.invalid', tourDates: '' });
+  assert.equal(r.status, 201);
+  const c = db.prepare("SELECT id FROM couples WHERE email = 'nodates@test.invalid'").get();
+  const tour = db.prepare('SELECT * FROM tours WHERE couple_id = ?').get(c.id);
+  assert.equal(tour.status, 'requested');
+  assert.equal(tour.notes, 'Requested on the website; no dates suggested yet.');
+  assert.equal(db.prepare('SELECT title FROM tasks WHERE couple_id = ?').get(c.id).title, 'Follow up on website enquiry and book their tour');
+});
+
+test('once the tour is done, a new enquiry opens a new tour request', async () => {
+  const c = db.prepare("SELECT id FROM couples WHERE email = 'nodates@test.invalid'").get();
+  db.prepare("UPDATE tours SET status = 'completed' WHERE couple_id = ?").run(c.id);
+  await send({ ...form, email: 'nodates@test.invalid', tourDates: 'Any Saturday in May' });
+  const tours = db.prepare('SELECT status, notes FROM tours WHERE couple_id = ? ORDER BY id').all(c.id);
+  assert.deepEqual(tours.map(t => t.status), ['completed', 'requested']);
+  assert.match(tours[1].notes, /Any Saturday in May/);
 });
 
 test('bots that fill the hidden field are ignored, and bad input is refused', async () => {

@@ -1,5 +1,8 @@
 // Enquiries from the contact form on rusticretreatalberta.ca.
 //
+// That page is "Book a Venue Tour", so every enquiry is a tour request, whether
+// or not the couple suggested dates.
+//
 // That form posts to Formspree, which emails the venue, and also sends a copy
 // here so the couple lands in the CRM without anyone retyping it. Formspree
 // stays the email notification, so nothing here emails staff.
@@ -92,14 +95,21 @@ function recordWebsiteEnquiry(body = {}, now = new Date()) {
     }
 
     const names = `${partner1} & ${partner2}`;
-    if (tourDates) {
+    const tourNote = tourDates ? `Dates suggested on the website: ${tourDates}` : 'Requested on the website; no dates suggested yet.';
+    const openTour = db.prepare(`SELECT id, notes FROM tours WHERE couple_id = ? AND status IN ('requested', 'scheduled')
+                                 ORDER BY id DESC LIMIT 1`).get(coupleId);
+    if (openTour) {
+      // One open tour per couple: a repeat enquiry adds its dates to it.
+      db.prepare('UPDATE tours SET notes = ? WHERE id = ?')
+        .run(openTour.notes ? `${openTour.notes}\n${tourNote}` : tourNote, openTour.id);
+    } else {
       db.prepare(`INSERT INTO tours (couple_id, name, email, phone, status, notes) VALUES (?, ?, ?, ?, 'requested', ?)`)
-        .run(coupleId, names, email, phone, `Dates suggested on the website: ${tourDates}`);
+        .run(coupleId, names, email, phone, tourNote);
     }
     // The website promises a reply within 24 hours.
     const tomorrow = new Date(now.getTime() + 86400000).toISOString().slice(0, 10);
     db.prepare(`INSERT INTO tasks (title, description, couple_id, due_date, priority) VALUES (?, ?, ?, ?, 'high')`)
-      .run(tourDates ? 'Follow up on website enquiry and book their tour' : 'Follow up on website enquiry',
+      .run('Follow up on website enquiry and book their tour',
         `${names} wrote in through the website contact form. The website promises a reply within 24 hours${prefers ? `; they prefer ${prefers}` : ''}.`,
         coupleId, tomorrow);
     return { coupleId, created };

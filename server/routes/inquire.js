@@ -132,8 +132,8 @@ router.post('/', rateLimit({ windowMs: 3600000, max: 5 }), (req, res) => {
 
 // ── Public: copy of the website's contact form (rusticretreatalberta.ca) ───────
 // The website posts its Formspree form here as well, so the couple becomes an
-// inquiry client with a follow-up task (and a tour request if they suggested
-// dates). Formspree still sends the email, so this one sends none.
+// inquiry client with a requested tour and a follow-up task. Formspree still
+// sends the email, so this one sends none.
 router.post('/website', rateLimit({ windowMs: 3600000, max: 10, name: 'website-enquiry' }), (req, res) => {
   const result = recordWebsiteEnquiry(req.body);
   if (!result.ok) return res.status(result.status).json({ error: result.error });
