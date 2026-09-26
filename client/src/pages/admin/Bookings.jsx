@@ -14,7 +14,7 @@ const paymentStyle = {
 }
 
 const emptyForm = {
-  couple_id: '', event_date: '', end_date: '', start_time: '', end_time: '',
+  couple_id: '', event_date: '', end_date: '',
   package_name: '', guest_count: '', ceremony_location: '', reception_location: '',
   catering_type: '', add_ons: '', special_requests: '', payment_status: 'pending', deposit_paid: '', total_price: ''
 }
@@ -51,7 +51,7 @@ export default function Bookings() {
 
   const openEdit = (b) => {
     setEditBooking(b)
-    setForm({ couple_id: b.couple_id, event_date: b.event_date || '', end_date: b.end_date || '', start_time: b.start_time || '', end_time: b.end_time || '', package_name: b.package_name || '', guest_count: b.guest_count || '', ceremony_location: b.ceremony_location || '', reception_location: b.reception_location || '', catering_type: b.catering_type || '', add_ons: b.add_ons || '', special_requests: b.special_requests || '', payment_status: b.payment_status || 'pending', deposit_paid: b.deposit_paid || '', total_price: b.total_price || '' })
+    setForm({ couple_id: b.couple_id, event_date: b.event_date || '', end_date: b.end_date || '', package_name: b.package_name || '', guest_count: b.guest_count || '', ceremony_location: b.ceremony_location || '', reception_location: b.reception_location || '', catering_type: b.catering_type || '', add_ons: b.add_ons || '', special_requests: b.special_requests || '', payment_status: b.payment_status || 'pending', deposit_paid: b.deposit_paid || '', total_price: b.total_price || '' })
     setShowForm(true)
   }
 
@@ -154,10 +154,6 @@ export default function Bookings() {
           <div className="grid grid-cols-2 gap-4">
             <Input label="Check-In Date" type="date" value={form.event_date} onChange={f('event_date')} required />
             <Input label="Check-Out Date" type="date" value={form.end_date} onChange={f('end_date')} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Start Time" value={form.start_time} onChange={f('start_time')} placeholder="Fri 8:00 AM" />
-            <Input label="End Time" value={form.end_time} onChange={f('end_time')} placeholder="Sun 8:00 PM" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Package" value={form.package_name} onChange={f('package_name')} placeholder="e.g. 3-Day Weekend" />
