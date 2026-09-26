@@ -6,6 +6,7 @@ import {
   DocumentDuplicateIcon, LinkIcon, CheckCircleIcon, PrinterIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
+import { packagePriceFor } from '../../utils/packagePrice'
 import { format, parseISO } from 'date-fns'
 
 const STATUS = {
@@ -106,12 +107,16 @@ export default function Proposals() {
     setForm(f => ({ ...f, items: [...f.items, { label: '', description: '', quantity: 1, unit_price: 0, amount: 0, kind: 'custom' }] }))
   }
   function addPackage(pkg) {
-    setForm(f => ({
-      ...f,
-      package_name: pkg.name,
-      title: f.title || `${pkg.name} Proposal`,
-      items: [{ label: pkg.name, description: pkg.description || '', quantity: 1, unit_price: pkg.price, amount: pkg.price, kind: 'package' }, ...f.items.filter(i => i.kind !== 'package')],
-    }))
+    // Priced for the wedding's year: set the check-in date first.
+    setForm(f => {
+      const price = packagePriceFor(pkg, f.event_date)
+      return {
+        ...f,
+        package_name: pkg.name,
+        title: f.title || `${pkg.name} Proposal`,
+        items: [{ label: pkg.name, description: pkg.description || '', quantity: 1, unit_price: price, amount: price, kind: 'package' }, ...f.items.filter(i => i.kind !== 'package')],
+      }
+    })
   }
   function addAddon(a) {
     const guests = Number(form.guest_count) || 0
@@ -284,7 +289,7 @@ export default function Proposals() {
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Add package:</span>
                   {packages.filter(p => p.is_active).map(pkg => (
                     <button key={pkg.id} onClick={() => addPackage(pkg)} className="text-xs px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 hover:bg-rose-100">
-                      {pkg.name} · ${Number(pkg.price).toLocaleString()}
+                      {pkg.name} · ${packagePriceFor(pkg, form.event_date).toLocaleString()}{form.event_date ? ` (${form.event_date.slice(0, 4)})` : ''}
                     </button>
                   ))}
                 </div>

@@ -130,7 +130,8 @@ function ChoiceBlock({ block, value, onChange, editable, invalid }) {
             </thead>
           )}
           <tbody>
-            {block.options.map(o => {
+            {/* A retired option shows only on a contract that already chose it. */}
+            {block.options.filter(o => !o.retired || o.value === value).map(o => {
               const on = o.value === value
               // One id per radio, and every cell is a <label for> pointing at it.
               // The row used to be a bare <label> with an onClick and no control

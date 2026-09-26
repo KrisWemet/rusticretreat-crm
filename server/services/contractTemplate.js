@@ -14,14 +14,26 @@ const db = require('../db');
 
 const TEMPLATES = {
   'rental-agreement-2027': require('../contract-templates/rental-agreement-2027'),
+  'rental-agreement-2028': require('../contract-templates/rental-agreement-2028'),
+  // Schedule A has no year-specific wording, so both packets attach the same one.
   'schedule-a-2027':       require('../contract-templates/schedule-a-2027'),
 };
 
 const PACKETS = {
+  // `season` is the wedding year the packet's prices apply to. Creating a
+  // contract checks it against the wedding date, so a 2028 wedding cannot be
+  // sent the 2027 prices by picking the wrong radio button.
   'rental-2027': {
     key: 'rental-2027',
+    season: 2027,
     title: 'Event Venue Rental Agreement & Schedule A — 2027',
     documents: ['rental-agreement-2027', 'schedule-a-2027'],
+  },
+  'rental-2028': {
+    key: 'rental-2028',
+    season: 2028,
+    title: 'Event Venue Rental Agreement & Schedule A — 2028',
+    documents: ['rental-agreement-2028', 'schedule-a-2027'],
   },
 };
 
@@ -36,6 +48,7 @@ function getPacket(key) {
 function listPackets() {
   return Object.values(PACKETS).map(p => ({
     key: p.key,
+    season: p.season,
     title: p.title,
     documents: p.documents.map(k => ({ key: k, title: TEMPLATES[k].title })),
   }));

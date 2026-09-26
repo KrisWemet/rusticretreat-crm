@@ -39,8 +39,27 @@ Not done / deliberately off:
 
 - **Couple portal is disabled** (`ENABLE_COUPLE_PORTAL` unset). The owner wants
   the venue side solid first. Signing does not create portal logins.
-- **Demo seed data is still in the live database.** Sample couples and invoices
-  are mixed in with real ones. Run the reset when the owner is ready (below).
+- **Demo couples are removed from the live database** by the one-time
+  `remove-demo-couples-2026-09` migration in `db.js` (production only, matched
+  by seeded email *and* names, so real records are untouched). Do **not** run
+  `reset-data.js` on live: real couples and bookings are in there now and it
+  deletes them all.
+
+One-time data changes run through `runOnce(name, fn)` in `db.js`, recorded in
+the `app_migrations` table so they apply exactly once per database. Prefer it
+to a boot-time environment variable, which has to be remembered and unset.
+
+**Payment schedule** — one source, `services/paymentSchedule.js`, matching
+Section 4 of the signed agreement: 25% deposit, 25% at 180 days before
+check-in, 50% balance at 90 days. Invoices, proposal acceptance, the proposal
+printout and the proposal-derived contract all use it. A milestone that has
+already passed at booking is due with the deposit.
+
+**Prices by season** — `packages.season_prices` (JSON `{"2028": 7500}`) overrides
+the default price for weddings in that year; `services/packagePricing.js` and
+`client/src/utils/packagePrice.js`. Contract packets carry a `season` and a
+contract for a wedding in another year is refused. The 2028 agreement is derived
+from the 2027 one and differs only in its price table.
 - **SMS / unified inbox** — researched and scoped, not built. See below.
 - **Vercel** — the original target, deferred. See below.
 
