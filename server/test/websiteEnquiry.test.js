@@ -98,3 +98,64 @@ test('bots that fill the hidden field are ignored, and bad input is refused', as
   assert.equal((await send({ ...form, email: 'not-an-email' })).status, 400);
   assert.equal((await send({ ...form, partner2FirstName: '', partner2LastName: '' })).status, 400);
 });
+
+// ── Booking requests (2026 / 2027 booking-request pages) ─────────────────────
+const { parseDayFirst } = require('../services/websiteEnquiry');
+const sendBooking = (fields) => fetch(`${base}/api/inquire/booking-request`, { method: 'POST', body: new URLSearchParams(fields) })
+  .then(async r => ({ status: r.status, body: await r.json() }));
+const booking = {
+  bookingForm: '2027', client1Name: 'Taylor Brooks', client2Name: 'Alex Rowe',
+  client1Phone: '780-555-0111', client2Phone: '780-555-0122', email: 'Taylor@Test.invalid',
+  contactPref: 'Text message', eventDate: '14/08/2027', checkinDate: '2027-08-13', checkoutDate: '2027-08-15',
+  package: '5-Day Weekend ($7,500)', guestCount: '75', overnightGuests: '40', dj: 'Yes — hiring a DJ',
+  heardAbout: 'Instagram', vision: 'Barefoot ceremony in the trees', unexpectedField: 'ignored',
+};
+
+test('booking-form dates are read day first', () => {
+  assert.equal(parseDayFirst('14/08/2027'), '2027-08-14');
+  assert.equal(parseDayFirst('4/8/2027'), '2027-08-04');
+  assert.equal(parseDayFirst('2027-08-13'), '2027-08-13');
+  assert.equal(parseDayFirst('31/02/2027'), null);
+});
+
+test('a booking request becomes an inquiry with its answers, package and a proposal task', async () => {
+  const r = await sendBooking(booking);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const c = db.prepare("SELECT * FROM couples WHERE email = 'taylor@test.invalid'").get();
+  assert.equal(c.status, 'inquiry');
+  assert.equal(c.partner1_name, 'Taylor Brooks');
+  assert.equal(c.phone, '780-555-0111');
+  assert.equal(c.partner2_phone, '780-555-0122');
+  assert.equal(c.wedding_date, '2027-08-14');
+  assert.equal(c.venue_package, '5-Day Experience');
+  assert.equal(c.referral_source, 'Instagram');
+  assert.match(c.notes, /^Website booking request \(2027 form\)/);
+  assert.match(c.notes, /Overnight camping guests: 40/);
+  assert.match(c.notes, /Their vision: Barefoot ceremony in the trees/);
+  assert.doesNotMatch(c.notes, /ignored/);
+  const task = db.prepare('SELECT * FROM tasks WHERE couple_id = ?').get(c.id);
+  assert.equal(task.title, 'Review booking request and send proposal');
+  assert.match(task.description, /5-Day Weekend \(\$7,500\), check-in 2027-08-13, 75 guests/);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM tours WHERE couple_id = ?').get(c.id).n, 0);
+});
+
+test('a lead who sends a booking request becomes an inquiry without losing their record', async () => {
+  const id = db.prepare("INSERT INTO couples (partner1_name, partner2_name, email, status, notes, venue_package) VALUES ('L', 'M', 'lead@test.invalid', 'lead', 'Met at the fair', '3-Day Weekend')").run().lastInsertRowid;
+  assert.equal((await sendBooking({ ...booking, email: 'lead@test.invalid' })).status, 201);
+  const c = db.prepare('SELECT * FROM couples WHERE id = ?').get(id);
+  assert.equal(c.status, 'inquiry');
+  assert.equal(c.partner1_name, 'L', 'names already on file are kept');
+  assert.equal(c.venue_package, '3-Day Weekend', 'a package already chosen is kept');
+  assert.match(c.notes, /^Met at the fair\n\nWebsite booking request/);
+  db.prepare("UPDATE couples SET status = 'booked' WHERE id = ?").run(id);
+  await sendBooking({ ...booking, email: 'lead@test.invalid' });
+  assert.equal(db.prepare('SELECT status FROM couples WHERE id = ?').get(id).status, 'booked', 'later stages are left alone');
+});
+
+test('booking-request bots and bad input are handled like the contact form', async () => {
+  const before = db.prepare('SELECT COUNT(*) n FROM couples').get().n;
+  assert.equal((await sendBooking({ ...booking, email: 'bot2@test.invalid', _gotcha: 'x' })).status, 201);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM couples').get().n, before);
+  assert.equal((await sendBooking({ ...booking, client2Name: '' })).status, 400);
+  assert.equal((await sendBooking({ ...booking, email: 'nope' })).status, 400);
+});

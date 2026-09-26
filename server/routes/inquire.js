@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const email = require('../services/email');
 const rateLimit = require('../middleware/rateLimit');
-const { recordWebsiteEnquiry } = require('../services/websiteEnquiry');
+const { recordWebsiteEnquiry, recordBookingRequest } = require('../services/websiteEnquiry');
 
 // Rustic Retreat hosts weddings June through September only.
 const SEASON_MONTHS = [6, 7, 8, 9];
@@ -136,6 +136,15 @@ router.post('/', rateLimit({ windowMs: 3600000, max: 5 }), (req, res) => {
 // sends the email, so this one sends none.
 router.post('/website', rateLimit({ windowMs: 3600000, max: 10, name: 'website-enquiry' }), (req, res) => {
   const result = recordWebsiteEnquiry(req.body);
+  if (!result.ok) return res.status(result.status).json({ error: result.error });
+  res.status(201).json({ success: true });
+});
+
+// ── Public: copy of the website's 2026/2027 booking-request forms ─────────────
+// Same arrangement as the contact form: Formspree emails the venue, and this
+// records the couple as an inquiry with a "review and send proposal" task.
+router.post('/booking-request', rateLimit({ windowMs: 3600000, max: 10, name: 'website-booking-request' }), (req, res) => {
+  const result = recordBookingRequest(req.body);
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.status(201).json({ success: true });
 });
