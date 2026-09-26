@@ -102,6 +102,11 @@ router.post('/couple-login', coupleLoginLimiter, (req, res) => {
   });
 });
 
+// Staff names, for the "Assigned To" choice on tasks.
+router.get('/staff', authenticateToken, (req, res) => {
+  res.json(db.prepare('SELECT id, name FROM users ORDER BY name').all());
+});
+
 // Get current user info
 router.get('/me', authenticateToken, (req, res) => {
   const user = db.prepare('SELECT id, name, email, role, created_at FROM users WHERE id = ?').get(req.user.userId);

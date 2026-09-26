@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { PaperAirplaneIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
+import { MESSAGE_TEMPLATES, firstNames } from '../../utils/options'
 
 export default function Messages() {
   const { getAdminAxios, user } = useAuth()
@@ -216,6 +217,18 @@ export default function Messages() {
                   >
                     Portal message
                   </button>
+                  <select
+                    aria-label="Insert a quick reply"
+                    value=""
+                    onChange={e => {
+                      const t = MESSAGE_TEMPLATES.find(m => m.label === e.target.value)
+                      if (t) setNewMessage(t.text.replace('{names}', firstNames(selectedCouple)))
+                    }}
+                    className="ml-auto text-xs border border-slate-200 rounded px-2 py-1 bg-white text-slate-600"
+                  >
+                    <option value="">Quick reply...</option>
+                    {MESSAGE_TEMPLATES.map(m => <option key={m.label} value={m.label}>{m.label}</option>)}
+                  </select>
                   {optedOut && (
                     <span className="text-xs text-amber-600">Replied STOP — texts are blocked</span>
                   )}

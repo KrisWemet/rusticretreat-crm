@@ -6,6 +6,7 @@ import { PlusIcon, CalendarDaysIcon, MapPinIcon, UsersIcon, CurrencyDollarIcon }
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
 import { packagePriceFor, withGst } from '../../utils/packagePrice'
+import { CEREMONY_SPACES, RECEPTION_SPACES } from '../../utils/options'
 
 const paymentStyle = {
   pending: 'bg-amber-100 text-amber-700',
@@ -34,6 +35,7 @@ export default function Bookings() {
   const [bookings, setBookings] = useState([])
   const [couples, setCouples] = useState([])
   const [packages, setPackages] = useState([])
+  const [addons, setAddons] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editBooking, setEditBooking] = useState(null)
@@ -51,6 +53,16 @@ export default function Bookings() {
     return next
   })
 
+  // Locations offered: the venue's spaces plus anything typed on earlier bookings.
+  const spaces = (base, key) => [...new Set([...base, ...bookings.map(b => b[key]).filter(Boolean)])]
+  const unitLabel = { per_guest: ' per guest', per_night: ' per night' }
+  const addAddon = (e) => {
+    const a = addons.find(x => String(x.id) === e.target.value)
+    if (!a) return
+    const item = `${a.name} – $${Number(a.price).toLocaleString('en-CA')}${unitLabel[a.unit] || ''}`
+    setForm(p => ({ ...p, add_ons: p.add_ons ? `${p.add_ons}, ${item}` : item }))
+  }
+
   const expected = expectedTotal(packages, form)
   const selectedPkg = packages.find(p => p.name === form.package_name)
   const totalDiffers = expected != null && form.total_price !== '' && Math.abs(Number(form.total_price) - expected) > 0.005
@@ -59,10 +71,11 @@ export default function Bookings() {
 
   const fetchData = async () => {
     const api = getAdminAxios()
-    const [bRes, cRes, pRes] = await Promise.all([api.get('/api/bookings'), api.get('/api/couples'), api.get('/api/packages')])
+    const [bRes, cRes, pRes, aRes] = await Promise.all([api.get('/api/bookings'), api.get('/api/couples'), api.get('/api/packages'), api.get('/api/addons?active=1')])
     setBookings(bRes.data)
     setCouples(cRes.data)
     setPackages(pRes.data)
+    setAddons(aRes.data)
   }
 
   useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
@@ -193,11 +206,21 @@ export default function Bookings() {
             <Input label="Guest Count" type="number" min="1" max="100" value={form.guest_count} onChange={f('guest_count')} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Ceremony Location" value={form.ceremony_location} onChange={f('ceremony_location')} placeholder="e.g. Forest Clearing" />
-            <Input label="Reception / Dancing" value={form.reception_location} onChange={f('reception_location')} placeholder="e.g. Clear-Top Gazebo" />
+            <Input label="Ceremony Location" value={form.ceremony_location} onChange={f('ceremony_location')} placeholder="Pick or type a location" list="ceremony-spaces" />
+            <Input label="Reception / Dancing" value={form.reception_location} onChange={f('reception_location')} placeholder="Pick or type a location" list="reception-spaces" />
+            <datalist id="ceremony-spaces">{spaces(CEREMONY_SPACES, 'ceremony_location').map(s => <option key={s} value={s} />)}</datalist>
+            <datalist id="reception-spaces">{spaces(RECEPTION_SPACES, 'reception_location').map(s => <option key={s} value={s} />)}</datalist>
           </div>
           <Input label="Food & Beverage Notes" value={form.catering_type} onChange={f('catering_type')} placeholder="e.g. Self-arranged BBQ + food truck Saturday. No kitchen on-site." />
-          <Input label="Add-Ons" value={form.add_ons} onChange={f('add_ons')} placeholder="e.g. Fireworks – $250, Generator rental, Pet cabin stay – $50" />
+          <div className="space-y-1">
+            <Input label="Add-Ons" value={form.add_ons} onChange={f('add_ons')} placeholder="e.g. Fireworks – $250, Generator rental, Pet cabin stay – $50" />
+            {addons.length > 0 && (
+              <select aria-label="Add an add-on from the list" className="input-field text-sm" value="" onChange={addAddon}>
+                <option value="">+ Add from the add-on list...</option>
+                {addons.map(a => <option key={a.id} value={a.id}>{a.name} – ${Number(a.price).toLocaleString('en-CA')}{unitLabel[a.unit] || ''}</option>)}
+              </select>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <Select label="Payment Status" value={form.payment_status} onChange={f('payment_status')}>
               {['pending','partial','paid','overdue'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}

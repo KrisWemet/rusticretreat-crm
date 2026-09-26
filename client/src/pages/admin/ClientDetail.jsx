@@ -12,6 +12,7 @@ import {
 import toast from 'react-hot-toast'
 import axios from 'axios'
 import { format, parseISO } from 'date-fns'
+import { REFERRAL_SOURCES, withCurrent } from '../../utils/options'
 
 const PROPOSAL_STATUS = {
   draft:    'bg-slate-100 text-slate-600',
@@ -35,6 +36,7 @@ export default function ClientDetail() {
   const [loading, setLoading] = useState(true)
   const [showEdit, setShowEdit] = useState(false)
   const [form, setForm] = useState({})
+  const [packages, setPackages] = useState([])
 
   const fetchData = async () => {
     const api = getAdminAxios()
@@ -52,6 +54,8 @@ export default function ClientDetail() {
   useEffect(() => {
     fetchData().catch(() => {}).finally(() => setLoading(false))
   }, [id])
+
+  useEffect(() => { getAdminAxios().get('/api/packages').then(r => setPackages(r.data)).catch(() => {}) }, [])
 
   const handleEdit = async (e) => {
     e.preventDefault()
@@ -206,6 +210,7 @@ export default function ClientDetail() {
             {[
               { label: 'Wedding Date', value: couple.wedding_date ? new Date(couple.wedding_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD' },
               { label: 'Package', value: couple.venue_package || 'Not selected' },
+              { label: 'Heard about us', value: couple.referral_source || 'Not specified' },
               { label: 'Budget', value: couple.budget_total > 0 ? `$${couple.budget_total.toLocaleString()}` : 'TBD' },
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between text-sm">
@@ -302,7 +307,14 @@ export default function ClientDetail() {
             <Input label="Wedding Date" type="date" value={form.wedding_date || ''} onChange={e => setForm(f => ({...f, wedding_date: e.target.value}))} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Venue Package" value={form.venue_package || ''} onChange={e => setForm(f => ({...f, venue_package: e.target.value}))} />
+            <Select label="Venue Package" value={form.venue_package || ''} onChange={e => setForm(f => ({...f, venue_package: e.target.value}))}>
+              <option value="">Not selected</option>
+              {withCurrent(packages.filter(p => p.is_active).map(p => p.name), form.venue_package).map(n => <option key={n} value={n}>{n}</option>)}
+            </Select>
+            <Select label="How they heard about us" value={form.referral_source || ''} onChange={e => setForm(f => ({...f, referral_source: e.target.value}))}>
+              <option value="">Not specified</option>
+              {withCurrent(REFERRAL_SOURCES, form.referral_source).map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Select label="Status" value={form.status || 'lead'} onChange={e => setForm(f => ({...f, status: e.target.value}))}>
