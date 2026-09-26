@@ -5,3 +5,10 @@ export function packagePriceFor(pkg, dateISO) {
   const seasons = pkg?.season_prices || {}
   return year && seasons[year] != null ? Number(seasons[year]) : Number(pkg?.price)
 }
+
+// Package prices are before GST; totals entered in the CRM include it.
+export const GST_RATE = 0.05
+
+export function withGst(amount) {
+  return Math.round(Number(amount) * (1 + GST_RATE) * 100) / 100
+}
