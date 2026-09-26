@@ -5,12 +5,22 @@ import Input, { Select, Textarea } from '../../components/ui/Input'
 import { PlusIcon, CalendarDaysIcon, MapPinIcon, UsersIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
+import { packagePriceFor, withGst } from '../../utils/packagePrice'
 
 const paymentStyle = {
   pending: 'bg-amber-100 text-amber-700',
   partial: 'bg-blue-100 text-blue-700',
   paid: 'bg-emerald-100 text-emerald-700',
   overdue: 'bg-red-100 text-red-700',
+}
+
+const money = (n) => `$${Number(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+// Package price for the check-in year plus GST, or null when the package isn't
+// one we know (a retired or hand-typed name on an older booking).
+function expectedTotal(packages, form) {
+  const pkg = packages.find(p => p.name === form.package_name)
+  return pkg ? withGst(packagePriceFor(pkg, form.event_date)) : null
 }
 
 const emptyForm = {
@@ -23,17 +33,36 @@ export default function Bookings() {
   const { getAdminAxios } = useAuth()
   const [bookings, setBookings] = useState([])
   const [couples, setCouples] = useState([])
+  const [packages, setPackages] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editBooking, setEditBooking] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
+  // Changing the package or check-in date refills the total, unless staff have
+  // typed their own figure (anything other than the previous suggestion).
+  const fPriced = (k) => (e) => setForm(p => {
+    const next = { ...p, [k]: e.target.value }
+    const before = expectedTotal(packages, p)
+    const after = expectedTotal(packages, next)
+    const untouched = p.total_price === '' || (before != null && Number(p.total_price) === before)
+    if (after != null && untouched) next.total_price = String(after)
+    return next
+  })
+
+  const expected = expectedTotal(packages, form)
+  const selectedPkg = packages.find(p => p.name === form.package_name)
+  const totalDiffers = expected != null && form.total_price !== '' && Math.abs(Number(form.total_price) - expected) > 0.005
+  const packageOptions = packages.filter(p => p.is_active || p.name === form.package_name)
+  const unknownPackage = form.package_name && !packages.some(p => p.name === form.package_name)
+
   const fetchData = async () => {
     const api = getAdminAxios()
-    const [bRes, cRes] = await Promise.all([api.get('/api/bookings'), api.get('/api/couples')])
+    const [bRes, cRes, pRes] = await Promise.all([api.get('/api/bookings'), api.get('/api/couples'), api.get('/api/packages')])
     setBookings(bRes.data)
     setCouples(cRes.data)
+    setPackages(pRes.data)
   }
 
   useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
@@ -152,11 +181,15 @@ export default function Bookings() {
             {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
           </Select>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Check-In Date" type="date" value={form.event_date} onChange={f('event_date')} required />
+            <Input label="Check-In Date" type="date" value={form.event_date} onChange={fPriced('event_date')} required />
             <Input label="Check-Out Date" type="date" value={form.end_date} onChange={f('end_date')} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Package" value={form.package_name} onChange={f('package_name')} placeholder="e.g. 3-Day Weekend" />
+            <Select label="Package" value={form.package_name} onChange={fPriced('package_name')}>
+              <option value="">Select package...</option>
+              {packageOptions.map(p => <option key={p.id} value={p.name}>{p.name}{p.is_active ? '' : ' (retired)'}</option>)}
+              {unknownPackage && <option value={form.package_name}>{form.package_name} (not in package list)</option>}
+            </Select>
             <Input label="Guest Count" type="number" min="1" max="100" value={form.guest_count} onChange={f('guest_count')} />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -169,7 +202,18 @@ export default function Bookings() {
             <Select label="Payment Status" value={form.payment_status} onChange={f('payment_status')}>
               {['pending','partial','paid','overdue'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
             </Select>
-            <Input label="Total Package Price (CAD)" type="number" value={form.total_price} onChange={f('total_price')} placeholder="6500" />
+            <div className="space-y-1">
+              <Input label="Total Package Price (CAD, incl. GST)" type="number" step="0.01" value={form.total_price} onChange={f('total_price')} placeholder="6825" />
+              {expected != null && !totalDiffers && (
+                <p className="text-xs text-slate-500">{money(packagePriceFor(selectedPkg, form.event_date))} + 5% GST</p>
+              )}
+              {totalDiffers && (
+                <p className="text-xs text-amber-700">
+                  {form.package_name}{form.event_date ? ` (${form.event_date.slice(0, 4)})` : ''} with 5% GST is {money(expected)}. Fine if this total includes add-ons, otherwise{' '}
+                  <button type="button" className="underline font-medium" onClick={() => setForm(p => ({ ...p, total_price: String(expected) }))}>use {money(expected)}</button>.
+                </p>
+              )}
+            </div>
           </div>
           <Input label="Deposit Paid ($)" type="number" value={form.deposit_paid} onChange={f('deposit_paid')} />
           <Textarea label="Special Requests" value={form.special_requests} onChange={f('special_requests')} />
