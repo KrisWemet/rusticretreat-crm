@@ -41,7 +41,7 @@ router.get('/:id', authenticateToken, (req, res) => {
 router.post('/', authenticateToken, (req, res) => {
   const {
     partner1_name, partner2_name, email, partner2_email, phone, wedding_date,
-    venue_package, status, notes, budget_total
+    venue_package, status, notes, budget_total, referral_source
   } = req.body;
 
   if (!partner1_name || !partner2_name || !email) {
@@ -63,10 +63,10 @@ router.post('/', authenticateToken, (req, res) => {
 
   try {
     const result = db.prepare(`
-      INSERT INTO couples (partner1_name, partner2_name, email, partner2_email, phone, wedding_date, venue_package, status, notes, budget_total)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO couples (partner1_name, partner2_name, email, partner2_email, phone, wedding_date, venue_package, status, notes, budget_total, referral_source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(partner1_name, partner2_name, email, partner2_email || null, phone || null, wedding_date || null,
-      venue_package || null, status || 'lead', notes || null, budget_total || 0);
+      venue_package || null, status || 'lead', notes || null, budget_total || 0, referral_source || null);
 
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(couple);
@@ -85,7 +85,7 @@ router.put('/:id', authenticateToken, (req, res) => {
 
   const {
     partner1_name, partner2_name, email, partner2_email, phone, wedding_date,
-    venue_package, status, notes, budget_total
+    venue_package, status, notes, budget_total, referral_source
   } = req.body;
 
   const nextEmail = (email || couple.email).trim().toLowerCase();
@@ -105,7 +105,8 @@ router.put('/:id', authenticateToken, (req, res) => {
     db.prepare(`
       UPDATE couples SET
         partner1_name = ?, partner2_name = ?, email = ?, partner2_email = ?, phone = ?,
-        wedding_date = ?, venue_package = ?, status = ?, notes = ?, budget_total = ?
+        wedding_date = ?, venue_package = ?, status = ?, notes = ?, budget_total = ?,
+        referral_source = ?
       WHERE id = ?
     `).run(
       partner1_name || couple.partner1_name,
@@ -119,6 +120,7 @@ router.put('/:id', authenticateToken, (req, res) => {
       status || couple.status,
       notes !== undefined ? notes : couple.notes,
       budget_total !== undefined ? budget_total : couple.budget_total,
+      referral_source !== undefined ? (referral_source || null) : couple.referral_source,
       req.params.id
     );
 

@@ -6,7 +6,8 @@ import { PlusIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline
 import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid'
 import { CheckCircleIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
-import { format, parseISO, isPast, isToday } from 'date-fns'
+import { format, parseISO, isPast, isToday, addDays } from 'date-fns'
+import { TASK_TITLES, DUE_IN, withCurrent } from '../../utils/options'
 
 const priorityStyle = {
   high: 'bg-red-100 text-red-700',
@@ -20,6 +21,7 @@ export default function Tasks() {
   const { getAdminAxios } = useAuth()
   const [tasks, setTasks] = useState([])
   const [couples, setCouples] = useState([])
+  const [staff, setStaff] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('incomplete')
   const [showAdd, setShowAdd] = useState(false)
@@ -28,8 +30,8 @@ export default function Tasks() {
 
   const fetchData = async () => {
     const api = getAdminAxios()
-    const [tRes, cRes] = await Promise.all([api.get('/api/tasks'), api.get('/api/couples')])
-    setTasks(tRes.data); setCouples(cRes.data)
+    const [tRes, cRes, sRes] = await Promise.all([api.get('/api/tasks'), api.get('/api/couples'), api.get('/api/auth/staff')])
+    setTasks(tRes.data); setCouples(cRes.data); setStaff(sRes.data)
   }
 
   useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
@@ -155,21 +157,31 @@ export default function Tasks() {
 
       <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Task">
         <form onSubmit={handleAdd} className="space-y-4">
-          <Input label="Task Title" value={form.title} onChange={f('title')} required />
-          <Textarea label="Description (optional)" value={form.description} onChange={f('description')} />
+          <Input label="Task Title" value={form.title} onChange={f('title')} required list="task-title-options" placeholder="Pick a common follow-up or type your own" />
+          <datalist id="task-title-options">
+            {TASK_TITLES.map(t => <option key={t} value={t} />)}
+          </datalist>
+          <Select label="Related Couple" value={form.couple_id} onChange={f('couple_id')}>
+            <option value="">None</option>
+            {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
+          </Select>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Assigned To" value={form.assigned_to} onChange={f('assigned_to')} placeholder="Staff name" />
             <Input label="Due Date" type="date" value={form.due_date} onChange={f('due_date')} />
+            <Select label="Due in" value="" onChange={e => e.target.value !== '' && setForm(p => ({ ...p, due_date: format(addDays(new Date(), Number(e.target.value)), 'yyyy-MM-dd') }))}>
+              <option value="">Pick a shortcut...</option>
+              {DUE_IN.map(d => <option key={d.label} value={d.days}>{d.label}</option>)}
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-4">
+            <Select label="Assigned To" value={form.assigned_to} onChange={f('assigned_to')}>
+              <option value="">Unassigned</option>
+              {withCurrent(staff.map(u => u.name), form.assigned_to).map(n => <option key={n} value={n}>{n}</option>)}
+            </Select>
             <Select label="Priority" value={form.priority} onChange={f('priority')}>
               {['low','medium','high'].map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
             </Select>
-            <Select label="Related Couple" value={form.couple_id} onChange={f('couple_id')}>
-              <option value="">None</option>
-              {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
-            </Select>
           </div>
+          <Textarea label="Description (optional)" value={form.description} onChange={f('description')} />
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
             <button type="button" className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
             <button type="submit" className="btn-primary">Create Task</button>

@@ -24,6 +24,8 @@ app.use('/api/proposals', require('../routes/proposals'));
 app.use('/api/packages', require('../routes/packages'));
 app.use('/api/contracts', require('../routes/contracts'));
 app.use('/api/invoices', require('../routes/invoices'));
+app.use('/api/couples', require('../routes/couples'));
+app.use('/api/auth', require('../routes/auth'));
 let server, base;
 const staff = 'Bearer ' + jwt.sign({ userId: 1, email: 'a@test', name: 'Admin', role: 'admin' }, process.env.JWT_SECRET);
 async function call(method, url, body, auth = staff) {
@@ -165,6 +167,24 @@ test('staff can save a split-deposit schedule; paid invoices stay and a bad plan
   const rest = await call('POST', `/api/invoices/schedule/${couple}`, { total_price: 6825, items: items.slice(1) });
   assert.equal(rest.status, 201, JSON.stringify(rest.body));
   assert.deepEqual(rows().map(r => [r.amount, r.paid]), [[853.13, 1], [853.12, 0], [1706.25, 0], [3412.5, 0]]);
+});
+
+test('staff can record how a couple heard about us, and list staff for task assignment', async () => {
+  const made = await call('POST', '/api/couples', {
+    partner1_name: 'H', partner2_name: 'J', email: 'h@test.invalid', partner2_email: 'j@test.invalid',
+    venue_package: '3-Day Weekend', referral_source: 'Friend or Family Referral',
+  });
+  assert.equal(made.status, 201, JSON.stringify(made.body));
+  assert.equal(made.body.referral_source, 'Friend or Family Referral');
+  const edited = await call('PUT', `/api/couples/${made.body.id}`, { referral_source: 'Google Search' });
+  assert.equal(edited.body.referral_source, 'Google Search');
+  const untouched = await call('PUT', `/api/couples/${made.body.id}`, { notes: 'x' });
+  assert.equal(untouched.body.referral_source, 'Google Search', 'an edit without the field keeps it');
+
+  const staffList = await call('GET', '/api/auth/staff');
+  assert.equal(staffList.status, 200);
+  assert.ok(staffList.body.length > 0 && staffList.body.every(u => u.name && !('password_hash' in u) && !('email' in u)));
+  assert.equal((await call('GET', '/api/auth/staff', null, null)).status, 401);
 });
 
 // Separate processes: the demo clean-up runs at boot, and only in production.

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { REFERRAL_SOURCES } from '../utils/options'
 import {
   HeartIcon,
   CheckCircleIcon,
@@ -192,12 +193,7 @@ export default function Inquire() {
             <label htmlFor="inquire-how-did-you-8" className="block text-sm font-medium text-slate-700 mb-1">How did you hear about us?</label>
             <select id="inquire-how-did-you-8" name="inquire-how-did-you-8" value={form.heard_about} onChange={f('heard_about')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent">
               <option value="">Select...</option>
-              <option>Google Search</option>
-              <option>Instagram / Social Media</option>
-              <option>Friend or Family Referral</option>
-              <option>Wedding Website (The Knot, WeddingWire)</option>
-              <option>Drove By / Saw the Venue</option>
-              <option>Other</option>
+              {REFERRAL_SOURCES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
 

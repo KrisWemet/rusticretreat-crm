@@ -6,6 +6,7 @@ import Input, { Select } from '../../components/ui/Input'
 import { PlusIcon, MagnifyingGlassIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
+import { REFERRAL_SOURCES, withCurrent } from '../../utils/options'
 
 const STATUS_OPTIONS = ['lead', 'inquiry', 'booked', 'completed', 'cancelled']
 
@@ -19,7 +20,7 @@ const statusStyle = {
 
 const emptyForm = {
   partner1_name: '', partner2_name: '', email: '', partner2_email: '', phone: '',
-  wedding_date: '', venue_package: '', status: 'lead', notes: '', budget_total: ''
+  wedding_date: '', venue_package: '', status: 'lead', notes: '', budget_total: '', referral_source: ''
 }
 
 export default function Clients() {
@@ -30,6 +31,7 @@ export default function Clients() {
   const [statusFilter, setStatusFilter] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [packages, setPackages] = useState([])
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const fetchCouples = async () => {
@@ -51,6 +53,8 @@ export default function Clients() {
     }, search ? 300 : 0)
     return () => clearTimeout(t)
   }, [search, statusFilter])
+
+  useEffect(() => { getAdminAxios().get('/api/packages').then(r => setPackages(r.data)).catch(() => {}) }, [])
 
   const handleAdd = async (e) => {
     e.preventDefault()
@@ -202,10 +206,17 @@ export default function Clients() {
           </p>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Phone" value={form.phone} onChange={f('phone')} />
-            <Input label="Venue Package" value={form.venue_package} onChange={f('venue_package')} placeholder="e.g. Grand Estate" />
+            <Select label="Venue Package" value={form.venue_package} onChange={f('venue_package')}>
+              <option value="">Not selected</option>
+              {withCurrent(packages.filter(p => p.is_active).map(p => p.name), form.venue_package).map(n => <option key={n} value={n}>{n}</option>)}
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Wedding Date" type="date" value={form.wedding_date} onChange={f('wedding_date')} />
+            <Select label="How they heard about us" value={form.referral_source} onChange={f('referral_source')}>
+              <option value="">Not specified</option>
+              {withCurrent(REFERRAL_SOURCES, form.referral_source).map(s => <option key={s} value={s}>{s}</option>)}
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Select label="Status" value={form.status} onChange={f('status')}>
