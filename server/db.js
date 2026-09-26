@@ -485,6 +485,8 @@ for (const col of [
   'ALTER TABLE couples ADD COLUMN nurture_7d_sent INTEGER DEFAULT 0',
   // Price by wedding year, JSON {"2028": 7500}; see services/packagePricing.js
   'ALTER TABLE packages ADD COLUMN season_prices TEXT',
+  // When staff last marked an enquiry as personally followed up
+  'ALTER TABLE couples ADD COLUMN contacted_at DATETIME',
 ]) { try { db.exec(col); } catch (_) {} }
 
 // Site tours — requested from the public inquiry form, scheduled by staff
@@ -627,16 +629,6 @@ try {
   db.prepare(`UPDATE couples SET referral_source = 'Instagram' WHERE id = 4 AND referral_source IS NULL`).run();
 } catch (_) {}
 
-// Backfill pipeline stage from each couple's status (one-time, only when unset)
-try {
-  const stageFor = { booked: 'booked', completed: 'booked', cancelled: 'lost', inquiry: 'tour', lead: 'inquiry' };
-  for (const c of db.prepare('SELECT id, status, pipeline_stage FROM couples').all()) {
-    if (!c.pipeline_stage || c.pipeline_stage === 'inquiry') {
-      const stage = stageFor[c.status] || 'inquiry';
-      db.prepare('UPDATE couples SET pipeline_stage = ? WHERE id = ?').run(stage, c.id);
-    }
-  }
-} catch (_) {}
 
 // Seed the add-on catalog (real Rustic Retreat à-la-carte items)
 try {
@@ -1066,6 +1058,19 @@ function runOnce(name, fn) {
 
 // 2028 package prices, confirmed by the owner. The existing price stays the
 // default for other years. Only fills a package that has no season prices yet.
+// Backfill each couple's pipeline stage from their status. This used to run on
+// every boot, which kept moving couples staff had put back in the Inquiry
+// column; it is now recorded as done and never repeats.
+runOnce('pipeline-backfill-v1', () => {
+  const stageFor = { booked: 'booked', completed: 'booked', cancelled: 'lost', inquiry: 'tour', lead: 'inquiry' };
+  for (const c of db.prepare('SELECT id, status, pipeline_stage FROM couples').all()) {
+    if (!c.pipeline_stage || c.pipeline_stage === 'inquiry') {
+      const stage = stageFor[c.status] || 'inquiry';
+      db.prepare('UPDATE couples SET pipeline_stage = ? WHERE id = ?').run(stage, c.id);
+    }
+  }
+});
+
 runOnce('package-season-prices-2028', () => {
   const set = db.prepare(`UPDATE packages SET season_prices = ? WHERE season_prices IS NULL AND name LIKE ?`);
   const n = set.run(JSON.stringify({ 2028: 7500 }), '%3-Day%').changes

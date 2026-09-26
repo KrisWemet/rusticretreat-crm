@@ -7,6 +7,16 @@ const SMTP_PASS    = process.env.SMTP_PASS;
 const SMTP_FROM    = process.env.SMTP_FROM || 'Rustic Retreat <noreply@rusticretreat.com>';
 const ADMIN_EMAIL  = process.env.ADMIN_EMAIL || process.env.SMTP_USER;
 const BASE_URL     = process.env.BASE_URL || 'http://localhost:5173';
+const { ETRANSFER_EMAIL } = require('../venue');
+
+// The couple portal is switched off unless ENABLE_COUPLE_PORTAL=1, so emails to
+// couples only link to it when it is actually running.
+const portalEnabled = () => process.env.ENABLE_COUPLE_PORTAL === '1';
+
+// Anything a person typed (names, messages, descriptions) is escaped before it
+// goes into an HTML body.
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = (n) => Number(n || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Resend's HTTP API is the preferred transport on a hosted platform: it is a
 // plain HTTPS call, so it works anywhere outbound web traffic does, whereas
@@ -102,8 +112,8 @@ async function sendContractLink({ to, coupleNames, contractTitle, signingUrl, si
     to,
     subject: `Your contract is ready to sign — ${contractTitle}`,
     text: `Hi ${greeting},\n\nYour contract "${contractTitle}" from Rustic Retreat is ready for your review and digital signature.\n\nSign here: ${fullUrl}\n\n${note}\n\nIf you have any questions, please reply to this email.\n\nWarm regards,\nRustic Retreat`,
-    html: `<p>Hi <strong>${greeting}</strong>,</p>
-<p>Your contract <strong>"${contractTitle}"</strong> from Rustic Retreat is ready for your review and digital signature.</p>
+    html: `<p>Hi <strong>${esc(greeting)}</strong>,</p>
+<p>Your contract <strong>"${esc(contractTitle)}"</strong> from Rustic Retreat is ready for your review and digital signature.</p>
 <p style="color:#64748b;font-size:14px">${note}</p>
 <p style="margin:24px 0"><a href="${fullUrl}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Review & Sign Contract</a></p>
 <p>Or copy this link: <a href="${fullUrl}">${fullUrl}</a></p>
@@ -115,7 +125,6 @@ async function sendContractLink({ to, coupleNames, contractTitle, signingUrl, si
 // ── Forms ────────────────────────────────────────────────────────────────────
 // Names and titles are typed by people, so they are escaped before going into
 // the HTML body.
-const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function sendFormLink({ to, cc, coupleNames, formTitle, path }) {
   const url = `${BASE_URL}${path}`;
@@ -134,7 +143,7 @@ async function sendFormLink({ to, cc, coupleNames, formTitle, path }) {
 }
 
 async function sendFormCompletedAdmin({ coupleNames, formTitle }) {
-  if (!ADMIN_EMAIL) return { delivered: false };
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
   return send({
     to: ADMIN_EMAIL,
     subject: `${coupleNames} filled in ${formTitle}`,
@@ -180,7 +189,7 @@ async function sendContractSignedCouple({ to, coupleNames, contractTitle, portal
         text: '\n\nWe will be in touch shortly with your next steps.',
         html: '<p>We will be in touch shortly with your next steps.</p>',
       };
-  await send({
+  return send({
     to,
     subject: `Contract signed — welcome to Rustic Retreat! 🎉`,
     text: `Hi ${coupleNames},\n\nThank you for signing "${contractTitle}". Your booking with Rustic Retreat is now confirmed!${portalBlock.text}\n\nWarm regards,\nRustic Retreat`,
@@ -192,155 +201,178 @@ ${portalBlock.html}
 }
 
 // ── Contract signed — admin notification ─────────────────────────────────────
-async function sendContractSignedAdmin({ coupleNames, contractTitle, signerName, signedAt }) {
-  if (!ADMIN_EMAIL) return;
-  await send({
+async function sendContractSignedAdmin({ coupleNames, contractTitle, signerName, signedAt, note }) {
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  return send({
     to: ADMIN_EMAIL,
     subject: `Contract signed by ${signerName} — ${coupleNames}`,
-    text: `${signerName} has signed "${contractTitle}" for ${coupleNames} at ${signedAt}.`,
-    html: `<p><strong>${signerName}</strong> has signed <strong>"${contractTitle}"</strong> for ${coupleNames}.</p><p>Signed at: ${signedAt}</p>`,
+    text: `${signerName} has signed "${contractTitle}" for ${coupleNames} at ${signedAt}.${note ? `\n\n${note}` : ''}`,
+    html: `<p><strong>${esc(signerName)}</strong> has signed <strong>"${esc(contractTitle)}"</strong> for ${esc(coupleNames)}.</p><p>Signed at: ${esc(signedAt)}</p>${note ? `<p>${esc(note)}</p>` : ''}`,
   });
 }
 
 // ── New message notification to couple ───────────────────────────────────────
 async function sendNewMessageCouple({ to, coupleNames, senderName, preview }) {
   const url = `${BASE_URL}/portal/messages`;
-  await send({
+  const reply = portalEnabled()
+    ? { text: `Reply here: ${url}`, html: `<p><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">Reply in Portal</a></p>` }
+    : { text: 'Just reply to this email.', html: '<p>Just reply to this email.</p>' };
+  return send({
     to,
     subject: `New message from ${senderName} — Rustic Retreat`,
-    text: `Hi ${coupleNames},\n\n${senderName} sent you a message:\n\n"${preview}"\n\nReply here: ${url}`,
-    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
-<p><strong>${senderName}</strong> sent you a message:</p>
-<blockquote style="border-left:3px solid #e11d48;padding:8px 16px;color:#555;margin:16px 0">${preview}</blockquote>
-<p><a href="${url}" style="background:#e11d48;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">Reply in Portal</a></p>`,
+    text: `Hi ${coupleNames},\n\n${senderName} sent you a message:\n\n"${preview}"\n\n${reply.text}`,
+    html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
+<p><strong>${esc(senderName)}</strong> sent you a message:</p>
+<blockquote style="border-left:3px solid #e11d48;padding:8px 16px;color:#555;margin:16px 0;white-space:pre-wrap">${esc(preview)}</blockquote>
+${reply.html}`,
   });
 }
 
 // ── New inquiry lead ─────────────────────────────────────────────────────────
 async function sendNewLeadAdmin({ coupleNames, email, phone, weddingDate, guestCount, message }) {
-  if (!ADMIN_EMAIL) return;
-  await send({
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  return send({
     to: ADMIN_EMAIL,
+    replyTo: email || undefined,
     subject: `New inquiry from ${coupleNames}`,
     text: `New lead:\n\nCouple: ${coupleNames}\nEmail: ${email}\nPhone: ${phone || '—'}\nWedding Date: ${weddingDate || '—'}\nGuests: ${guestCount || '—'}\n\nMessage:\n${message || '—'}`,
     html: `<p><strong>New inquiry received!</strong></p>
 <table cellpadding="6" style="border-collapse:collapse">
-<tr><td style="color:#666">Couple:</td><td><strong>${coupleNames}</strong></td></tr>
-<tr><td style="color:#666">Email:</td><td>${email}</td></tr>
-<tr><td style="color:#666">Phone:</td><td>${phone || '—'}</td></tr>
-<tr><td style="color:#666">Wedding Date:</td><td>${weddingDate || '—'}</td></tr>
-<tr><td style="color:#666">Guest Count:</td><td>${guestCount || '—'}</td></tr>
+<tr><td style="color:#666">Couple:</td><td><strong>${esc(coupleNames)}</strong></td></tr>
+<tr><td style="color:#666">Email:</td><td>${esc(email)}</td></tr>
+<tr><td style="color:#666">Phone:</td><td>${esc(phone || '—')}</td></tr>
+<tr><td style="color:#666">Wedding Date:</td><td>${esc(weddingDate || '—')}</td></tr>
+<tr><td style="color:#666">Guest Count:</td><td>${esc(guestCount || '—')}</td></tr>
 </table>
-${message ? `<p><strong>Message:</strong><br>${message}</p>` : ''}`,
+${message ? `<p><strong>Message:</strong></p><p style="white-space:pre-wrap">${esc(message)}</p>` : ''}`,
   });
 }
 
+// ── How to pay (shown while the portal is off) ───────────────────────────────
+function howToPay({ coupleNames, description }) {
+  if (portalEnabled()) {
+    const url = `${BASE_URL}/portal/payments`;
+    return {
+      text: `View your payment schedule in your wedding portal: ${url}`,
+      html: `<p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">View Payment Portal</a></p>`,
+    };
+  }
+  const memo = `${coupleNames} — ${description}`;
+  return {
+    text: `To pay, send an Interac e-Transfer to ${ETRANSFER_EMAIL} and put "${memo}" in the message.`,
+    html: `<p>To pay, send an <strong>Interac e-Transfer</strong> to <strong>${esc(ETRANSFER_EMAIL)}</strong> and put <em>${esc(memo)}</em> in the message.</p>`,
+  };
+}
+
 // ── Payment reminder to couple ───────────────────────────────────────────────
+function dueWording(daysUntilDue) {
+  if (daysUntilDue <= 0) return 'today';
+  if (daysUntilDue === 1) return 'tomorrow';
+  return `in ${daysUntilDue} days`;
+}
+
 async function sendPaymentReminder({ to, coupleNames, description, amount, dueDate, daysUntilDue }) {
-  const url = `${BASE_URL}/portal/payments`;
-  const urgency = daysUntilDue <= 1 ? 'tomorrow' : `in ${daysUntilDue} days`;
-  await send({
+  const urgency = dueWording(daysUntilDue);
+  const pay = howToPay({ coupleNames, description });
+  return send({
     to,
     subject: `Payment reminder: ${description} due ${urgency}`,
-    text: `Hi ${coupleNames},\n\nThis is a friendly reminder that your payment "${description}" of $${amount.toLocaleString()} is due ${urgency} (${dueDate}).\n\nLog in to your wedding portal to view your payment schedule: ${url}\n\nIf you have questions, please contact your coordinator.\n\nWarm regards,\nRustic Retreat`,
-    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
+    text: `Hi ${coupleNames},\n\nThis is a friendly reminder that your payment "${description}" of $${money(amount)} CAD is due ${urgency} (${dueDate}).\n\n${pay.text}\n\nIf you have already paid, thank you, and please ignore this reminder. Questions? Just reply to this email.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
 <p>This is a friendly reminder that your payment is coming up:</p>
 <table cellpadding="8" style="border-collapse:collapse;background:#fdf2f8;border-radius:8px;width:100%;max-width:400px;margin:16px 0">
-<tr><td style="color:#888">Payment:</td><td><strong>${description}</strong></td></tr>
-<tr><td style="color:#888">Amount:</td><td><strong style="color:#e11d48">$${amount.toLocaleString()}</strong></td></tr>
-<tr><td style="color:#888">Due Date:</td><td><strong>${dueDate}</strong></td></tr>
+<tr><td style="color:#888">Payment:</td><td><strong>${esc(description)}</strong></td></tr>
+<tr><td style="color:#888">Amount:</td><td><strong style="color:#e11d48">$${money(amount)} CAD</strong></td></tr>
+<tr><td style="color:#888">Due Date:</td><td><strong>${esc(dueDate)}</strong></td></tr>
 </table>
-<p style="margin:24px 0"><a href="${url}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">View Payment Portal</a></p>
-<p>If you have any questions, please don't hesitate to reach out to your coordinator.</p>
+${pay.html}
+<p>If you have already paid, thank you, and please ignore this reminder. Questions? Just reply to this email.</p>
 <p>Warm regards,<br>Rustic Retreat</p>`,
   });
 }
 
 // ── Payment receipt to couple ────────────────────────────────────────────────
 async function sendPaymentReceipt({ to, coupleNames, description, amount, paymentMethod, paidDate, balance }) {
-  const url = `${BASE_URL}/portal/payments`;
   const balanceLine = balance > 0
-    ? `Remaining balance: $${balance.toLocaleString()} CAD`
+    ? `Remaining balance: $${money(balance)} CAD`
     : 'Your balance is paid in full — thank you!';
-  await send({
+  const scheduleLink = portalEnabled()
+    ? { text: `\n\nView your full payment schedule: ${BASE_URL}/portal/payments`,
+        html: `<p style="margin:24px 0"><a href="${esc(`${BASE_URL}/portal/payments`)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">View Payment Portal</a></p>` }
+    : { text: '\n\nQuestions about your payment schedule? Just reply to this email.',
+        html: '<p>Questions about your payment schedule? Just reply to this email.</p>' };
+  return send({
     to,
     subject: `Payment received — ${description} (Rustic Retreat)`,
-    text: `Hi ${coupleNames},\n\nThis confirms we've received your payment. Thank you!\n\nPayment: ${description}\nAmount: $${amount.toLocaleString()} CAD\nMethod: ${paymentMethod}\nDate: ${paidDate}\n\n${balanceLine}\n\nView your full payment schedule: ${url}\n\nWarm regards,\nRustic Retreat`,
-    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
+    text: `Hi ${coupleNames},\n\nThis confirms we've received your payment. Thank you!\n\nPayment: ${description}\nAmount: $${money(amount)} CAD\nMethod: ${paymentMethod}\nDate: ${paidDate}\n\n${balanceLine}${scheduleLink.text}\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
 <p>This confirms we've received your payment — thank you! 🎉</p>
 <table cellpadding="8" style="border-collapse:collapse;background:#f0fdf4;border-radius:8px;width:100%;max-width:420px;margin:16px 0">
-<tr><td style="color:#888">Payment:</td><td><strong>${description}</strong></td></tr>
-<tr><td style="color:#888">Amount:</td><td><strong style="color:#16a34a">$${amount.toLocaleString()} CAD</strong></td></tr>
-<tr><td style="color:#888">Method:</td><td>${paymentMethod}</td></tr>
-<tr><td style="color:#888">Date:</td><td>${paidDate}</td></tr>
-<tr><td style="color:#888">Balance:</td><td><strong>${balance > 0 ? '$' + balance.toLocaleString() + ' CAD' : 'Paid in full ✓'}</strong></td></tr>
+<tr><td style="color:#888">Payment:</td><td><strong>${esc(description)}</strong></td></tr>
+<tr><td style="color:#888">Amount:</td><td><strong style="color:#16a34a">$${money(amount)} CAD</strong></td></tr>
+<tr><td style="color:#888">Method:</td><td>${esc(paymentMethod)}</td></tr>
+<tr><td style="color:#888">Date:</td><td>${esc(paidDate)}</td></tr>
+<tr><td style="color:#888">Balance:</td><td><strong>${balance > 0 ? '$' + money(balance) + ' CAD' : 'Paid in full ✓'}</strong></td></tr>
 </table>
-<p style="margin:24px 0"><a href="${url}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">View Payment Portal</a></p>
+${scheduleLink.html}
 <p>Warm regards,<br>Rustic Retreat</p>`,
   });
 }
 
 // ── Site tour request — admin notification ───────────────────────────────────
 async function sendTourRequestAdmin({ coupleNames, email: coupleEmail, phone, preferredDate }) {
-  if (!ADMIN_EMAIL) return;
-  await send({
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  return send({
     to: ADMIN_EMAIL,
+    replyTo: coupleEmail || undefined,
     subject: `Site tour requested — ${coupleNames}`,
     text: `${coupleNames} requested a site tour.\n\nEmail: ${coupleEmail}\nPhone: ${phone || '—'}\nPreferred date: ${preferredDate || 'Flexible'}\n\nFollow up to confirm a time.`,
-    html: `<p><strong>${coupleNames}</strong> requested a site tour.</p>
+    html: `<p><strong>${esc(coupleNames)}</strong> requested a site tour.</p>
 <table cellpadding="6" style="border-collapse:collapse">
-<tr><td style="color:#666">Email:</td><td>${coupleEmail}</td></tr>
-<tr><td style="color:#666">Phone:</td><td>${phone || '—'}</td></tr>
-<tr><td style="color:#666">Preferred date:</td><td>${preferredDate || 'Flexible'}</td></tr>
+<tr><td style="color:#666">Email:</td><td>${esc(coupleEmail)}</td></tr>
+<tr><td style="color:#666">Phone:</td><td>${esc(phone || '—')}</td></tr>
+<tr><td style="color:#666">Preferred date:</td><td>${esc(preferredDate || 'Flexible')}</td></tr>
 </table>
 <p>Follow up to confirm a time.</p>`,
   });
 }
 
-// ── Cold-lead nurture follow-up to couple ────────────────────────────────────
-async function sendLeadNurture({ to, coupleNames }) {
-  const url = `${BASE_URL}/inquire`;
-  await send({
-    to,
-    subject: `Still dreaming of a Rustic Retreat wedding?`,
-    text: `Hi ${coupleNames},\n\nWe wanted to follow up on your inquiry about hosting your wedding at Rustic Retreat. We'd love to answer any questions and check our availability for your dates — our June–September weekends book up quickly.\n\nJust reply to this email or reach out any time. We'd be honoured to host your celebration.\n\nWarm regards,\nRustic Retreat`,
-    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
-<p>We wanted to follow up on your inquiry about hosting your wedding at Rustic Retreat. We'd love to answer any questions and check availability for your dates — our June–September weekends book up quickly.</p>
-<p>Just reply to this email or reach out any time. We'd be honoured to host your celebration. 🌲</p>
-<p>Warm regards,<br>Rustic Retreat</p>`,
-  });
-}
 
-// ── Cold-lead alert to admin (no response after a week) ──────────────────────
-async function sendColdLeadAdmin({ coupleNames, email: coupleEmail, phone, daysOld }) {
-  if (!ADMIN_EMAIL) return;
-  await send({
+// ── Enquiry nobody has followed up yet — alert to admin ─────────────────────
+// Couples are never nudged automatically (the owner's choice): the venue is
+// told instead, so the follow-up is personal.
+async function sendColdLeadAdmin({ coupleNames, email: coupleEmail, phone, daysOld, coupleId }) {
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  const url = coupleId ? `${BASE_URL}/clients/${coupleId}` : `${BASE_URL}/clients`;
+  return send({
     to: ADMIN_EMAIL,
-    subject: `Lead going cold — ${coupleNames} (${daysOld} days, no booking)`,
-    text: `${coupleNames} inquired ${daysOld} days ago and hasn't booked.\n\nEmail: ${coupleEmail}\nPhone: ${phone || '—'}\n\nConsider a personal call or message before this lead goes cold.`,
-    html: `<p><strong>${coupleNames}</strong> inquired <strong>${daysOld} days ago</strong> and hasn't booked yet.</p>
+    replyTo: coupleEmail || undefined,
+    subject: `Needs a follow-up — ${coupleNames} (${daysOld} days since their enquiry)`,
+    text: `${coupleNames} enquired ${daysOld} days ago and nobody has followed up in the CRM yet (no tour scheduled, no proposal sent, not marked contacted).\n\nEmail: ${coupleEmail || '—'}\nPhone: ${phone || '—'}\n\nOpen in the CRM: ${url}\n\nOnce you've been in touch, click "Mark contacted" on their page.`,
+    html: `<p><strong>${esc(coupleNames)}</strong> enquired <strong>${daysOld} days ago</strong> and nobody has followed up in the CRM yet (no tour scheduled, no proposal sent, not marked contacted).</p>
 <table cellpadding="6" style="border-collapse:collapse">
-<tr><td style="color:#666">Email:</td><td>${coupleEmail}</td></tr>
-<tr><td style="color:#666">Phone:</td><td>${phone || '—'}</td></tr>
+<tr><td style="color:#666">Email:</td><td>${esc(coupleEmail || '—')}</td></tr>
+<tr><td style="color:#666">Phone:</td><td>${esc(phone || '—')}</td></tr>
 </table>
-<p>Consider a personal call or message before this lead goes cold.</p>`,
+<p style="margin:20px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">Open in the CRM</a></p>
+<p style="color:#666">Once you've been in touch, click "Mark contacted" on their page.</p>`,
   });
 }
 
 // ── Proposal sent to couple (online accept link) ─────────────────────────────
 async function sendProposal({ to, coupleNames, title, total, token }) {
   const url = `${BASE_URL}/proposal/${token}`;
-  await send({
+  return send({
     to,
     subject: `Your proposal from Rustic Retreat — ${title}`,
-    text: `Hi ${coupleNames},\n\nYour personalized proposal "${title}" is ready to review.\n\nTotal: $${total.toLocaleString()} CAD (incl. GST)\n\nReview and accept online here: ${url}\n\nQuestions? Just reply to this email.\n\nWarm regards,\nRustic Retreat`,
-    html: `<p>Hi <strong>${coupleNames}</strong>,</p>
-<p>Your personalized proposal <strong>"${title}"</strong> is ready to review.</p>
+    text: `Hi ${coupleNames},\n\nYour personalized proposal "${title}" is ready to review.\n\nTotal: $${money(total)} CAD (incl. GST)\n\nReview and accept online here: ${url}\n\nQuestions? Just reply to this email.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
+<p>Your personalized proposal <strong>"${esc(title)}"</strong> is ready to review.</p>
 <table cellpadding="8" style="border-collapse:collapse;background:#fdf2f8;border-radius:8px;width:100%;max-width:400px;margin:16px 0">
-<tr><td style="color:#888">Total (incl. GST):</td><td><strong style="color:#e11d48">$${total.toLocaleString()} CAD</strong></td></tr>
+<tr><td style="color:#888">Total (incl. GST):</td><td><strong style="color:#e11d48">$${money(total)} CAD</strong></td></tr>
 </table>
-<p style="margin:24px 0"><a href="${url}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Review &amp; Accept Proposal</a></p>
-<p>Or copy this link: <a href="${url}">${url}</a></p>
+<p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Review &amp; Accept Proposal</a></p>
+<p>Or copy this link: <a href="${esc(url)}">${esc(url)}</a></p>
 <p>Questions? Just reply to this email.</p>
 <p>Warm regards,<br>Rustic Retreat</p>`,
   });
@@ -348,13 +380,13 @@ async function sendProposal({ to, coupleNames, title, total, token }) {
 
 // ── Proposal accepted — admin notification ───────────────────────────────────
 async function sendProposalAcceptedAdmin({ coupleNames, title, total, acceptedName }) {
-  if (!ADMIN_EMAIL) return;
-  await send({
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  return send({
     to: ADMIN_EMAIL,
     subject: `🎉 Proposal accepted — ${coupleNames}`,
-    text: `${acceptedName} accepted "${title}" for ${coupleNames}.\n\nTotal: $${total.toLocaleString()} CAD\n\nA booking and deposit invoice have been created automatically.`,
-    html: `<p><strong>${acceptedName}</strong> accepted <strong>"${title}"</strong> for ${coupleNames}! 🎉</p>
-<p>Total: <strong>$${total.toLocaleString()} CAD</strong></p>
+    text: `${acceptedName} accepted "${title}" for ${coupleNames}.\n\nTotal: $${money(total)} CAD\n\nA booking and deposit invoice have been created automatically.`,
+    html: `<p><strong>${esc(acceptedName)}</strong> accepted <strong>"${esc(title)}"</strong> for ${esc(coupleNames)}! 🎉</p>
+<p>Total: <strong>$${money(total)} CAD</strong></p>
 <p>A booking and deposit invoice have been created automatically.</p>`,
   });
 }
@@ -364,23 +396,31 @@ async function sendProposalAcceptedAdmin({ coupleNames, title, total, acceptedNa
 // likely a real person — a lead texting the number off the website, or a couple
 // using a phone we never recorded — and dropping it silently means nobody ever
 // learns they wrote in.
+// ── Text from a number we do not recognise ───────────────────────────────────
+// An inbound text that matches no couple must not be swallowed. It is most
+// likely a real person — a lead texting the number off the website, or a couple
+// using a phone we never recorded — and dropping it silently means nobody ever
+// learns they wrote in.
 async function sendUnmatchedSmsAdmin({ fromNumber, text, receivedAt }) {
-  if (!ADMIN_EMAIL) return;
-  await send({
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  return send({
     to: ADMIN_EMAIL,
     subject: `Text from an unknown number (${fromNumber})`,
     text: `A text arrived from a number that matches no couple in the CRM.\n\nFrom: ${fromNumber}\nReceived: ${receivedAt}\n\nMessage:\n${text}\n\nAdd this number to the right couple to have future texts thread automatically.`,
     html: `<p><strong>A text arrived from a number that matches no couple in the CRM.</strong></p>
 <table cellpadding="6" style="border-collapse:collapse">
-<tr><td style="color:#666">From:</td><td><strong>${fromNumber}</strong></td></tr>
-<tr><td style="color:#666">Received:</td><td>${receivedAt}</td></tr>
+<tr><td style="color:#666">From:</td><td><strong>${esc(fromNumber)}</strong></td></tr>
+<tr><td style="color:#666">Received:</td><td>${esc(receivedAt)}</td></tr>
 </table>
-<p><strong>Message:</strong><br>${text}</p>
+<p><strong>Message:</strong></p><p style="white-space:pre-wrap">${esc(text)}</p>
 <p style="color:#666">Add this number to the right couple to have future texts thread automatically.</p>`,
   });
 }
 
 module.exports = {
+  send,
+  esc,
+  dueWording,
   sendUnmatchedSmsAdmin,
   sendProposal,
   sendProposalAcceptedAdmin,
@@ -395,6 +435,5 @@ module.exports = {
   sendPaymentReminder,
   sendPaymentReceipt,
   sendTourRequestAdmin,
-  sendLeadNurture,
   sendColdLeadAdmin,
 };

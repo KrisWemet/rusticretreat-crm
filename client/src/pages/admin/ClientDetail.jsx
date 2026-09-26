@@ -58,6 +58,18 @@ export default function ClientDetail() {
 
   useEffect(() => { getAdminAxios().get('/api/packages').then(r => setPackages(r.data)).catch(() => {}) }, [])
 
+  // Marks an enquiry as personally followed up, which takes it off the
+  // dashboard's "Needs a follow-up" list.
+  const toggleContacted = async (contacted) => {
+    try {
+      const { data } = await getAdminAxios().patch(`/api/couples/${id}/contacted`, { contacted })
+      setCouple(data)
+      toast.success(contacted ? 'Marked as contacted' : 'Contacted mark removed')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not update')
+    }
+  }
+
   const handleEdit = async (e) => {
     e.preventDefault()
     try {
@@ -123,7 +135,7 @@ export default function ClientDetail() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => navigate('/clients')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
           <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
         </button>
@@ -141,6 +153,18 @@ export default function ClientDetail() {
         <Badge variant={statusColor[couple.status]} className="text-sm px-3 py-1">
           {couple.status?.charAt(0).toUpperCase() + couple.status?.slice(1)}
         </Badge>
+        {['lead', 'inquiry'].includes(couple.status) && (
+          couple.contacted_at ? (
+            <button onClick={() => toggleContacted(false)} title="Click to undo"
+              className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100">
+              ✓ Contacted {format(new Date(couple.contacted_at.replace(' ', 'T') + 'Z'), 'MMM d')}
+            </button>
+          ) : (
+            <Button variant="secondary" size="sm" onClick={() => toggleContacted(true)}>
+              Mark contacted
+            </Button>
+          )
+        )}
         <Button variant="secondary" size="sm" onClick={() => setShowEdit(true)}>
           <PencilIcon className="w-4 h-4" /> Edit
         </Button>

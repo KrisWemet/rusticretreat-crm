@@ -81,7 +81,7 @@ export default function Dashboard() {
   const [upcomingBookings, setUpcomingBookings] = useState([])
   const [recentMessages, setRecentMessages] = useState([])
   const [pendingTasks, setPendingTasks] = useState([])
-  const [attention, setAttention] = useState({ expiring_proposals: [], stalled_proposals: [], overdue_invoices: [] })
+  const [attention, setAttention] = useState({ expiring_proposals: [], stalled_proposals: [], overdue_invoices: [], needs_follow_up: [] })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -126,7 +126,7 @@ export default function Dashboard() {
         setUpcomingBookings(upcoming.slice(0, 5))
         setRecentMessages(messages.filter(m => m.sender_type === 'couple').slice(-4).reverse())
         setPendingTasks(dueTasks.slice(0, 5))
-        setAttention(attentionRes.data || { expiring_proposals: [], stalled_proposals: [], overdue_invoices: [] })
+        setAttention({ expiring_proposals: [], stalled_proposals: [], overdue_invoices: [], needs_follow_up: [], ...(attentionRes.data || {}) })
       } catch (e) {
         // Surface this. A bare console.error here hid a broken dashboard for
         // weeks: every stat silently fell back to a dash and looked plausible.
@@ -146,6 +146,8 @@ export default function Dashboard() {
     { to: '/tasks', icon: ClipboardDocumentListIcon, label: 'Tasks', description: 'Track internal to-dos, follow-ups, and preparations.', color: 'bg-amber-100 text-amber-600', badge: stats.overdueTasks },
     { to: '/vendors', icon: BuildingStorefrontIcon, label: 'Vendors', description: 'Manage vendor contacts, bookings, and partners.', color: 'bg-emerald-100 text-emerald-600', badge: 0 },
   ]
+
+  const attentionCount = attention.needs_follow_up.length + attention.expiring_proposals.length + attention.stalled_proposals.length + attention.overdue_invoices.length
 
   if (loading) {
     return (
@@ -188,16 +190,29 @@ export default function Dashboard() {
       </div>
 
       {/* Needs Attention */}
-      {(attention.expiring_proposals.length > 0 || attention.stalled_proposals.length > 0 || attention.overdue_invoices.length > 0) && (
+      {attentionCount > 0 && (
         <div className="card border-l-4 border-amber-400 overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-3 bg-amber-50 border-b border-amber-100">
             <BellAlertIcon className="w-4 h-4 text-amber-600" />
             <span className="text-sm font-semibold text-amber-800">Needs Attention</span>
             <span className="ml-auto text-xs text-amber-600">
-              {attention.expiring_proposals.length + attention.stalled_proposals.length + attention.overdue_invoices.length} item{(attention.expiring_proposals.length + attention.stalled_proposals.length + attention.overdue_invoices.length) !== 1 ? 's' : ''}
+              {attentionCount} item{attentionCount !== 1 ? 's' : ''}
             </span>
           </div>
           <div className="divide-y divide-slate-50">
+            {attention.needs_follow_up.map(c => (
+              <Link key={`fu-${c.id}`} to={`/clients/${c.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-amber-50 transition-colors">
+                <div className="w-2 h-2 rounded-full bg-violet-400 mt-1.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-slate-700">{c.partner1_name} &amp; {c.partner2_name}</div>
+                  <div className="text-xs text-slate-500 truncate">{c.email || c.phone || 'No contact details'}</div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-xs font-medium text-violet-700">Needs a follow-up</div>
+                  <div className="text-xs text-slate-400">{c.days_old === 0 ? 'enquired today' : `enquired ${c.days_old} day${c.days_old === 1 ? '' : 's'} ago`}</div>
+                </div>
+              </Link>
+            ))}
             {attention.expiring_proposals.map(p => (
               <Link key={`ep-${p.id}`} to="/proposals" className="flex items-start gap-3 px-5 py-3 hover:bg-amber-50 transition-colors">
                 <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />

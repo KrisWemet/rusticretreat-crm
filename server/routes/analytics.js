@@ -187,7 +187,12 @@ router.get('/attention', authenticateToken, (req, res) => {
     LIMIT 10
   `).all();
 
-  res.json({ expiring_proposals: expiring, stalled_proposals: stalled, overdue_invoices: overdue });
+  // Enquiries nobody has followed up yet (no tour, proposal, booking or
+  // "contacted" mark). Couples are never nudged automatically, so this list is
+  // how the venue knows who to call.
+  const followUps = require('../services/leadNurture').needsFollowUp().slice(0, 10);
+
+  res.json({ expiring_proposals: expiring, stalled_proposals: stalled, overdue_invoices: overdue, needs_follow_up: followUps });
 });
 
 module.exports = router;

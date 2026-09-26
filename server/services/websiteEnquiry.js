@@ -97,11 +97,13 @@ function recordWebsiteEnquiry(body = {}, now = new Date()) {
     } else {
       created = true;
       coupleId = db.prepare(`
-        INSERT INTO couples (partner1_name, partner2_name, email, phone, wedding_date, status, notes, budget_total)
-        VALUES (?, ?, ?, ?, ?, 'inquiry', ?, 0)
+        INSERT INTO couples (partner1_name, partner2_name, email, phone, wedding_date, status, pipeline_stage, notes, budget_total)
+        VALUES (?, ?, ?, ?, ?, 'inquiry', 'tour', ?, 0)
       `).run(partner1, partner2, email, phone, parseWeddingDate(weddingText), note).lastInsertRowid;
     }
 
+    // Every website enquiry asks for a site tour, so it starts in the Tour column.
+    db.prepare(`UPDATE couples SET pipeline_stage = 'tour' WHERE id = ? AND (pipeline_stage IS NULL OR pipeline_stage = 'inquiry')`).run(coupleId);
     const names = `${partner1} & ${partner2}`;
     const tourNote = tourDates ? `Dates suggested on the website: ${tourDates}` : 'Requested on the website; no dates suggested yet.';
     const openTour = db.prepare(`SELECT id, notes FROM tours WHERE couple_id = ? AND status IN ('requested', 'scheduled')

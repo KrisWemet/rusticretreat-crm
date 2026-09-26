@@ -62,11 +62,11 @@ function markInvoicePaid(invoiceId, paid, paymentMethod) {
   );
 
   if (paid && wasUnpaid) {
-    const couple = db.prepare('SELECT partner1_name, partner2_name, email FROM couples WHERE id = ?').get(invoice.couple_id);
+    const couple = db.prepare('SELECT partner1_name, partner2_name, email, partner2_email FROM couples WHERE id = ?').get(invoice.couple_id);
     if (couple && couple.email) {
       const { balance } = coupleStatement(invoice.couple_id);
       email.sendPaymentReceipt({
-        to: couple.email,
+        to: [couple.email, couple.partner2_email].filter(Boolean),
         coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
         description: invoice.description,
         amount: invoice.amount,

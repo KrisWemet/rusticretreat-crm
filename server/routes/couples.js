@@ -30,6 +30,11 @@ router.get('/', authenticateToken, (req, res) => {
   res.json(couples);
 });
 
+// Enquiries nobody has followed up yet (see services/leadNurture.js)
+router.get('/follow-ups', authenticateToken, (req, res) => {
+  res.json(require('../services/leadNurture').needsFollowUp());
+});
+
 // Get single couple
 router.get('/:id', authenticateToken, (req, res) => {
   const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id);
@@ -156,6 +161,15 @@ router.patch('/:id/stage', authenticateToken, (req, res) => {
     newStatus,
     req.params.id
   );
+  res.json(db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id));
+});
+
+// Mark an enquiry as personally followed up (or undo it)
+router.patch('/:id/contacted', authenticateToken, (req, res) => {
+  const couple = db.prepare('SELECT id FROM couples WHERE id = ?').get(req.params.id);
+  if (!couple) return res.status(404).json({ error: 'Couple not found' });
+  const contacted = req.body?.contacted !== false;
+  db.prepare(`UPDATE couples SET contacted_at = ${contacted ? "datetime('now')" : 'NULL'} WHERE id = ?`).run(req.params.id);
   res.json(db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id));
 });
 

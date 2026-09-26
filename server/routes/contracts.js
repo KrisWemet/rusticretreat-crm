@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { assertBookable, sendRuleError } = require('../services/bookingRules');
+const { assertBookable, sendRuleError, BookingRuleError, defaultEndDate } = require('../services/bookingRules');
 const { buildPaymentSchedule } = require('../services/paymentSchedule');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -871,6 +871,10 @@ router.post('/:id/send', authenticateToken, async (req, res) => {
       });
     }
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
+    // A resend is a fresh invitation, so the signing window starts again —
+    // otherwise an expired contract could never be re-sent.
+    db.prepare(`UPDATE contracts SET signing_expires_at = datetime('now', ?) WHERE id = ?`)
+      .run(`+${SIGNING_LINK_DAYS} days`, contract.id);
     // Reissues the current signer's token, so any earlier link stops working.
     const next = await activateNextSigner(contract, couple);
     if (!next) return res.status(400).json({ error: 'Everyone has already signed' });
@@ -1117,20 +1121,25 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       }
     }
 
-    // Record this person's signature. Everyone signed is what completes the
-    // contract — one signature no longer finishes it.
+    // Record this person's signature and, when it is the last one, turn the
+    // contract into a booking. It all happens in one transaction, so a crash
+    // part-way can never leave a signed contract without its booking, or a
+    // booking without its signature.
     let allSigned = true;
-    if (signer) {
-      db.prepare(`
-        UPDATE contract_signers
-        SET status = 'signed', signed_at = datetime('now'), name = ?,
-            signature_data = ?, signer_ip = ?, signer_user_agent = ?, consent_text = ?
-        WHERE id = ?
-      `).run(signer_name, signature_data, signer_ip, user_agent, consent_text, signer.id);
-      allSigned = !nextSigner(contract.id);
-    }
+    let dateClash = null;
+    let scheduleCreated = false;
+    const finish = db.transaction(() => {
+      if (signer) {
+        db.prepare(`
+          UPDATE contract_signers
+          SET status = 'signed', signed_at = datetime('now'), name = ?,
+              signature_data = ?, signer_ip = ?, signer_user_agent = ?, consent_text = ?
+          WHERE id = ?
+        `).run(signer_name, signature_data, signer_ip, user_agent, consent_text, signer.id);
+        allSigned = !nextSigner(contract.id);
+      }
+      if (!allSigned) return;
 
-    if (allSigned) {
       db.prepare(`
         UPDATE contracts
         SET status = 'signed', signed_at = datetime('now'),
@@ -1140,7 +1149,92 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
         WHERE id = ?
       `).run(signer_name, contract.email, signature_data, signer_ip,
              user_agent, consent_text, contract.id);
-    }
+
+      // Update couple: status → booked, and sync event details from contract
+      db.prepare(`
+        UPDATE couples SET
+          status = CASE WHEN status IN ('lead','inquiry') THEN 'booked' ELSE status END,
+          pipeline_stage = CASE WHEN status IN ('lead','inquiry','booked') THEN 'booked' ELSE pipeline_stage END,
+          wedding_date   = COALESCE(?, wedding_date),
+          venue_package  = COALESCE(?, venue_package)
+        WHERE id = ?
+      `).run(contract.wedding_date || null, contract.package_name || null, contract.couple_id);
+
+      if (!contract.wedding_date) return;
+
+      // The date was checked when the venue signed, but weeks can pass before
+      // the couple finish. If someone else has taken it since, the signatures
+      // still stand; the booking is left for staff to sort out, with a task.
+      try {
+        assertBookable(db, {
+          event_date: contract.wedding_date,
+          package_name: contract.package_name,
+          guest_count: contract.guest_count,
+        }, { excludeCoupleId: contract.couple_id, checkPackage: false });
+      } catch (err) {
+        if (!(err instanceof BookingRuleError)) throw err;
+        dateClash = err.message;
+        db.prepare(`INSERT INTO tasks (title, description, couple_id, due_date, priority) VALUES (?, ?, ?, date('now'), 'high')`)
+          .run('Date clash on a signed contract',
+            `"${contract.title}" is fully signed, but its date could not be booked: ${err.message} Sort out the dates with the couple, then add the booking by hand.`,
+            contract.couple_id);
+        return;
+      }
+
+      // Upsert booking with event details from the signed contract
+      const endDate = defaultEndDate(contract.wedding_date, contract.package_name);
+      const existing = db.prepare(
+        'SELECT id FROM bookings WHERE couple_id = ? ORDER BY id LIMIT 1'
+      ).get(contract.couple_id);
+      let bookingId;
+      if (existing) {
+        bookingId = existing.id;
+        db.prepare(`
+          UPDATE bookings SET
+            event_date          = COALESCE(?, event_date),
+            end_date            = COALESCE(end_date, ?),
+            start_time          = COALESCE(?, start_time),
+            end_time            = COALESCE(?, end_time),
+            guest_count         = COALESCE(?, guest_count),
+            ceremony_location   = COALESCE(?, ceremony_location),
+            reception_location  = COALESCE(?, reception_location),
+            package_name        = COALESCE(?, package_name),
+            total_price         = COALESCE(?, total_price)
+          WHERE id = ?
+        `).run(
+          contract.wedding_date, endDate, contract.start_time, contract.end_time,
+          contract.guest_count, contract.ceremony_location, contract.reception_location,
+          contract.package_name, contract.total_price, existing.id,
+        );
+      } else {
+        bookingId = db.prepare(`
+          INSERT INTO bookings
+            (couple_id, event_date, end_date, start_time, end_time, guest_count,
+             ceremony_location, reception_location, package_name, total_price)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          contract.couple_id, contract.wedding_date, endDate,
+          contract.start_time || null, contract.end_time || null,
+          contract.guest_count || null, contract.ceremony_location || null,
+          contract.reception_location || null, contract.package_name || null,
+          contract.total_price || null,
+        ).lastInsertRowid;
+      }
+
+      // A couple booked by contract alone (no accepted proposal) would have no
+      // payment schedule. Give them the standard one — deposit due now, 25% at
+      // 180 days before check-in, the balance at 90 — which staff can edit.
+      const hasInvoices = db.prepare('SELECT 1 FROM invoices WHERE couple_id = ? LIMIT 1').get(contract.couple_id);
+      if (!hasInvoices && Number(contract.total_price) > 0) {
+        const insertInvoice = db.prepare(
+          'INSERT INTO invoices (couple_id, booking_id, description, amount, due_date) VALUES (?, ?, ?, ?, ?)');
+        for (const p of buildPaymentSchedule({ total: Number(contract.total_price), checkIn: contract.wedding_date })) {
+          insertInvoice.run(contract.couple_id, bookingId, p.label, p.amount, p.due_date);
+        }
+        scheduleCreated = true;
+      }
+    });
+    finish();
 
     // Everything below turns the contract into a booking: the couple becomes
     // 'booked', the calendar date is claimed, and portal credentials are issued.
@@ -1164,54 +1258,6 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
           role: s.role, name: s.name, status: s.status, signed_at: s.signed_at,
         })),
       });
-    }
-
-    // Update couple: status → booked, and sync event details from contract
-    db.prepare(`
-      UPDATE couples SET
-        status = CASE WHEN status IN ('lead','inquiry') THEN 'booked' ELSE status END,
-        wedding_date   = COALESCE(?, wedding_date),
-        venue_package  = COALESCE(?, venue_package)
-      WHERE id = ?
-    `).run(contract.wedding_date || null, contract.package_name || null, contract.couple_id);
-
-    // Upsert booking with event details from the signed contract
-    if (contract.wedding_date) {
-      const existing = db.prepare(
-        'SELECT id FROM bookings WHERE couple_id = ? ORDER BY id LIMIT 1'
-      ).get(contract.couple_id);
-
-      if (existing) {
-        db.prepare(`
-          UPDATE bookings SET
-            event_date          = COALESCE(?, event_date),
-            start_time          = COALESCE(?, start_time),
-            end_time            = COALESCE(?, end_time),
-            guest_count         = COALESCE(?, guest_count),
-            ceremony_location   = COALESCE(?, ceremony_location),
-            reception_location  = COALESCE(?, reception_location),
-            package_name        = COALESCE(?, package_name),
-            total_price         = COALESCE(?, total_price)
-          WHERE id = ?
-        `).run(
-          contract.wedding_date, contract.start_time, contract.end_time,
-          contract.guest_count, contract.ceremony_location, contract.reception_location,
-          contract.package_name, contract.total_price, existing.id,
-        );
-      } else {
-        db.prepare(`
-          INSERT INTO bookings
-            (couple_id, event_date, start_time, end_time, guest_count,
-             ceremony_location, reception_location, package_name, total_price)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          contract.couple_id, contract.wedding_date,
-          contract.start_time || null, contract.end_time || null,
-          contract.guest_count || null, contract.ceremony_location || null,
-          contract.reception_location || null, contract.package_name || null,
-          contract.total_price || null,
-        );
-      }
     }
 
     // Create / reveal portal credentials — only while the portal is in use.
@@ -1247,6 +1293,9 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       contractTitle: contract.title,
       signerName: signer_name,
       signedAt,
+      note: dateClash
+        ? `The date could not be booked: ${dateClash} A task has been added to sort it out.`
+        : (scheduleCreated ? 'The standard payment schedule (25% / 25% / 50%) has been added on the Payments page.' : null),
     });
 
     res.json({
