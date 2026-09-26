@@ -146,7 +146,8 @@ router.get('/', authenticateToken, (req, res) => {
              c.signing_expires_at, c.locked_at, c.client_fields_locked_at,
              c.wedding_date, c.start_time, c.end_time, c.guest_count,
              c.ceremony_location, c.reception_location, c.package_name,
-             c.total_price, c.created_at,
+             c.total_price, c.created_at, c.source,
+             (SELECT COUNT(*) FROM contract_files cf WHERE cf.contract_id = c.id) AS file_count,
              co.partner1_name, co.partner2_name, co.email AS couple_email
       FROM contracts c
       JOIN couples co ON co.id = c.couple_id
@@ -293,6 +294,8 @@ router.post('/', authenticateToken, (req, res) => {
 // ── Admin: update contract (title / content, only if not signed) ─────────────
 router.put('/:id', authenticateToken, (req, res) => {
   const { title, content } = req.body;
+  const DETAILS = ['wedding_date', 'start_time', 'end_time', 'guest_count',
+    'ceremony_location', 'reception_location', 'package_name', 'total_price'];
   try {
     const existing = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Not found' });
@@ -308,12 +311,119 @@ router.put('/:id', authenticateToken, (req, res) => {
                'Delete it and create a new one if the terms need to change.',
       });
     }
-    db.prepare('UPDATE contracts SET title = ?, content = ? WHERE id = ?')
-      .run(title ?? existing.title, content ?? existing.content, req.params.id);
+    // The standard agreement's wording comes from its template; its details are
+    // filled in on the Prepare screen. Only a free-text contract's wording is
+    // typed, so only that can be rewritten here.
+    if (existing.template_key && content !== undefined) {
+      return res.status(400).json({
+        error: 'The standard agreement\u2019s wording is fixed. Use Prepare to fill in its details, ' +
+               'or create a free-text contract for different terms.',
+      });
+    }
+    if (content !== undefined && !String(content).trim()) {
+      return res.status(400).json({ error: 'The contract wording cannot be empty' });
+    }
+    const next = {};
+    for (const k of DETAILS) if (req.body[k] !== undefined) next[k] = req.body[k] === '' ? null : req.body[k];
+    db.prepare(`UPDATE contracts SET title = ?, content = ?${DETAILS.map(k => `, ${k} = ?`).join('')} WHERE id = ?`)
+      .run(title ?? existing.title, content ?? existing.content,
+        ...DETAILS.map(k => (k in next ? next[k] : existing[k])), req.params.id);
     res.json(db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Admin: contracts signed outside the CRM, and attached files ──────────────
+// A contract signed on paper or through another service is recorded as signed
+// and locked, with its scan or PDF attached, so every agreement lives in one
+// place. It never enters the e-signing flow.
+const multer = require('multer');
+const FILE_TYPES = {
+  'application/pdf': true, 'image/jpeg': true, 'image/png': true,
+  'image/webp': true, 'image/heic': true, 'image/heif': true,
+};
+const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_BYTES, files: 1 },
+  fileFilter: (req, file, cb) => (FILE_TYPES[file.mimetype]
+    ? cb(null, true)
+    : cb(Object.assign(new Error('Unsupported file type'), { code: 'BAD_TYPE' }))),
+}).single('file');
+
+// multer's errors (too large, bad multipart) become a message staff can act on.
+function withUpload(handler) {
+  return (req, res) => upload(req, res, (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'That file is over 15 MB. Save a smaller PDF or photo and try again.'
+        : err.code === 'BAD_TYPE' ? 'That file type isn\u2019t supported. Upload a PDF, JPG, PNG, WEBP or HEIC.'
+        : 'The upload could not be read.';
+      return res.status(400).json({ error: msg });
+    }
+    handler(req, res);
+  });
+}
+
+function storeFile(contractId, file, user) {
+  return db.prepare(`INSERT INTO contract_files (contract_id, filename, mime_type, size, data, uploaded_by)
+                     VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(contractId, String(file.originalname || 'contract').slice(0, 200), file.mimetype, file.size, file.buffer,
+      (user && (user.name || user.email)) || null).lastInsertRowid;
+}
+
+router.post('/external', authenticateToken, withUpload((req, res) => {
+  const b = req.body || {};
+  const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(b.couple_id);
+  if (!couple) return res.status(400).json({ error: 'Choose the couple this contract belongs to' });
+  if (!String(b.title || '').trim()) return res.status(400).json({ error: 'Give the contract a title' });
+  const signed = String(b.signed_date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(signed)) return res.status(400).json({ error: 'Enter the date it was signed' });
+  const total = b.total_price === '' || b.total_price == null ? null : Number(b.total_price);
+  if (total !== null && !(total >= 0)) return res.status(400).json({ error: 'The total must be a number' });
+  const guests = b.guest_count ? parseInt(b.guest_count, 10) : null;
+
+  const record = db.transaction(() => {
+    const id = db.prepare(`
+      INSERT INTO contracts (couple_id, title, content, status, source, signed_at, locked_at, signer_name,
+                             wedding_date, package_name, total_price, guest_count)
+      VALUES (?, ?, ?, 'signed', 'external', ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)
+    `).run(couple.id, String(b.title).trim().slice(0, 200),
+      String(b.notes || '').trim() || 'Signed outside the CRM. The signed copy is attached.',
+      `${signed}T12:00:00.000Z`, String(b.signed_by || '').trim() || `${couple.partner1_name} & ${couple.partner2_name}`,
+      b.wedding_date || null, b.package_name || null, total, guests).lastInsertRowid;
+    if (req.file) storeFile(id, req.file, req.user);
+    return id;
+  });
+  const id = record();
+  res.status(201).json(db.prepare(`SELECT c.id, c.title, c.status, c.source, c.signed_at FROM contracts c WHERE c.id = ?`).get(id));
+}));
+
+router.get('/:id/files', authenticateToken, (req, res) => {
+  res.json(db.prepare(`SELECT id, filename, mime_type, size, uploaded_by, uploaded_at FROM contract_files
+                       WHERE contract_id = ? ORDER BY id`).all(req.params.id));
+});
+
+router.post('/:id/files', authenticateToken, withUpload((req, res) => {
+  if (!db.prepare('SELECT id FROM contracts WHERE id = ?').get(req.params.id)) return res.status(404).json({ error: 'Contract not found' });
+  if (!req.file) return res.status(400).json({ error: 'Choose a PDF or photo to attach (PDF, JPG, PNG, WEBP or HEIC, up to 15 MB).' });
+  const id = storeFile(req.params.id, req.file, req.user);
+  res.status(201).json(db.prepare('SELECT id, filename, mime_type, size, uploaded_by, uploaded_at FROM contract_files WHERE id = ?').get(id));
+}));
+
+router.get('/:id/files/:fileId', authenticateToken, (req, res) => {
+  const f = db.prepare('SELECT * FROM contract_files WHERE id = ? AND contract_id = ?').get(req.params.fileId, req.params.id);
+  if (!f) return res.status(404).json({ error: 'File not found' });
+  res.setHeader('Content-Type', f.mime_type);
+  res.setHeader('Content-Disposition', `inline; filename="${f.filename.replace(/["\\\r\n]/g, '')}"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.send(f.data);
+});
+
+router.delete('/:id/files/:fileId', authenticateToken, (req, res) => {
+  db.prepare('DELETE FROM contract_files WHERE id = ? AND contract_id = ?').run(req.params.fileId, req.params.id);
+  res.json({ success: true });
 });
 
 // ── Admin: delete contract ───────────────────────────────────────────────────

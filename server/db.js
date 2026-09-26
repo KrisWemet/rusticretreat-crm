@@ -353,6 +353,26 @@ for (const col of [
   'ALTER TABLE messages ADD COLUMN from_number TEXT',
 ]) { try { db.exec(col); } catch (_) {} }
 
+// ── Contracts signed outside the CRM, and files attached to any contract ──────
+// source is 'external' for a contract recorded after the fact (paper, another
+// e-sign service); NULL means it was created and signed here. Files live in the
+// database rather than on disk so they are on the Railway volume and in every
+// backup, and they are only ever served to signed-in staff.
+try { db.exec('ALTER TABLE contracts ADD COLUMN source TEXT'); } catch (_) {}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS contract_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    uploaded_by TEXT,
+    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_contract_files_contract ON contract_files(contract_id);
+`);
+
 // ── Template-backed contract data ────────────────────────────────────────────
 // Answers live one row per field rather than as a JSON blob on the contract, so
 // a value can be traced to who typed it and when. The venue's answers and the

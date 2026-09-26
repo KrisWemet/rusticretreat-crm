@@ -4,6 +4,7 @@ import Modal from '../../components/ui/Modal'
 import Input, { Select } from '../../components/ui/Input'
 import SignaturePad from '../../components/SignaturePad'
 import PrepareContractModal from '../../components/PrepareContractModal'
+import { RecordSignedContractModal, EditDraftContractModal, ContractFiles } from '../../components/ContractExtras'
 import {
   PlusIcon,
   DocumentTextIcon,
@@ -20,6 +21,9 @@ import {
   CurrencyDollarIcon,
   ArrowDownTrayIcon,
   ExclamationTriangleIcon,
+  PencilSquareIcon,
+  PaperClipIcon,
+  ArrowUpTrayIcon,
 } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid'
 import toast from 'react-hot-toast'
@@ -130,6 +134,9 @@ export default function Contracts() {
   const [packets, setPackets] = useState([])
   const [prepContract, setPrepContract] = useState(null)
   const [unreachable, setUnreachable] = useState(false)
+  const [showRecord, setShowRecord] = useState(false)
+  const [editContract, setEditContract] = useState(null)
+  const [packages, setPackages] = useState([])
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const fetchData = async () => {
@@ -143,6 +150,7 @@ export default function Contracts() {
         api.get('/api/contracts/templates').catch(() => ({ data: [] })),
       ])
       setPackets(tpRes.data || [])
+      api.get('/api/packages').then(r => setPackages(r.data)).catch(() => {})
       setContracts(cRes.data)
       setCouples(cpRes.data)
       setUnreachable(false)
@@ -420,10 +428,16 @@ export default function Contracts() {
           <h1 className="page-title">Contracts</h1>
           <p className="page-subtitle">{contracts.length} contracts · {stats.signed} signed</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowCreate(true)}>
-          <PlusIcon className="w-4 h-4" />
-          New Contract
-        </button>
+        <div className="flex gap-2">
+          <button className="btn-secondary" onClick={() => setShowRecord(true)} title="Add a contract signed on paper or elsewhere">
+            <ArrowUpTrayIcon className="w-4 h-4" />
+            Record Signed Contract
+          </button>
+          <button className="btn-primary" onClick={() => setShowCreate(true)}>
+            <PlusIcon className="w-4 h-4" />
+            New Contract
+          </button>
+        </div>
       </div>
 
       {/* The server being unreachable used to be silent on screen and loud in
@@ -583,6 +597,10 @@ export default function Contracts() {
                     <button onClick={() => openView(c)} className="font-medium text-slate-800 hover:text-rose-600 transition-colors text-left">
                       {c.title}
                     </button>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {c.source === 'external' && <span className="text-[11px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 font-medium">Signed outside the CRM</span>}
+                      {c.file_count > 0 && <span className="text-[11px] text-slate-400 flex items-center gap-0.5"><PaperClipIcon className="w-3 h-3" />{c.file_count}</span>}
+                    </div>
                   </td>
                   <td>
                     <div className="text-slate-700">{c.partner1_name} & {c.partner2_name}</div>
@@ -670,7 +688,12 @@ export default function Contracts() {
                           <PaperAirplaneIcon className="w-3.5 h-3.5" />
                         </button>
                       )}
-                      {c.status === 'draft' && !c.locked_at && (
+                      {c.status === 'draft' && !c.locked_at && !c.template_key && (
+                        <button onClick={() => setEditContract(c)} className="btn-ghost py-1 px-2 text-xs" title="Edit the wording and details">
+                          <PencilSquareIcon className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {((c.status === 'draft' && !c.locked_at) || c.source === 'external') && (
                         <button onClick={() => deleteContract(c.id)} className="btn-ghost py-1 px-2 text-xs text-red-400 hover:bg-red-50">
                           <TrashIcon className="w-3.5 h-3.5" />
                         </button>
@@ -683,6 +706,11 @@ export default function Contracts() {
           </table>
         </div>
       )}
+
+      <RecordSignedContractModal isOpen={showRecord} onClose={() => setShowRecord(false)} onSaved={fetchData}
+        api={getAdminAxios()} couples={couples} packages={packages} />
+      <EditDraftContractModal contract={editContract} onClose={() => setEditContract(null)} onSaved={fetchData}
+        api={getAdminAxios()} packages={packages} />
 
       {/* ── Venue prep for template contracts ──────────────────────────── */}
       <PrepareContractModal
@@ -901,6 +929,8 @@ export default function Contracts() {
               <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{viewContract.content}</pre>
             </div>
 
+            <ContractFiles contract={viewContract} api={getAdminAxios()} onChanged={fetchData} />
+
             {/* Where the contract actually is right now — the question staff
                 ask most often once something has been sent out. */}
             {signers[viewContract.id]?.length > 0 && (
@@ -932,6 +962,11 @@ export default function Contracts() {
 
             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
               <button className="btn-secondary" onClick={() => setShowView(false)}>Close</button>
+              {viewContract.status === 'draft' && !viewContract.locked_at && !viewContract.template_key && (
+                <button className="btn-secondary" onClick={() => { setShowView(false); setEditContract(viewContract) }}>
+                  <PencilSquareIcon className="w-4 h-4" /> Edit
+                </button>
+              )}
               <button className="btn-secondary" onClick={() => printContract(viewContract)}>
                 <ArrowDownTrayIcon className="w-4 h-4" />
                 Download PDF
