@@ -12,6 +12,7 @@
 // is copied into wedding_date.
 
 const db = require('../db');
+const { recordSystemSubmission } = require('./forms');
 
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
   'august', 'september', 'october', 'november', 'december'];
@@ -112,6 +113,8 @@ function recordWebsiteEnquiry(body = {}, now = new Date()) {
       .run('Follow up on website enquiry and book their tour',
         `${names} wrote in through the website contact form. The website promises a reply within 24 hours${prefers ? `; they prefer ${prefers}` : ''}.`,
         coupleId, tomorrow);
+    // The answers as an editable form response on the couple's record.
+    recordSystemSubmission('website-enquiry', coupleId, body);
     return { coupleId, created };
   });
 
@@ -242,6 +245,8 @@ function recordBookingRequest(body = {}, now = new Date()) {
       .run('Review booking request and send proposal',
         `${partner1} & ${partner2} sent a booking request through the website${summary ? ` (${summary})` : ''}. Check the dates are free, then send a proposal. Their answers are in the client notes.`,
         coupleId, tomorrow);
+    recordSystemSubmission('booking-request', coupleId, body,
+      BOOKING_FIELDS.map(([key, label]) => [key, label]));
     return { coupleId, created };
   });
 

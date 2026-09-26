@@ -35,6 +35,7 @@ import Pipeline from './pages/admin/Pipeline'
 import Proposals from './pages/admin/Proposals'
 import FormsAdmin from './pages/admin/Forms'
 import PublicProposal from './pages/PublicProposal'
+import PublicForm from './pages/PublicForm'
 import PortalForms from './pages/portal/Forms'
 
 function App() {
@@ -65,6 +66,7 @@ function App() {
           {/* Public: no auth needed */}
           <Route path="/sign/:token" element={<SignContract />} />
           <Route path="/proposal/:token" element={<PublicProposal />} />
+          <Route path="/form/:token" element={<PublicForm />} />
           <Route path="/inquire" element={<Inquire />} />
 
           {/* Admin/Staff routes */}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import FillFormModal from '../../components/FillFormModal'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   PlusIcon, TrashIcon, PencilIcon, ClipboardDocumentCheckIcon,
@@ -31,6 +32,7 @@ export default function Forms() {
   const [assignments, setAssignments] = useState([])
   const [assignCouple, setAssignCouple] = useState('')
   const [viewing, setViewing] = useState(null) // { assignment, responses }
+  const [filling, setFilling] = useState(null) // assignment id open for staff entry
 
   function load() {
     Promise.all([api.get('/api/forms'), api.get('/api/couples')])
@@ -46,7 +48,7 @@ export default function Forms() {
     setForm({
       title: data.title, description: data.description || '',
       fields: data.fields.map(f => ({
-        label: f.label, field_type: f.field_type, required: !!f.required,
+        id: f.id, label: f.label, field_type: f.field_type, required: !!f.required,
         options: f.options ? JSON.parse(f.options).join(', ') : '',
       })),
     })
@@ -69,7 +71,8 @@ export default function Forms() {
       const payload = {
         title: form.title, description: form.description,
         fields: form.fields.map(f => ({
-          label: f.label, field_type: f.field_type, required: f.required,
+          // The id keeps a question's existing answers attached when it is edited.
+          id: f.id, label: f.label, field_type: f.field_type, required: f.required,
           options: f.field_type === 'select' && f.options ? f.options.split(',').map(s => s.trim()).filter(Boolean) : null,
         })),
       }
@@ -228,9 +231,7 @@ export default function Forms() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{a.status}</span>
-                      {a.status === 'completed' && (
-                        <button onClick={() => viewResponses(a)} className="p-1 text-slate-400 hover:text-slate-700" title="View responses"><EyeIcon className="w-4 h-4" /></button>
-                      )}
+                      <button onClick={() => setFilling(a.id)} className="p-1 text-slate-400 hover:text-slate-700" title="View, fill in or edit answers"><PencilIcon className="w-4 h-4" /></button>
                     </div>
                   </div>
                 ))}
@@ -239,6 +240,8 @@ export default function Forms() {
           </div>
         </div>
       )}
+
+      <FillFormModal assignmentId={filling} api={api} onClose={() => setFilling(null)} onSaved={() => manage && openManage(manage)} />
 
       {/* Response viewer */}
       {viewing && (

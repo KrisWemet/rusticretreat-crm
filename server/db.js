@@ -591,6 +591,27 @@ db.exec(`
   );
 `);
 
+// ── Forms: staff entry, private links, and website submissions ────────────────
+// An assignment can now be filled in by staff, by the couple through a private
+// link (access_token, like a contract signing link), or by the website. forms.
+// system_key marks the forms the website fills; form_fields.field_key ties a
+// question to the website's field name so its answers land in the right place.
+for (const col of [
+  'ALTER TABLE form_assignments ADD COLUMN access_token TEXT',
+  'ALTER TABLE form_assignments ADD COLUMN token_expires_at DATETIME',
+  'ALTER TABLE form_assignments ADD COLUMN link_sent_at DATETIME',
+  'ALTER TABLE form_assignments ADD COLUMN filled_by TEXT',
+  'ALTER TABLE form_assignments ADD COLUMN updated_by TEXT',
+  'ALTER TABLE form_assignments ADD COLUMN updated_at DATETIME',
+  'ALTER TABLE forms ADD COLUMN system_key TEXT',
+  'ALTER TABLE form_fields ADD COLUMN field_key TEXT',
+]) { try { db.exec(col); } catch (_) {} }
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_form_assignments_token ON form_assignments(access_token) WHERE access_token IS NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_forms_system_key ON forms(system_key) WHERE system_key IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_form_assignments_couple ON form_assignments(couple_id);
+`);
+
 // Pipeline stage for the visual sales board + Stripe payment columns on invoices
 for (const col of [
   "ALTER TABLE couples ADD COLUMN pipeline_stage TEXT DEFAULT 'inquiry'",

@@ -109,6 +109,37 @@ async function sendContractLink({ to, coupleNames, contractTitle, signingUrl, si
   });
 }
 
+// ── Forms ────────────────────────────────────────────────────────────────────
+// Names and titles are typed by people, so they are escaped before going into
+// the HTML body.
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function sendFormLink({ to, cc, coupleNames, formTitle, path }) {
+  const url = `${BASE_URL}${path}`;
+  const recipients = [to, cc].filter(Boolean).join(', ');
+  return send({
+    to: recipients,
+    subject: `Please fill in: ${formTitle}`,
+    text: `Hi ${coupleNames},\n\nRustic Retreat has a short form for you: "${formTitle}".\n\nFill it in here: ${url}\n\nYou can come back to this link to change your answers. If you have any questions, just reply to this email.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
+<p>Rustic Retreat has a short form for you: <strong>"${esc(formTitle)}"</strong>.</p>
+<p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Fill in the form</a></p>
+<p>Or copy this link: <a href="${esc(url)}">${esc(url)}</a></p>
+<p style="color:#64748b;font-size:14px">You can come back to this link to change your answers.</p>
+<p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
+async function sendFormCompletedAdmin({ coupleNames, formTitle }) {
+  if (!ADMIN_EMAIL) return { delivered: false };
+  return send({
+    to: ADMIN_EMAIL,
+    subject: `${coupleNames} filled in ${formTitle}`,
+    text: `${coupleNames} have filled in "${formTitle}". Their answers are on their client page in the CRM.`,
+    html: `<p><strong>${esc(coupleNames)}</strong> have filled in <strong>"${esc(formTitle)}"</strong>.</p><p>Their answers are on their client page in the CRM.</p>`,
+  });
+}
+
 // ── Contract signed — confirmation to couple ─────────────────────────────────
 async function sendContractSignedCouple({ to, coupleNames, contractTitle, portalUrl, portalEnabled }) {
   const url = portalUrl || `${BASE_URL}/portal/login`;
@@ -333,6 +364,8 @@ module.exports = {
   sendContractSignedAdmin,
   sendNewMessageCouple,
   sendNewLeadAdmin,
+  sendFormLink,
+  sendFormCompletedAdmin,
   sendPaymentReminder,
   sendPaymentReceipt,
   sendTourRequestAdmin,

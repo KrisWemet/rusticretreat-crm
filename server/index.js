@@ -66,6 +66,8 @@ const PUBLIC_PATHS = [
   /^\/api\/contracts\/sign\//,       // …and the API that page calls, incl. /print
   /^\/proposal\//,                   // couple reviewing a proposal
   /^\/api\/proposals\/public\//,
+  /^\/form\//,                       // couple filling in a form from their private link
+  /^\/api\/forms\/public\//,          // …and the API that page calls (token + rate limit)
   /^\/inquire\/?$/,                  // public enquiry form
   /^\/api\/inquire/,
   /^\/assets\//,                     // JS/CSS the above pages need to render

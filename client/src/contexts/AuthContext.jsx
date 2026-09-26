@@ -11,6 +11,7 @@ const AuthContext = createContext(null)
 const PUBLIC_ROUTES = [
   /^\/sign\//,       // contract signing links
   /^\/proposal\//,   // proposal review links
+  /^\/form\//,       // private form links sent to couples
   /^\/inquire\/?$/,  // public enquiry form
 ]
 
