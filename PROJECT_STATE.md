@@ -6,7 +6,7 @@ does not rediscover the same landmines.
 
 Last updated: 2026-09-27 · branch `claude/wedding-crm-esign-integration-coau0z`.
 The owner-facing handoff (business rules, what was built when, open items) is
-`HANDOFF.md` in `KrisWemet/rustic-retreat-crm`; this file is the technical one.
+`HANDOFF.md` at the root of this repo; this file is the technical one.
 
 ---
 
