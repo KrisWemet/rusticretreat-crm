@@ -487,6 +487,8 @@ for (const col of [
   'ALTER TABLE packages ADD COLUMN season_prices TEXT',
   // When staff last marked an enquiry as personally followed up
   'ALTER TABLE couples ADD COLUMN contacted_at DATETIME',
+  // Archived couples are hidden from lists but keep all their records
+  'ALTER TABLE couples ADD COLUMN archived_at DATETIME',
 ]) { try { db.exec(col); } catch (_) {} }
 
 // Site tours — requested from the public inquiry form, scheduled by staff
@@ -1035,6 +1037,26 @@ function applyCredentialBootstrap() {
   }
 }
 applyCredentialBootstrap();
+
+// ── Activity log ─────────────────────────────────────────────────────────────
+// Who did what, and when, for the changes that matter afterwards: deletes,
+// archives, payments recorded, prices changed. detail holds a JSON snapshot of
+// what was removed or changed, so a deleted record can still be looked up.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    user_id INTEGER,
+    user_name TEXT,
+    action TEXT NOT NULL,
+    entity TEXT,
+    entity_id INTEGER,
+    couple_id INTEGER,
+    summary TEXT,
+    detail TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_activity_couple ON activity_log(couple_id, at);
+`);
 
 // ── One-time data changes ────────────────────────────────────────────────────
 // Recorded in app_migrations so each runs exactly once per database, however

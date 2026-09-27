@@ -375,7 +375,18 @@ export default function Contracts() {
 
   const deleteContract = async (id) => {
     if (!confirm('Delete this contract?')) return
-    await getAdminAxios().delete(`/api/contracts/${id}`)
+    try {
+      await getAdminAxios().delete(`/api/contracts/${id}`)
+    } catch (err) {
+      // A signed contract needs an admin to confirm a second time.
+      if (err.response?.data?.needs_confirm) {
+        if (!confirm('This contract is SIGNED. It is a legal record of the agreement. Delete it permanently anyway?')) return
+        try { await getAdminAxios().delete(`/api/contracts/${id}?confirm=signed`) }
+        catch (e) { return toast.error(e.response?.data?.error || 'Failed to delete') }
+      } else {
+        return toast.error(err.response?.data?.error || 'Failed to delete')
+      }
+    }
     toast.success('Deleted')
     fetchData()
   }

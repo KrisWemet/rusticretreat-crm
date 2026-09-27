@@ -30,7 +30,7 @@ const STAGE_LABEL = {
 export default function ClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { getAdminAxios } = useAuth()
+  const { getAdminAxios, user } = useAuth()
   const [couple, setCouple] = useState(null)
   const [stats, setStats] = useState(null)
   const [proposals, setProposals] = useState([])
@@ -107,15 +107,38 @@ export default function ClientDetail() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this couple? This cannot be undone.')) return
+  // Archiving hides a couple from every list but keeps all their records, so
+  // it can always be undone. Permanent deletion is admin-only and refused by
+  // the server while they have a signed contract or a paid invoice.
+  const handleArchive = async () => {
+    if (!confirm('Archive this couple? They will be hidden from your lists, but their bookings, contracts, payments and forms are kept, and you can restore them any time.')) return
     try {
-      const api = getAdminAxios()
-      await api.delete(`/api/couples/${id}`)
-      toast.success('Couple deleted')
+      await getAdminAxios().delete(`/api/couples/${id}`)
+      toast.success('Couple archived')
       navigate('/clients')
     } catch (err) {
-      toast.error('Failed to delete')
+      toast.error(err.response?.data?.error || 'Failed to archive')
+    }
+  }
+
+  const handleRestore = async () => {
+    try {
+      const { data } = await getAdminAxios().patch(`/api/couples/${id}/restore`)
+      setCouple(data)
+      toast.success('Couple restored')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to restore')
+    }
+  }
+
+  const handleDeletePermanently = async () => {
+    if (!confirm('Delete this couple permanently? Everything on their record is removed and this cannot be undone.')) return
+    try {
+      await getAdminAxios().delete(`/api/couples/${id}?permanent=1`)
+      toast.success('Couple deleted permanently')
+      navigate('/clients')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete', { duration: 7000 })
     }
   }
 
@@ -168,10 +191,24 @@ export default function ClientDetail() {
         <Button variant="secondary" size="sm" onClick={() => setShowEdit(true)}>
           <PencilIcon className="w-4 h-4" /> Edit
         </Button>
-        <Button variant="danger" size="sm" onClick={handleDelete}>
-          <TrashIcon className="w-4 h-4" /> Delete
-        </Button>
+        {!couple.archived_at && (
+          <Button variant="danger" size="sm" onClick={handleArchive}>
+            <TrashIcon className="w-4 h-4" /> Archive
+          </Button>
+        )}
       </div>
+
+      {couple.archived_at && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <span className="flex-1 min-w-[12rem]">
+            Archived on {format(new Date(couple.archived_at.replace(' ', 'T') + 'Z'), 'MMM d, yyyy')}. This couple is hidden from your lists; all their records are kept.
+          </span>
+          <Button variant="secondary" size="sm" onClick={handleRestore}>Restore</Button>
+          {user?.role === 'admin' && (
+            <Button variant="danger" size="sm" onClick={handleDeletePermanently}>Delete permanently</Button>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       {stats && (

@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { buildPaymentSchedule, normaliseCustomSchedule } = require('../services/paymentSchedule');
 const { authenticateToken } = require('../middleware/auth');
+const { logActivity } = require('../services/activity');
 const email = require('../services/email');
 
 // Totals across a couple's invoices: contracted, paid, and outstanding balance.
@@ -84,6 +85,8 @@ router.patch('/:id/paid', authenticateToken, (req, res) => {
   const { paid, payment_method } = req.body;
   const updated = markInvoicePaid(req.params.id, paid, payment_method);
   if (!updated) return res.status(404).json({ error: 'Invoice not found' });
+  logActivity(req, { action: paid ? 'invoice.paid' : 'invoice.unpaid', entity: 'invoice', entityId: updated.id, coupleId: updated.couple_id,
+    summary: `Marked "${updated.description}" ($${updated.amount}) ${paid ? 'paid' : 'unpaid'}` });
   res.json(updated);
 });
 
@@ -110,8 +113,18 @@ router.put('/:id', authenticateToken, (req, res) => {
 });
 
 // ── Admin: delete invoice ────────────────────────────────────────────────────
+// A paid invoice is the record of money received, so it cannot be deleted —
+// mark it unpaid first if it really was entered by mistake. Every deletion is
+// logged with what was removed.
 router.delete('/:id', authenticateToken, (req, res) => {
-  db.prepare('DELETE FROM invoices WHERE id = ?').run(req.params.id);
+  const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id);
+  if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+  if (invoice.paid) {
+    return res.status(409).json({ error: 'This invoice is marked paid. Mark it unpaid first if it was recorded by mistake.' });
+  }
+  db.prepare('DELETE FROM invoices WHERE id = ?').run(invoice.id);
+  logActivity(req, { action: 'invoice.deleted', entity: 'invoice', entityId: invoice.id, coupleId: invoice.couple_id,
+    summary: `Deleted invoice "${invoice.description}" ($${invoice.amount})`, detail: invoice });
   res.json({ success: true });
 });
 
@@ -156,7 +169,10 @@ router.post('/schedule/:coupleId', authenticateToken, (req, res) => {
     });
   });
 
-  res.status(201).json(replace());
+  const created = replace();
+  logActivity(req, { action: 'invoice.schedule', entity: 'couple', entityId: Number(req.params.coupleId), coupleId: Number(req.params.coupleId),
+    summary: `Replaced unpaid invoices with a ${custom !== undefined ? 'custom' : 'standard'} schedule of ${created.length} payment${created.length === 1 ? '' : 's'} (total $${total_price})` });
+  res.status(201).json(created);
 });
 
 module.exports = router;

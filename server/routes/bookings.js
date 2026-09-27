@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const { logActivity } = require('../services/activity');
 const { assertBookable, sendRuleError } = require('../services/bookingRules');
 
 // Get all bookings
@@ -141,6 +142,8 @@ router.delete('/:id', authenticateToken, (req, res) => {
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
   db.prepare('DELETE FROM bookings WHERE id = ?').run(req.params.id);
+  logActivity(req, { action: 'booking.deleted', entity: 'booking', entityId: booking.id, coupleId: booking.couple_id,
+    summary: `Deleted booking for ${booking.event_date || 'no date'}${booking.package_name ? ` (${booking.package_name})` : ''}`, detail: booking });
   res.json({ message: 'Booking deleted successfully' });
 });
 

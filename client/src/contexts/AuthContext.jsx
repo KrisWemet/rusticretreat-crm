@@ -28,7 +28,6 @@ export function AuthProvider({ children }) {
     const userData = localStorage.getItem('adminUser')
     if (token && userData) {
       setUser(JSON.parse(userData))
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
     }
 
     // Check for existing couple token
@@ -69,7 +68,6 @@ export function AuthProvider({ children }) {
     const { token, user: userData } = response.data
     localStorage.setItem('adminToken', token)
     localStorage.setItem('adminUser', JSON.stringify(userData))
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
     setUser(userData)
     return userData
   }
@@ -97,7 +95,6 @@ export function AuthProvider({ children }) {
     expiring.current = true
     localStorage.removeItem('adminToken')
     localStorage.removeItem('adminUser')
-    delete axios.defaults.headers.common['Authorization']
     setUser(null)
     toast.error('Your session has expired — please sign in again.')
     navigate('/login', { replace: true })
@@ -107,7 +104,6 @@ export function AuthProvider({ children }) {
   const logoutAdmin = () => {
     localStorage.removeItem('adminToken')
     localStorage.removeItem('adminUser')
-    delete axios.defaults.headers.common['Authorization']
     setUser(null)
     navigate('/login')
   }
@@ -146,6 +142,9 @@ export function AuthProvider({ children }) {
     return instance
   }
 
+  // The admin token travels only on requests made through this client, never as
+  // a global axios default, so public pages (signing, proposals, forms) do not
+  // send it even when staff are logged in on the same browser.
   const getAdminAxios = () => {
     const token = localStorage.getItem('adminToken')
     return attachInterceptors(

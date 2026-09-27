@@ -38,7 +38,8 @@ export default function Clients() {
     const api = getAdminAxios()
     const params = new URLSearchParams()
     if (search) params.append('search', search)
-    if (statusFilter) params.append('status', statusFilter)
+    if (statusFilter === 'archived') params.append('archived', '1')
+    else if (statusFilter) params.append('status', statusFilter)
     const r = await api.get(`/api/couples?${params}`)
     setCouples(r.data)
   }
@@ -91,7 +92,7 @@ export default function Clients() {
 
       {/* Status tabs + Search */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 flex-shrink-0">
+        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 flex-shrink-0 overflow-x-auto max-w-full">
           <button
             onClick={() => setStatusFilter('')}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${!statusFilter ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}
@@ -107,6 +108,13 @@ export default function Clients() {
               {s}
             </button>
           ))}
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'archived' ? '' : 'archived')}
+            title="Couples you archived. They keep all their records and can be restored."
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${statusFilter === 'archived' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'}`}
+          >
+            Archived
+          </button>
         </div>
         <div className="relative flex-1">
           <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />

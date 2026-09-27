@@ -13,6 +13,19 @@ const BOOTED_AT = new Date();
 // X-Forwarded-For value. The rate limiters key on req.ip.
 app.set('trust proxy', 1);
 
+// ── Security headers ─────────────────────────────────────────────────────────
+// No page of the CRM is meant to be shown inside another site (that is how
+// click-jacking works on a signing page), nothing should be sniffed as another
+// content type, and signing and proposal links carry their token in the URL,
+// so the full address is never sent to other sites as a referrer.
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  if (IS_PROD) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+  next();
+});
+
 // ── Preview gate ─────────────────────────────────────────────────────────────
 // While the CRM is deployed for private testing, CRM_GATE_KEY puts a shared
 // secret in front of the whole app: without the cookie every path 404s, so the
@@ -149,6 +162,14 @@ require('./services/backup').startBackupScheduler();
 // it and return index.html with a 200, making the platform healthcheck pass even
 // when every API router is broken.
 app.get('/api/health', (req, res) => {
+  // A trivial query proves the database file is open and readable; a server
+  // that is up but cannot reach its data is not healthy.
+  try {
+    require('./db').prepare('SELECT 1').get();
+  } catch (err) {
+    console.error('[health] database check failed:', err.message);
+    return res.status(503).json({ status: 'error', error: 'Database unavailable' });
+  }
   // uptime_seconds makes a crash loop visible from the outside: if this keeps
   // resetting to a few seconds, the process is dying and being restarted, which
   // is what a 502 on every page actually means.
@@ -177,9 +198,15 @@ if (IS_PROD) {
 }
 
 // Error handler
+// Internal error details go to the log, not to whoever made the request.
+// Requests that are simply malformed (a garbled URL from a bot, bad JSON, a
+// body too large) get their 4xx instead of being logged as a server fault.
 app.use((err, req, res, next) => {
+  if (err instanceof URIError) return res.status(400).json({ error: 'Bad request' });
+  const status = err.status || err.statusCode;
+  if (status >= 400 && status < 500) return res.status(status).json({ error: err.expose ? err.message : 'Bad request' });
   console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error', message: err.message });
+  res.status(500).json({ error: 'Something went wrong on our side. Please try again.' });
 });
 
 // ── Last-resort crash guards ─────────────────────────────────────────────────
