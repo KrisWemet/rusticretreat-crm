@@ -12,10 +12,13 @@ const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'rusticretreat
 // the server, which is what the download endpoint is for.
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(path.dirname(DB_PATH), 'backups');
 
-const KEEP = Number(process.env.BACKUP_KEEP || 14);
-const INTERVAL_HOURS = Number(process.env.BACKUP_INTERVAL_HOURS || 24);
+// Daily and manual snapshots kept on the volume, plus the snapshots taken
+// automatically just before a data migration runs (see runOnce in db.js).
+const KEEP = Number(process.env.BACKUP_KEEP || 30);
+const KEEP_PRE_MIGRATION = 10;
+const INTERVAL_HOURS = 24; // once a day, run by the daily job runner
 
-const FILE_RE = /^rusticretreat-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z\.db$/;
+const FILE_RE = /^(rusticretreat|pre-migration)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z(-[a-z0-9-]+)?\.db$/;
 
 function stamp(d = new Date()) {
   return d.toISOString().replace(/\.\d+Z$/, 'Z').replace(/:/g, '-');
@@ -29,8 +32,12 @@ function stamp(d = new Date()) {
  * checkpoint: copying only the .db would silently produce a backup missing the
  * newest bookings and signatures, which is worse than no backup because it
  * looks fine until you restore it.
+ *
+ * The snapshot is then copied off the volume to the storage bucket, when one
+ * is configured. With requireOffsite, a failed upload is an error (the daily
+ * job, so the venue is alerted); otherwise it is reported in the result.
  */
-async function createBackup() {
+async function createBackup({ requireOffsite = false } = {}) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
   const name = `rusticretreat-${stamp()}.db`;
   const dest = path.join(BACKUP_DIR, name);
@@ -39,14 +46,25 @@ async function createBackup() {
 
   const { size } = fs.statSync(dest);
   const pruned = pruneOldBackups();
-  return { name, path: dest, size, pruned };
+
+  let offsite;
+  try {
+    offsite = await require('./offsite').uploadBackup(dest, name);
+  } catch (err) {
+    if (requireOffsite) throw new Error(`Backup ${name} was saved on the server, but the off-site copy failed: ${err.message}`);
+    offsite = { uploaded: false, error: err.message };
+  }
+  return { name, path: dest, size, pruned, offsite };
 }
 
-// Keep the most recent KEEP snapshots. Retention runs after a successful
-// backup, never before — a failed backup must not take the old ones with it.
+// Retention runs after a successful backup, never before — a failed backup
+// must not take the old ones with it. Each kind keeps its own newest copies.
 function pruneOldBackups() {
   const files = listBackups();
-  const stale = files.slice(KEEP);
+  const stale = [
+    ...files.filter(f => f.kind === 'daily').slice(KEEP),
+    ...files.filter(f => f.kind === 'pre-migration').slice(KEEP_PRE_MIGRATION),
+  ];
   for (const f of stale) {
     try { fs.unlinkSync(path.join(BACKUP_DIR, f.name)); } catch { /* already gone */ }
   }
@@ -60,9 +78,10 @@ function listBackups() {
     .filter(n => FILE_RE.test(n))
     .map(n => {
       const s = fs.statSync(path.join(BACKUP_DIR, n));
-      return { name: n, size: s.size, created_at: s.mtime.toISOString() };
+      return { name: n, size: s.size, created_at: s.mtime.toISOString(),
+        kind: n.startsWith('pre-migration-') ? 'pre-migration' : 'daily' };
     })
-    .sort((a, b) => b.name.localeCompare(a.name));
+    .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.name.localeCompare(a.name));
 }
 
 // Resolve a caller-supplied backup name to a real path, or null.
@@ -75,33 +94,15 @@ function resolveBackup(name) {
   return fs.existsSync(full) ? full : null;
 }
 
-function startBackupScheduler() {
-  if (INTERVAL_HOURS <= 0) {
-    console.log('[backup] Scheduler disabled (BACKUP_INTERVAL_HOURS=0)');
-    return null;
-  }
-  const runOnce = async () => {
-    try {
-      const r = await createBackup();
-      console.log(`[backup] Wrote ${r.name} (${(r.size / 1024).toFixed(0)} KB)` +
-                  (r.pruned ? `, pruned ${r.pruned} old` : ''));
-    } catch (err) {
-      // A failed backup must never take the app down with it.
-      console.error('[backup] Failed:', err.message);
-    }
-  };
-
-  // Take one shortly after boot so a fresh deploy always has a restore point,
-  // then settle into the regular interval.
-  const first = setTimeout(runOnce, 60_000);
-  const timer = setInterval(runOnce, INTERVAL_HOURS * 3600_000);
-  if (first.unref) first.unref();
-  if (timer.unref) timer.unref();
-  console.log(`[backup] Scheduler started — every ${INTERVAL_HOURS}h, keeping ${KEEP}, in ${BACKUP_DIR}`);
-  return timer;
+// The daily job (services/schedule.js): snapshot, prune, copy off-site.
+async function dailyBackup() {
+  const r = await createBackup({ requireOffsite: true });
+  const off = r.offsite?.uploaded ? `, copied off-site (${r.offsite.kept} kept)` : ' (no off-site bucket configured)';
+  console.log(`[backup] Wrote ${r.name} (${(r.size / 1024).toFixed(0)} KB)` + (r.pruned ? `, pruned ${r.pruned} old` : '') + off);
+  return { name: r.name, size: r.size, offsite: !!r.offsite?.uploaded };
 }
 
 module.exports = {
-  createBackup, listBackups, resolveBackup, startBackupScheduler,
+  createBackup, dailyBackup, listBackups, resolveBackup,
   BACKUP_DIR, KEEP, INTERVAL_HOURS,
 };

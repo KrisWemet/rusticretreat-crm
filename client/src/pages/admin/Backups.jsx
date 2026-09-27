@@ -9,6 +9,15 @@ import {
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
 
+const JOB_LABEL = {
+  'backup': 'Backup (2 am)',
+  'complete-past-weddings': 'Mark finished weddings completed (3 am)',
+  'expire-proposals': 'Expire old proposals (3 am)',
+  'payment-reminders': 'Payment reminders to couples (8 am)',
+  'follow-ups': 'Follow-up alerts to you (8 am)',
+  'morning-summary': 'Morning summary email (7 am)',
+}
+
 function fmtSize(bytes) {
   if (bytes > 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
   return `${Math.round(bytes / 1024)} KB`
@@ -35,7 +44,8 @@ export default function Backups() {
     setRunning(true)
     try {
       const r = await getAdminAxios().post('/api/backup')
-      toast.success(`Backup created (${fmtSize(r.data.size)})`)
+      if (r.data.offsite?.error) toast.error(`Backup saved on the server, but the off-site copy failed: ${r.data.offsite.error}`, { duration: 8000 })
+      else toast.success(`Backup created (${fmtSize(r.data.size)})${r.data.offsite?.uploaded ? ' and copied off-site' : ''}`)
       fetchData()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Backup failed')
@@ -71,7 +81,7 @@ export default function Backups() {
           <h1 className="page-title">Backups</h1>
           <p className="page-subtitle">
             {backups.length} snapshot{backups.length === 1 ? '' : 's'}
-            {data ? ` · every ${data.interval_hours}h · keeping ${data.keep}` : ''}
+            {data ? ` · daily at 2 am (Alberta) · keeping ${data.keep} on the server` : ''}
           </p>
         </div>
         <button className="btn-primary" onClick={runBackup} disabled={running}>
@@ -81,7 +91,22 @@ export default function Backups() {
       </div>
 
       {/* The limitation that matters. Snapshots live beside the database on the
-          same volume, so they cover mistakes but not losing the volume. */}
+          same volume, so they cover mistakes but not losing the volume — unless
+          each one is also copied to the off-site bucket. */}
+      {data?.offsite_configured ? (
+        <div className="card p-4 border-emerald-200 bg-emerald-50">
+          <div className="flex items-start gap-3">
+            <ShieldCheckIcon className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-emerald-900">
+              <p className="font-semibold mb-1">Off-site copies are on</p>
+              <p className="text-emerald-800">
+                Each daily backup is also copied to separate storage (a Railway storage bucket), which keeps the
+                newest {data.offsite_keep}. If the daily backup or its copy ever fails, you are emailed.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="card p-4 border-amber-200 bg-amber-50">
         <div className="flex items-start gap-3">
           <ExclamationTriangleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -95,6 +120,7 @@ export default function Backups() {
           </div>
         </div>
       </div>
+      )}
 
       <div className="card overflow-x-auto">
         {loading ? (
@@ -104,7 +130,7 @@ export default function Backups() {
         ) : backups.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
             <ShieldCheckIcon className="w-10 h-10 mx-auto mb-3 text-slate-200" />
-            <p>No backups yet. The first one runs automatically a minute after startup.</p>
+            <p>No backups yet. They run automatically every night, or use "Back up now".</p>
           </div>
         ) : (
           <table className="table">
@@ -116,6 +142,11 @@ export default function Backups() {
                 <tr key={b.name}>
                   <td className="text-slate-700">
                     {format(parseISO(b.created_at), 'MMM d, yyyy · h:mm a')}
+                    {b.kind === 'pre-migration' && (
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium" title="Taken automatically just before an update changed data">
+                        before update
+                      </span>
+                    )}
                     {i === 0 && (
                       <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
                         latest
@@ -136,6 +167,27 @@ export default function Backups() {
           </table>
         )}
       </div>
+
+      {data?.jobs?.length > 0 && (
+        <div className="card overflow-x-auto">
+          <table className="table">
+            <thead><tr><th>Daily job</th><th>Last run</th><th>Result</th></tr></thead>
+            <tbody>
+              {data.jobs.map(j => (
+                <tr key={j.name}>
+                  <td className="text-slate-700">{JOB_LABEL[j.name] || j.name}</td>
+                  <td className="text-slate-500">{j.last_run_at ? format(new Date(j.last_run_at.replace(' ', 'T') + 'Z'), 'MMM d · h:mm a') : '—'}</td>
+                  <td>
+                    {j.last_status === 'ok' && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">OK</span>}
+                    {j.last_status === 'error' && <span className="text-xs text-red-600" title={j.last_error}>Failed: {j.last_error}</span>}
+                    {j.last_status === 'running' && <span className="text-xs text-slate-500">Running…</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {data && (
         <p className="text-xs text-slate-400">

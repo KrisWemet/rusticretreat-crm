@@ -152,10 +152,17 @@ app.use('/api/forms', require('./routes/forms'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/backup', require('./routes/backup'));
 
-// Start background schedulers
-require('./services/paymentReminder').startReminderScheduler();
-require('./services/leadNurture').startLeadNurtureScheduler();
-require('./services/backup').startBackupScheduler();
+// ── Daily jobs (Alberta time; see services/schedule.js) ─────────────────────
+const schedule = require('./services/schedule');
+const housekeeping = require('./services/housekeeping');
+schedule.registerJob('backup', 2, () => require('./services/backup').dailyBackup());
+schedule.registerJob('complete-past-weddings', 3, ({ day }) => housekeeping.completePastWeddings(day));
+schedule.registerJob('expire-proposals', 3, ({ day }) => housekeeping.expireProposals(day));
+schedule.registerJob('payment-reminders', 8, () => require('./services/paymentReminder').checkAndSendReminders());
+schedule.registerJob('follow-ups', 8, () => require('./services/leadNurture').checkFollowUps());
+// A job that fails (a backup above all) is emailed to the venue, not just logged.
+schedule.setFailureHandler((name, err) => require('./services/email').sendJobFailureAdmin({ job: name, error: err.message }));
+if (process.env.NODE_ENV !== 'test') schedule.startScheduler();
 
 // Health check. Must be registered BEFORE the production SPA catch-all below —
 // Express matches in registration order, so app.get('*') would otherwise shadow

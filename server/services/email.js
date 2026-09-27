@@ -81,21 +81,59 @@ async function sendViaResend({ to, subject, html, text, replyTo }) {
 // Incidental notifications just ignore the result and carry on, since a failed
 // courtesy email must not roll back a signature that is already recorded.
 // `to` may be one address or a list; replyTo, when given, is where a reply goes.
-async function send({ to, subject, html, text, replyTo }) {
+async function send({ to, subject, html, text, replyTo, coupleId, kind }) {
   if (Array.isArray(to)) to = to.filter(Boolean);
-  if (!to || to.length === 0) return { delivered: false, error: 'No recipient address' };
-  if (!configured) {
+  let result;
+  if (!to || to.length === 0) {
+    result = { delivered: false, error: 'No recipient address' };
+  } else if (!configured) {
     console.log(`[EMAIL – not configured] To: ${to} | Subject: ${subject}`);
-    return { delivered: false, error: 'Email is not configured on this server' };
+    result = { delivered: false, error: 'Email is not configured on this server' };
+  } else {
+    try {
+      if (RESEND_API_KEY) await sendViaResend({ to, subject, html, text, replyTo });
+      else await transporter.sendMail({ from: SMTP_FROM, to, subject, html, text, ...(replyTo ? { replyTo } : {}) });
+      result = { delivered: true };
+    } catch (err) {
+      console.error('[EMAIL send error]', to, err.message);
+      result = { delivered: false, error: err.message };
+    }
   }
+  logEmail({ to, subject, coupleId, kind, result });
+  return result;
+}
+
+// Record the attempt in email_log. The couple is taken from the caller when
+// known, otherwise matched by recipient address, so a couple's page can list
+// everything they were sent. Never throws.
+function logEmail({ to, subject, coupleId, kind, result }) {
   try {
-    if (RESEND_API_KEY) await sendViaResend({ to, subject, html, text, replyTo });
-    else await transporter.sendMail({ from: SMTP_FROM, to, subject, html, text, ...(replyTo ? { replyTo } : {}) });
-    return { delivered: true };
+    const db = require('../db');
+    const list = (Array.isArray(to) ? to : [to]).filter(Boolean).map(a => String(a).toLowerCase());
+    let id = coupleId || null;
+    if (!id && list.length) {
+      const hit = db.prepare(`SELECT id FROM couples WHERE LOWER(email) IN (${list.map(() => '?').join(',')})
+                              OR LOWER(partner2_email) IN (${list.map(() => '?').join(',')}) LIMIT 1`).get(...list, ...list);
+      id = hit ? hit.id : null;
+    }
+    db.prepare('INSERT INTO email_log (couple_id, kind, to_addr, subject, delivered, error) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(id, kind || null, list.join(', ') || null, subject || null, result.delivered ? 1 : 0, result.error || null);
   } catch (err) {
-    console.error('[EMAIL send error]', to, err.message);
-    return { delivered: false, error: err.message };
+    console.error('[EMAIL log]', err.message);
   }
+}
+
+// ── A daily job failed — tell the venue ──────────────────────────────────────
+async function sendJobFailureAdmin({ job, error }) {
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  const what = job === 'backup' ? 'the daily backup' : `the daily "${job}" job`;
+  return send({
+    to: ADMIN_EMAIL,
+    kind: 'job-failure',
+    subject: `CRM problem: ${what} failed`,
+    text: `The CRM could not complete ${what} today.\n\nError: ${error}\n\nIt will try again tomorrow. If this keeps happening, check the Railway logs.`,
+    html: `<p>The CRM could not complete <strong>${esc(what)}</strong> today.</p><p style="color:#666">Error: ${esc(error)}</p><p>It will try again tomorrow. If this keeps happening, check the Railway logs.</p>`,
+  });
 }
 
 // ── Contract sent to couple ──────────────────────────────────────────────────
@@ -109,6 +147,7 @@ async function sendContractLink({ to, coupleNames, contractTitle, signingUrl, si
   // Returned, not swallowed: the caller needs to know whether the link actually
   // went out before it tells staff the couple has been notified.
   return send({
+    kind: 'contract-link',
     to,
     subject: `Your contract is ready to sign — ${contractTitle}`,
     text: `Hi ${greeting},\n\nYour contract "${contractTitle}" from Rustic Retreat is ready for your review and digital signature.\n\nSign here: ${fullUrl}\n\n${note}\n\nIf you have any questions, please reply to this email.\n\nWarm regards,\nRustic Retreat`,
@@ -130,6 +169,7 @@ async function sendFormLink({ to, cc, coupleNames, formTitle, path }) {
   const url = `${BASE_URL}${path}`;
   const recipients = [...new Set([to, cc].filter(Boolean))];
   return send({
+    kind: 'form-link',
     to: recipients,
     subject: `Please fill in: ${formTitle}`,
     text: `Hi ${coupleNames},\n\nRustic Retreat has a short form for you: "${formTitle}".\n\nFill it in here: ${url}\n\nYou can come back to this link to change your answers. If you have any questions, just reply to this email.\n\nWarm regards,\nRustic Retreat`,
@@ -145,6 +185,7 @@ async function sendFormLink({ to, cc, coupleNames, formTitle, path }) {
 async function sendFormCompletedAdmin({ coupleNames, formTitle }) {
   if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
   return send({
+    kind: 'form-completed',
     to: ADMIN_EMAIL,
     subject: `${coupleNames} filled in ${formTitle}`,
     text: `${coupleNames} have filled in "${formTitle}". Their answers are on their client page in the CRM.`,
@@ -163,6 +204,7 @@ async function sendWebsiteSubmissionAdmin({ kind, coupleNames, email: coupleEmai
   const rows = answers.map(([label, value]) =>
     `<tr><td style="color:#666;vertical-align:top;padding:4px 12px 4px 0">${esc(label)}</td><td style="padding:4px 0;white-space:pre-wrap">${esc(value)}</td></tr>`).join('');
   return send({
+    kind: 'website-submission',
     to: ADMIN_EMAIL,
     replyTo: coupleEmail,
     subject: `${heading}: ${coupleNames}`,
@@ -190,6 +232,7 @@ async function sendContractSignedCouple({ to, coupleNames, contractTitle, portal
         html: '<p>We will be in touch shortly with your next steps.</p>',
       };
   return send({
+    kind: 'contract-signed',
     to,
     subject: `Contract signed — welcome to Rustic Retreat! 🎉`,
     text: `Hi ${coupleNames},\n\nThank you for signing "${contractTitle}". Your booking with Rustic Retreat is now confirmed!${portalBlock.text}\n\nWarm regards,\nRustic Retreat`,
@@ -204,6 +247,7 @@ ${portalBlock.html}
 async function sendContractSignedAdmin({ coupleNames, contractTitle, signerName, signedAt, note }) {
   if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
   return send({
+    kind: 'contract-signed-admin',
     to: ADMIN_EMAIL,
     subject: `Contract signed by ${signerName} — ${coupleNames}`,
     text: `${signerName} has signed "${contractTitle}" for ${coupleNames} at ${signedAt}.${note ? `\n\n${note}` : ''}`,
@@ -218,6 +262,7 @@ async function sendNewMessageCouple({ to, coupleNames, senderName, preview }) {
     ? { text: `Reply here: ${url}`, html: `<p><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">Reply in Portal</a></p>` }
     : { text: 'Just reply to this email.', html: '<p>Just reply to this email.</p>' };
   return send({
+    kind: 'message',
     to,
     subject: `New message from ${senderName} — Rustic Retreat`,
     text: `Hi ${coupleNames},\n\n${senderName} sent you a message:\n\n"${preview}"\n\n${reply.text}`,
@@ -232,6 +277,7 @@ ${reply.html}`,
 async function sendNewLeadAdmin({ coupleNames, email, phone, weddingDate, guestCount, message }) {
   if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
   return send({
+    kind: 'new-lead',
     to: ADMIN_EMAIL,
     replyTo: email || undefined,
     subject: `New inquiry from ${coupleNames}`,
@@ -275,6 +321,7 @@ async function sendPaymentReminder({ to, coupleNames, description, amount, dueDa
   const urgency = dueWording(daysUntilDue);
   const pay = howToPay({ coupleNames, description });
   return send({
+    kind: 'payment-reminder',
     to,
     subject: `Payment reminder: ${description} due ${urgency}`,
     text: `Hi ${coupleNames},\n\nThis is a friendly reminder that your payment "${description}" of $${money(amount)} CAD is due ${urgency} (${dueDate}).\n\n${pay.text}\n\nIf you have already paid, thank you, and please ignore this reminder. Questions? Just reply to this email.\n\nWarm regards,\nRustic Retreat`,
@@ -302,6 +349,7 @@ async function sendPaymentReceipt({ to, coupleNames, description, amount, paymen
     : { text: '\n\nQuestions about your payment schedule? Just reply to this email.',
         html: '<p>Questions about your payment schedule? Just reply to this email.</p>' };
   return send({
+    kind: 'payment-receipt',
     to,
     subject: `Payment received — ${description} (Rustic Retreat)`,
     text: `Hi ${coupleNames},\n\nThis confirms we've received your payment. Thank you!\n\nPayment: ${description}\nAmount: $${money(amount)} CAD\nMethod: ${paymentMethod}\nDate: ${paidDate}\n\n${balanceLine}${scheduleLink.text}\n\nWarm regards,\nRustic Retreat`,
@@ -323,6 +371,7 @@ ${scheduleLink.html}
 async function sendTourRequestAdmin({ coupleNames, email: coupleEmail, phone, preferredDate }) {
   if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
   return send({
+    kind: 'tour-request',
     to: ADMIN_EMAIL,
     replyTo: coupleEmail || undefined,
     subject: `Site tour requested — ${coupleNames}`,
@@ -345,6 +394,7 @@ async function sendColdLeadAdmin({ coupleNames, email: coupleEmail, phone, daysO
   if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
   const url = coupleId ? `${BASE_URL}/clients/${coupleId}` : `${BASE_URL}/clients`;
   return send({
+    kind: 'follow-up-alert',
     to: ADMIN_EMAIL,
     replyTo: coupleEmail || undefined,
     subject: `Needs a follow-up — ${coupleNames} (${daysOld} days since their enquiry)`,
@@ -363,6 +413,7 @@ async function sendColdLeadAdmin({ coupleNames, email: coupleEmail, phone, daysO
 async function sendProposal({ to, coupleNames, title, total, token }) {
   const url = `${BASE_URL}/proposal/${token}`;
   return send({
+    kind: 'proposal',
     to,
     subject: `Your proposal from Rustic Retreat — ${title}`,
     text: `Hi ${coupleNames},\n\nYour personalized proposal "${title}" is ready to review.\n\nTotal: $${money(total)} CAD (incl. GST)\n\nReview and accept online here: ${url}\n\nQuestions? Just reply to this email.\n\nWarm regards,\nRustic Retreat`,
@@ -382,6 +433,7 @@ async function sendProposal({ to, coupleNames, title, total, token }) {
 async function sendProposalAcceptedAdmin({ coupleNames, title, total, acceptedName }) {
   if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
   return send({
+    kind: 'proposal-accepted',
     to: ADMIN_EMAIL,
     subject: `🎉 Proposal accepted — ${coupleNames}`,
     text: `${acceptedName} accepted "${title}" for ${coupleNames}.\n\nTotal: $${money(total)} CAD\n\nA booking and deposit invoice have been created automatically.`,
@@ -404,6 +456,7 @@ async function sendProposalAcceptedAdmin({ coupleNames, title, total, acceptedNa
 async function sendUnmatchedSmsAdmin({ fromNumber, text, receivedAt }) {
   if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
   return send({
+    kind: 'unmatched-sms',
     to: ADMIN_EMAIL,
     subject: `Text from an unknown number (${fromNumber})`,
     text: `A text arrived from a number that matches no couple in the CRM.\n\nFrom: ${fromNumber}\nReceived: ${receivedAt}\n\nMessage:\n${text}\n\nAdd this number to the right couple to have future texts thread automatically.`,
@@ -419,6 +472,7 @@ async function sendUnmatchedSmsAdmin({ fromNumber, text, receivedAt }) {
 
 module.exports = {
   send,
+  sendJobFailureAdmin,
   esc,
   dueWording,
   sendUnmatchedSmsAdmin,

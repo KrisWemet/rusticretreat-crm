@@ -4,8 +4,9 @@ Running handoff document. **Update it when you change something structural, hit
 a trap worth recording, or change the deployment.** It exists so a new session
 does not rediscover the same landmines.
 
-Last updated: 2026-08-20 · branch `claude/wedding-crm-esign-integration-coau0z`
-· HEAD `d9104bf`
+Last updated: 2026-09-27 · branch `claude/wedding-crm-esign-integration-coau0z`.
+The owner-facing handoff (business rules, what was built when, open items) is
+`HANDOFF.md` in `KrisWemet/rustic-retreat-crm`; this file is the technical one.
 
 ---
 
@@ -18,9 +19,11 @@ Two repos exist. **`KrisWemet/e-sign` is empty** — one commit, a README. It ne
 held code. All signing lives in this repo; there is nothing to merge or
 integrate. Its README now says so.
 
-The CRM is **not** connected to the public wedding website, deliberately.
+The public website's contact and booking-request forms post to the CRM
+(`/api/inquire/website`, `/api/inquire/booking-request`); the CRM emails the
+venue, and the site falls back to Formspree if the CRM is unreachable.
 
-**Live:** `https://rusticretreat-crm-production.up.railway.app` on Railway,
+**Live:** `https://crm.rusticretreatalberta.ca` (signing links on `sign.`), on Railway,
 project `refreshing-analysis` (auto-generated name), service `rusticretreat-crm`.
 
 ---
@@ -60,7 +63,7 @@ the default price for weddings in that year; `services/packagePricing.js` and
 `client/src/utils/packagePrice.js`. Contract packets carry a `season` and a
 contract for a wedding in another year is refused. The 2028 agreement is derived
 from the 2027 one and differs only in its price table.
-- **SMS / unified inbox** — researched and scoped, not built. See below.
+- **SMS / unified inbox** — code exists (`services/sms.js`, `routes/sms.js`) but is off: no provider keys are set. See below.
 - **Vercel** — the original target, deferred. See below.
 
 ---
@@ -542,8 +545,10 @@ the dashboard is tidier and equivalent.
 **Admin login:** `admin@rusticretreat.com` — password was set via the bootstrap.
 The seeded `admin123` and the second staff login are disabled.
 
-**Reaching the app:** `https://<host>/?gate=<CRM_GATE_KEY>` sets a 30-day cookie.
-Without it every non-public path 404s, by design.
+**Access gate:** off. `CRM_PUBLIC=1` is set and the owner chose to keep it that
+way (the admin login protects the CRM). With a `CRM_GATE_KEY` instead,
+`https://<host>/?gate=<key>` would set a 30-day cookie and every non-public path
+would 404 without it.
 
 **Resend:** domain `rusticretreatalberta.ca` shows `partially_failed`, which is
 misleading — DKIM and SPF are **verified**; only the inbound MX record failed,
@@ -602,15 +607,17 @@ See `DEPLOY.md` for the full write-up.
 
 ### Smaller open items
 
-- Demo seed data still in the live database. Clear with
-  `npm run reset-data --prefix server -- --yes` (keeps logins and venue setup;
-  `--everything` also clears packages/add-ons/forms; refuses without `--yes`).
-- No off-site backup — snapshots are downloaded by hand today.
+- Demo couples were removed from the live database by the one-time migration
+  `remove-demo-couples-2026-09`. **Never run `reset-data` on the live database.**
+- Backups: nightly at 2 am Alberta time, 30 kept on the volume, plus a snapshot
+  before any data migration, plus an off-site copy in a Railway storage bucket
+  when the `BACKUP_BUCKET*` variables are set (see `.env.example`). A failed
+  backup or upload is emailed to `ADMIN_EMAIL`.
+- Daily jobs run in Alberta time from one runner (`services/schedule.js`,
+  recorded in `job_runs`); the Backups page shows each job's last run.
 - The printable executed contract has never been eyeballed by the owner in
   production (verified locally: toolbar hidden, three signature blocks, all
   three parties labelled).
-- `GET /api/messages/unread/count` is dead code; the sidebar Messages badge is
-  wired but never fed.
 - `ETRANSFER_EMAIL` is **not set on Railway**. Not urgent: the built-in default
   is the confirmed address, so the live app is already correct.
 - The two contract templates still disagree; see the trap above.
@@ -619,8 +626,10 @@ See `DEPLOY.md` for the full write-up.
 
 ## Testing
 
-There is no test suite. Verification has been: run the production build locally
-and drive it with Playwright + Chromium (`/opt/pw-browsers/chromium`,
+`npm test --prefix server` runs the server tests (`server/test/*.test.js`, Node's
+built-in runner), and CI runs them plus a client build on every push and PR
+(`.github/workflows/server-tests.yml`). For screens, run the production build
+locally and drive it with Playwright + Chromium (`/opt/pw-browsers/chromium`,
 `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`; do not run `playwright install`).
 
 ```bash

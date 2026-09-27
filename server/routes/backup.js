@@ -16,6 +16,9 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
       directory: backup.BACKUP_DIR,
       keep: backup.KEEP,
       interval_hours: backup.INTERVAL_HOURS,
+      offsite_configured: require('../services/offsite').configured(),
+      offsite_keep: require('../services/offsite').KEEP,
+      jobs: require('../services/schedule').jobStatus(),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -26,7 +29,7 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
 router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const r = await backup.createBackup();
-    res.status(201).json({ success: true, name: r.name, size: r.size, pruned: r.pruned });
+    res.status(201).json({ success: true, name: r.name, size: r.size, pruned: r.pruned, offsite: r.offsite });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
