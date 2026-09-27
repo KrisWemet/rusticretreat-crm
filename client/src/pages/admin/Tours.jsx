@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
 import Input, { Textarea, Select } from '../../components/ui/Input'
@@ -52,8 +52,18 @@ export default function Tours() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const openAdd = async () => {
-    setAddForm({ couple_id: '', name: '', email: '', phone: '', scheduled_at: '', notes: '' })
+  const [params, setParams] = useSearchParams()
+  // From the calendar: /tours?new=2026-10-03 opens "Add tour" on that day.
+  useEffect(() => {
+    const day = params.get('new')
+    if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return
+    openAdd(`${day}T10:00`)
+    setParams({}, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const openAdd = async (scheduledAt = '') => {
+    setAddForm({ couple_id: '', name: '', email: '', phone: '', scheduled_at: typeof scheduledAt === 'string' ? scheduledAt : '', notes: '' })
     setAdding(true)
     if (!couples.length) getAdminAxios().get('/api/couples').then(r => setCouples(r.data)).catch(() => {})
   }

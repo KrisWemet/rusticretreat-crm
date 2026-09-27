@@ -173,13 +173,16 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
     setInvalid(f => ({ ...f, [key]: true }))
   }
 
+  // Both the × and the Close button ask before throwing away unsaved answers.
+  const closeGuarded = () => {
+    if (dirty && !window.confirm('You have unsaved changes. Close anyway?')) return
+    onClose()
+  }
+
   return (
     <Modal
       isOpen={!!contract}
-      onClose={() => {
-        if (dirty && !window.confirm('You have unsaved changes. Close anyway?')) return
-        onClose()
-      }}
+      onClose={closeGuarded}
       title="Prepare contract"
       size="xl"
     >
@@ -270,7 +273,7 @@ export default function PrepareContractModal({ contract, onClose, onSaved }) {
                 {dirty ? 'Unsaved changes' : 'All changes saved'}
               </p>
               <div className="flex gap-2">
-                <button type="button" onClick={onClose}
+                <button type="button" onClick={closeGuarded}
                   className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
                   Close
                 </button>

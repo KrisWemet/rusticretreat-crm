@@ -23,6 +23,7 @@ export default function Pipeline() {
   const [loading, setLoading] = useState(true)
   const [dragId, setDragId] = useState(null)
   const [dragOver, setDragOver] = useState(null)
+  const [search, setSearch] = useState('')
 
   const api = getAdminAxios()
 
@@ -60,9 +61,12 @@ export default function Pipeline() {
 
   return (
     <div className="p-6 space-y-5">
-      <div>
-        <h1 className="page-title">Sales Pipeline</h1>
-        <p className="page-subtitle">Drag couples between stages as they move toward booking</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="page-title">Sales Pipeline</h1>
+          <p className="page-subtitle">Drag a card, or use “Move to”, as couples move toward booking</p>
+        </div>
+        <input type="search" aria-label="Search the pipeline" placeholder="Search couples…" value={search} onChange={e => setSearch(e.target.value)} className="input-field w-full sm:w-64" />
       </div>
 
       {loading ? (
@@ -70,7 +74,9 @@ export default function Pipeline() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
           {STAGES.map(stage => {
+            const q = search.trim().toLowerCase()
             const list = couples.filter(c => stageOf(c) === stage.key)
+              .filter(c => !q || `${c.partner1_name} ${c.partner2_name} ${c.email || ''}`.toLowerCase().includes(q))
             const value = valueOf(list)
             return (
               <div
@@ -108,6 +114,16 @@ export default function Pipeline() {
                       {c.referral_source && (
                         <div className="text-[10px] text-slate-400 mt-1.5 inline-block bg-slate-50 px-1.5 py-0.5 rounded">{c.referral_source}</div>
                       )}
+                      {/* Drag and drop does not work on phones and tablets; this does. */}
+                      <select
+                        aria-label={`Move ${c.partner1_name} & ${c.partner2_name} to another stage`}
+                        value=""
+                        onChange={e => e.target.value && moveTo(c.id, e.target.value)}
+                        className="mt-2 w-full text-xs border border-slate-200 rounded px-1.5 py-1 bg-white text-slate-500"
+                      >
+                        <option value="">Move to…</option>
+                        {STAGES.filter(s => s.key !== stage.key).map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                      </select>
                     </div>
                   ))}
                   {list.length === 0 && (

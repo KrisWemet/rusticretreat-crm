@@ -992,6 +992,18 @@ function applyCredentialBootstrap() {
     throw new Error('ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters');
   }
   const email = process.env.ADMIN_EMAIL_LOGIN || 'admin@rusticretreat.com';
+
+  // Applied once per value. Staff can now change their password in the CRM
+  // (Settings), and a variable left set must not quietly undo that on every
+  // deploy. Setting a different value applies again.
+  db.exec('CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)');
+  const fingerprint = crypto.createHash('sha256').update(`${email}\n${pw}`).digest('hex');
+  const applied = db.prepare("SELECT value FROM app_settings WHERE key = 'bootstrap_applied'").get();
+  if (applied && applied.value === fingerprint) {
+    console.log('[bootstrap] ADMIN_BOOTSTRAP_PASSWORD was already applied; it is safe to unset it.');
+    return;
+  }
+  db.prepare("INSERT INTO app_settings (key, value) VALUES ('bootstrap_applied', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(fingerprint);
   const hash = bcrypt.hashSync(pw, 10);
   const result = db.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
     .run(hash, email);

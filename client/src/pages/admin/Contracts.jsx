@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
@@ -114,6 +115,8 @@ const EMPTY_FORM = {
 export default function Contracts() {
   const { getAdminAxios } = useAuth()
   const [contracts, setContracts] = useState([])
+  const [statusFilter, setStatusFilter] = useState('')
+  const [search, setSearch] = useState('')
   const [couples, setCouples] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -434,12 +437,12 @@ export default function Contracts() {
   return (
     <div className="p-6 space-y-5 max-w-7xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="page-title">Contracts</h1>
           <p className="page-subtitle">{contracts.length} contracts · {stats.signed} signed</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button className="btn-secondary" onClick={() => setShowRecord(true)} title="Add a contract signed on paper or elsewhere">
             <ArrowUpTrayIcon className="w-4 h-4" />
             Record Signed Contract
@@ -472,19 +475,22 @@ export default function Contracts() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* Counts double as filters. */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
         {[
-          { label: 'Total',              value: stats.total,  color: 'text-slate-800' },
-          { label: 'Draft',              value: stats.draft,  color: 'text-slate-500' },
-          { label: 'Awaiting Signature', value: stats.sent,   color: 'text-blue-700'  },
-          { label: 'Signed',             value: stats.signed, color: 'text-emerald-700' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="card p-4 text-center">
+          { key: '',       label: 'Total',              value: stats.total,  color: 'text-slate-800' },
+          { key: 'draft',  label: 'Draft',              value: stats.draft,  color: 'text-slate-500' },
+          { key: 'sent',   label: 'Awaiting Signature', value: stats.sent,   color: 'text-blue-700'  },
+          { key: 'signed', label: 'Signed',             value: stats.signed, color: 'text-emerald-700' },
+        ].map(({ key, label, value, color }) => (
+          <button key={label} onClick={() => setStatusFilter(key)} aria-pressed={statusFilter === key}
+            className={`card p-3 sm:p-4 text-center transition-shadow hover:shadow-md ${statusFilter === key && key ? 'ring-2 ring-rose-400' : ''}`}>
             <div className={`text-2xl font-bold ${color}`}>{value}</div>
             <div className="text-xs text-slate-400 mt-0.5">{label}</div>
-          </div>
+          </button>
         ))}
       </div>
+      <input type="search" aria-label="Search contracts" placeholder="Search by couple or contract title…" value={search} onChange={e => setSearch(e.target.value)} className="input-field" />
 
       {/* What just happened to the signing chain.
           The link used to headline this banner under "Share this link with your
@@ -602,19 +608,32 @@ export default function Contracts() {
               </tr>
             </thead>
             <tbody>
-              {contracts.map(c => (
+              {contracts
+                .filter(c => !statusFilter || c.status === statusFilter)
+                .filter(c => !search.trim() || `${c.title} ${c.partner1_name} ${c.partner2_name} ${c.couple_email || ''}`.toLowerCase().includes(search.trim().toLowerCase()))
+                .map(c => {
+                  // A link that lapses unsigned stops working; flag it a week ahead.
+                  const expiresMs = c.status === 'sent' && c.signing_expires_at ? new Date(c.signing_expires_at.replace(' ', 'T') + 'Z').getTime() : null
+                  const daysLeft = expiresMs != null ? Math.ceil((expiresMs - Date.now()) / 86400000) : null
+                  return (
                 <tr key={c.id}>
                   <td>
                     <button onClick={() => openView(c)} className="font-medium text-slate-800 hover:text-rose-600 transition-colors text-left">
                       {c.title}
                     </button>
                     <div className="flex items-center gap-2 mt-0.5">
+                      {daysLeft != null && daysLeft <= 7 && (
+                        <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${daysLeft <= 0 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}
+                          title="Use Resend to send a fresh link with a new signing window">
+                          {daysLeft <= 0 ? 'Signing link expired' : `Link expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`}
+                        </span>
+                      )}
                       {c.source === 'external' && <span className="text-[11px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 font-medium">Signed outside the CRM</span>}
                       {c.file_count > 0 && <span className="text-[11px] text-slate-400 flex items-center gap-0.5"><PaperClipIcon className="w-3 h-3" />{c.file_count}</span>}
                     </div>
                   </td>
                   <td>
-                    <div className="text-slate-700">{c.partner1_name} & {c.partner2_name}</div>
+                    <Link to={`/clients/${c.couple_id}`} className="text-slate-700 hover:text-rose-600">{c.partner1_name} & {c.partner2_name}</Link>
                     <div className="text-xs text-slate-400">{c.couple_email}</div>
                   </td>
                   <td className="text-slate-500 text-xs">
@@ -712,7 +731,8 @@ export default function Contracts() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                  )
+                })}
             </tbody>
           </table>
         </div>
