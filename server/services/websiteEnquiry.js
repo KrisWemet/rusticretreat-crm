@@ -12,6 +12,8 @@
 // is copied into wedding_date.
 
 const db = require('../db');
+const crypto=require('crypto');
+function submissionKey(kind,body){const normalized=Object.fromEntries(Object.keys(body).filter(k=>!k.startsWith('_')).sort().map(k=>[k,String(body[k]??'').trim()]));return crypto.createHash('sha256').update(kind+JSON.stringify(normalized)).digest('hex')}
 const { recordSystemSubmission } = require('./forms');
 
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
@@ -85,6 +87,10 @@ function recordWebsiteEnquiry(body = {}, now = new Date()) {
     guests && ['Guests', guests], tourDates && ['Tour dates suggested', tourDates], message && ['Message', message],
   ].filter(Boolean);
 
+  const fingerprint=submissionKey('website-enquiry',body);
+  const prior=db.prepare('SELECT * FROM website_submissions WHERE fingerprint=?').get(fingerprint);
+  if(prior)return {ok:true,coupleId:prior.couple_id,created:false,duplicate:true,notified:!!prior.notified,fingerprint};
+
   const record = db.transaction(() => {
     const existing = db.prepare('SELECT * FROM couples WHERE LOWER(email) = ?').get(email);
     let coupleId, created;
@@ -124,10 +130,11 @@ function recordWebsiteEnquiry(body = {}, now = new Date()) {
         coupleId, tomorrow);
     // The answers as an editable form response on the couple's record.
     recordSystemSubmission('website-enquiry', coupleId, body);
+    db.prepare('INSERT INTO website_submissions(fingerprint,couple_id) VALUES(?,?)').run(fingerprint,coupleId);
     return { coupleId, created };
   });
 
-  return { ok: true, ...record(), notice: { coupleNames: `${partner1} & ${partner2}`, email, answers } };
+  return { ok: true, fingerprint, ...record(), notice: { coupleNames: `${partner1} & ${partner2}`, email, answers } };
 }
 
 // ── Booking requests (the 2026 and 2027 booking-request pages) ────────────────
@@ -227,6 +234,10 @@ function recordBookingRequest(body = {}, now = new Date()) {
     .map(([label, v]) => `${label}: ${v}`);
   const note = [`Website booking request${year ? ` (${year} form)` : ''}, ${today}:`, ...answers].join('\n');
 
+  const fingerprint=submissionKey('booking-request',body);
+  const prior=db.prepare('SELECT * FROM website_submissions WHERE fingerprint=?').get(fingerprint);
+  if(prior)return {ok:true,coupleId:prior.couple_id,created:false,duplicate:true,notified:!!prior.notified,fingerprint};
+
   const record = db.transaction(() => {
     const existing = db.prepare('SELECT * FROM couples WHERE LOWER(email) = ?').get(email);
     let coupleId, created;
@@ -256,12 +267,13 @@ function recordBookingRequest(body = {}, now = new Date()) {
         coupleId, tomorrow);
     recordSystemSubmission('booking-request', coupleId, body,
       BOOKING_FIELDS.map(([key, label]) => [key, label]));
+    db.prepare('INSERT INTO website_submissions(fingerprint,couple_id) VALUES(?,?)').run(fingerprint,coupleId);
     return { coupleId, created };
   });
 
   const mailAnswers = [['Couple', `${partner1} & ${partner2}`], ['Email', email], year && ['Booking form', year],
     ...BOOKING_FIELDS.map(([key, label]) => [label, clip(body[key], 2000)]).filter(([, v]) => v)].filter(Boolean);
-  return { ok: true, ...record(), notice: { coupleNames: `${partner1} & ${partner2}`, email, answers: mailAnswers } };
+  return { ok: true, fingerprint, ...record(), notice: { coupleNames: `${partner1} & ${partner2}`, email, answers: mailAnswers } };
 }
 
 module.exports = { recordWebsiteEnquiry, recordBookingRequest, parseWeddingDate, parseDayFirst };

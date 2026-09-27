@@ -46,6 +46,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
   );
   const updated = db.prepare('SELECT * FROM tours WHERE id = ?').get(req.params.id);
 
+  if (updated.couple_id && updated.status === 'completed' && tour.status !== 'completed') {
+    const key = `tour-followup:${tour.id}`;
+    if (!db.prepare('SELECT 1 FROM tasks WHERE workflow_key = ?').get(key)) db.prepare('INSERT INTO tasks (title, couple_id, due_date, priority, workflow_key) VALUES (?, ?, ?, ?, ?)').run('Follow up after venue tour and prepare proposal', updated.couple_id, require('../services/schedule').albertaToday(), 'high', key);
+  }
   // Staff tick "email a confirmation" when scheduling; nothing goes out otherwise.
   let confirmation = null;
   if (notify && updated.status === 'scheduled' && updated.scheduled_at) {

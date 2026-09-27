@@ -1,44 +1,47 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
-import Login from './pages/Login'
-import PortalLogin from './pages/PortalLogin'
-import SignContract from './pages/SignContract'
-import Dashboard from './pages/admin/Dashboard'
-import Clients from './pages/admin/Clients'
-import ClientDetail from './pages/admin/ClientDetail'
-import Bookings from './pages/admin/Bookings'
-import Messages from './pages/admin/Messages'
-import Tasks from './pages/admin/Tasks'
-import VendorsAdmin from './pages/admin/VendorsAdmin'
-import Contracts from './pages/admin/Contracts'
-import Payments from './pages/admin/Payments'
-import VenueCalendar from './pages/admin/VenueCalendar'
-import Inquire from './pages/Inquire'
-import PortalDashboard from './pages/portal/PortalDashboard'
-import Checklist from './pages/portal/Checklist'
-import GuestList from './pages/portal/GuestList'
-import Budget from './pages/portal/Budget'
-import VendorList from './pages/portal/VendorList'
-import Timeline from './pages/portal/Timeline'
-import PortalMessages from './pages/portal/PortalMessages'
-import Documents from './pages/portal/Documents'
-import PortalPayments from './pages/portal/Payments'
-import PortalSettings from './pages/portal/Settings'
-import Analytics from './pages/admin/Analytics'
-import Packages from './pages/admin/Packages'
-import Backups from './pages/admin/Backups'
-import Tours from './pages/admin/Tours'
-import Pipeline from './pages/admin/Pipeline'
-import Proposals from './pages/admin/Proposals'
-import FormsAdmin from './pages/admin/Forms'
-import PublicProposal from './pages/PublicProposal'
-import PublicForm from './pages/PublicForm'
-import PortalForms from './pages/portal/Forms'
-import Settings from './pages/admin/Settings'
-import NotFound from './pages/NotFound'
+const Login = lazy(() => import('./pages/Login'))
+const PortalLogin = lazy(() => import('./pages/PortalLogin'))
+const SignContract = lazy(() => import('./pages/SignContract'))
+const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
+const Clients = lazy(() => import('./pages/admin/Clients'))
+const ClientDetail = lazy(() => import('./pages/admin/ClientDetail'))
+const Bookings = lazy(() => import('./pages/admin/Bookings'))
+const Messages = lazy(() => import('./pages/admin/Messages'))
+const Tasks = lazy(() => import('./pages/admin/Tasks'))
+const VendorsAdmin = lazy(() => import('./pages/admin/VendorsAdmin'))
+const Contracts = lazy(() => import('./pages/admin/Contracts'))
+const Payments = lazy(() => import('./pages/admin/Payments'))
+const VenueCalendar = lazy(() => import('./pages/admin/VenueCalendar'))
+const Inquire = lazy(() => import('./pages/Inquire'))
+const PortalDashboard = lazy(() => import('./pages/portal/PortalDashboard'))
+const Checklist = lazy(() => import('./pages/portal/Checklist'))
+const GuestList = lazy(() => import('./pages/portal/GuestList'))
+const Budget = lazy(() => import('./pages/portal/Budget'))
+const VendorList = lazy(() => import('./pages/portal/VendorList'))
+const Timeline = lazy(() => import('./pages/portal/Timeline'))
+const PortalMessages = lazy(() => import('./pages/portal/PortalMessages'))
+const Documents = lazy(() => import('./pages/portal/Documents'))
+const PortalPayments = lazy(() => import('./pages/portal/Payments'))
+const PortalSettings = lazy(() => import('./pages/portal/Settings'))
+const Analytics = lazy(() => import('./pages/admin/Analytics'))
+const Packages = lazy(() => import('./pages/admin/Packages'))
+const Backups = lazy(() => import('./pages/admin/Backups'))
+const Tours = lazy(() => import('./pages/admin/Tours'))
+const Pipeline = lazy(() => import('./pages/admin/Pipeline'))
+const Proposals = lazy(() => import('./pages/admin/Proposals'))
+const FormsAdmin = lazy(() => import('./pages/admin/Forms'))
+const PublicProposal = lazy(() => import('./pages/PublicProposal'))
+const PublicForm = lazy(() => import('./pages/PublicForm'))
+const PortalForms = lazy(() => import('./pages/portal/Forms'))
+const Settings = lazy(() => import('./pages/admin/Settings'))
+const NotFound = lazy(() => import('./pages/NotFound'))
+
+const AssignedEvents=lazy(()=>import('./pages/admin/AssignedEvents'))
 
 function App() {
   return (
@@ -64,6 +67,7 @@ function App() {
             },
           }}
         />
+        <Suspense fallback={<div role="status" className="p-6 text-slate-500">Loading page…</div>}>
         <Routes>
           {/* Public: no auth needed */}
           <Route path="/sign/:token" element={<SignContract />} />
@@ -75,6 +79,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="operations" element={<AssignedEvents />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="clients" element={<Clients />} />
             <Route path="clients/:id" element={<ClientDetail />} />
@@ -113,6 +118,7 @@ function App() {
             <Route path="settings" element={<PortalSettings />} />
           </Route>
         </Routes>
+        </Suspense>
       </AuthProvider>
     </BrowserRouter>
   )

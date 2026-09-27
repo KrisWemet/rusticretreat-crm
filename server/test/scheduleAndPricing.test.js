@@ -198,7 +198,7 @@ test('demo couples are removed once in production, real couples are kept, dev ke
     assert.equal(r.status, 0, r.stderr);
     return r.stdout;
   };
-  const count = "console.log('COUNT', db.prepare(\"SELECT COUNT(*) n FROM couples WHERE email LIKE '%@example.com'\").get().n, db.prepare(\"SELECT COUNT(*) n FROM couples WHERE email = 'real@couple.test'\").get().n, db.prepare('SELECT COUNT(*) n FROM bookings').get().n)";
+  const count = "console.log('COUNT', db.prepare(\"SELECT COUNT(*) n FROM couples WHERE email LIKE '%@example.com' AND archived_at IS NULL\").get().n, db.prepare(\"SELECT COUNT(*) n FROM couples WHERE email = 'real@couple.test'\").get().n, db.prepare('SELECT COUNT(*) n FROM bookings WHERE couple_id IN (SELECT id FROM couples WHERE archived_at IS NULL)').get().n)";
   // Development boot: seeded, demo kept. Add a real couple with a booking.
   const dev = run('development', `db.prepare("INSERT INTO couples (partner1_name, partner2_name, email) VALUES ('Real','Couple','real@couple.test')").run();
     db.prepare("INSERT INTO bookings (couple_id, event_date) VALUES ((SELECT id FROM couples WHERE email='real@couple.test'), '2029-01-05')").run(); ${count}`);

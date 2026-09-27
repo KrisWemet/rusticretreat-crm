@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 
 export default function Modal({ isOpen, onClose, title, children, size = 'md' }) {
+  const dialog = useRef(null)
+  const closeRef = useRef(onClose); closeRef.current = onClose
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -17,10 +19,21 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
   // unsaved changes).
   useEffect(() => {
     if (!isOpen) return
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.() }
+    const previous = document.activeElement
+    const focusables = () => [...(dialog.current?.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]') || [])].filter(el => !el.disabled && el.getClientRects().length)
+    focusables()[0]?.focus()
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeRef.current?.()
+      if (e.key === 'Tab') {
+        const items = focusables(), first = items[0], last = items[items.length - 1]
+        if (!items.length) { e.preventDefault(); dialog.current?.focus() }
+        else if (e.shiftKey && (document.activeElement === first || !dialog.current?.contains(document.activeElement))) { e.preventDefault(); last.focus() }
+        else if (!e.shiftKey && (document.activeElement === last || !dialog.current?.contains(document.activeElement))) { e.preventDefault(); first.focus() }
+      }
+    }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [isOpen, onClose])
+    return () => { document.removeEventListener('keydown', onKey); previous?.focus() }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -38,7 +51,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
           className="fixed inset-0 bg-black/50 backdrop-blur-sm"
           onClick={onClose}
         />
-        <div role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}
+        <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}
           className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizes[size]} p-4 sm:p-6 z-10`}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">{title}</h2>

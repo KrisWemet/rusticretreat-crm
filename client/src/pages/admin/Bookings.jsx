@@ -26,7 +26,7 @@ function expectedTotal(packages, form) {
 }
 
 const emptyForm = {
-  couple_id: '', event_date: '', end_date: '',
+  couple_id: '', wedding_date: '', event_date: '', end_date: '',
   package_name: '', guest_count: '', ceremony_location: '', reception_location: '',
   catering_type: '', add_ons: '', special_requests: '', payment_status: 'pending', deposit_paid: '', total_price: ''
 }
@@ -103,7 +103,7 @@ export default function Bookings() {
 
   const openEdit = (b) => {
     setEditBooking(b)
-    setForm({ couple_id: b.couple_id, event_date: b.event_date || '', end_date: b.end_date || '', package_name: b.package_name || '', guest_count: b.guest_count || '', ceremony_location: b.ceremony_location || '', reception_location: b.reception_location || '', catering_type: b.catering_type || '', add_ons: b.add_ons || '', special_requests: b.special_requests || '', payment_status: b.payment_status || 'pending', deposit_paid: b.deposit_paid || '', total_price: b.total_price || '' })
+    setForm({ couple_id: b.couple_id, wedding_date: b.wedding_date || '', event_date: b.event_date || '', end_date: b.end_date || '', package_name: b.package_name || '', guest_count: b.guest_count || '', ceremony_location: b.ceremony_location || '', reception_location: b.reception_location || '', catering_type: b.catering_type || '', add_ons: b.add_ons || '', special_requests: b.special_requests || '', payment_status: b.payment_status || 'pending', deposit_paid: b.deposit_paid || '', total_price: b.total_price || '' })
     setShowForm(true)
   }
 
@@ -212,7 +212,7 @@ export default function Bookings() {
                   </td>
                   <td>
                     <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${paymentStyle[b.payment_status] || 'bg-slate-100 text-slate-500'}`}>
-                      {b.payment_status}
+                      {b.payment_schedule_missing ? 'No invoices' : b.payment_status}
                     </span>
                   </td>
                   <td>
@@ -235,6 +235,7 @@ export default function Bookings() {
             {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
           </Select>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Wedding / Ceremony Date" type="date" value={form.wedding_date} onChange={f('wedding_date')} />
             <Input label="Check-In Date" type="date" value={form.event_date} onChange={fPriced('event_date')} required />
             <Input label="Check-Out Date" type="date" value={form.end_date} onChange={f('end_date')} />
           </div>

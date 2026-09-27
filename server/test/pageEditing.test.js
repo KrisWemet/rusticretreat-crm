@@ -126,7 +126,8 @@ test('a booking\'s payment status follows its invoices', async () => {
   invoice(late, { amount: 100, due_date: '2020-01-01' });
   const { body } = await call('GET', '/api/bookings');
   const st = id => body.find(b => b.couple_id === id).payment_status;
-  assert.equal(st(none), 'no invoices');
+  assert.equal(st(none), 'pending');
+  assert.equal(body.find(b => b.couple_id === none).payment_schedule_missing, true);
   assert.equal(st(partial), 'partial');
   assert.equal(st(paid), 'paid');
   assert.equal(st(late), 'overdue');

@@ -50,7 +50,7 @@ export default function Forms() {
     setForm({
       title: data.title, description: data.description || '',
       fields: data.fields.map(f => ({
-        id: f.id, label: f.label, field_type: f.field_type, required: !!f.required,
+        id: f.id, record_field: f.record_field || '', label: f.label, field_type: f.field_type, required: !!f.required,
         options: f.options ? JSON.parse(f.options).join(', ') : '',
       })),
     })
@@ -74,7 +74,7 @@ export default function Forms() {
         title: form.title, description: form.description,
         fields: form.fields.map(f => ({
           // The id keeps a question's existing answers attached when it is edited.
-          id: f.id, label: f.label, field_type: f.field_type, required: f.required,
+          id: f.id, record_field: f.record_field || '', label: f.label, field_type: f.field_type, required: f.required,
           options: f.field_type === 'select' && f.options ? f.options.split(',').map(s => s.trim()).filter(Boolean) : null,
         })),
       }
@@ -225,6 +225,11 @@ export default function Forms() {
                     {field.field_type === 'select' && (
                       <input className="input-field" value={field.options} onChange={e => setField(idx, { options: e.target.value })} placeholder="Options, comma-separated (e.g. Yes, No, Maybe)" />
                     )}
+                    <label className="block text-xs text-slate-500">Prefill from and offer to update event record
+                      <select aria-label={`Event field for question ${idx + 1}`} className="input-field mt-1" value={field.record_field || ''} onChange={e => setField(idx, { record_field: e.target.value })}>
+                        <option value="">Keep as a form answer</option>{['guest_count','phone','ceremony_location','reception_location','catering_type','special_requests'].map(k => <option key={k} value={k}>{k.replaceAll('_', ' ')}</option>)}
+                      </select>
+                    </label>
                     <label className="flex items-center gap-2 text-xs text-slate-500">
                       <input type="checkbox" checked={field.required} onChange={e => setField(idx, { required: e.target.checked })} className="w-3.5 h-3.5 accent-rose-600" />
                       Required

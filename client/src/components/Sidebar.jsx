@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -46,6 +47,14 @@ export default function Sidebar({ unreadMessages = 0, pendingTasks = 0, open = f
   const { user, logoutAdmin } = useAuth()
   const location = useLocation()
 
+  const groups = [
+    ['Daily work', ['/dashboard','/messages','/tasks']],
+    ['Enquiries and sales', ['/clients','/pipeline','/tours','/proposals']],
+    ['Event preparation', ['/calendar','/bookings','/contracts','/payments','/forms','/vendors']],
+    ['Administration', ['/analytics','/packages','/backups','/settings']],
+  ]
+  const items = user?.access_scope==='operations'?[{to:'/operations',label:'Assigned events',icon:ClipboardDocumentListIcon,group:'Event work'},{to:'/settings',label:'Settings',icon:Cog6ToothIcon,group:'Account'}]:groups.flatMap(([group, paths]) => paths.map(to => ({ ...navItems.find(n => n.to === to), group }))).filter(n => n.to !== '/backups' || user?.role === 'admin')
+
   const getBadge = (badge) => {
     if (badge === 'messages' && unreadMessages > 0) return unreadMessages
     if (badge === 'tasks' && pendingTasks > 0) return pendingTasks
@@ -69,13 +78,13 @@ export default function Sidebar({ unreadMessages = 0, pendingTasks = 0, open = f
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <div className="text-slate-600 text-xs font-semibold uppercase tracking-widest px-3 mb-2">Main Menu</div>
-        {navItems.map(({ to, icon: Icon, label, badge }) => {
+        {items.map(({ to, icon: Icon, label, badge, group }, index) => {
           const count = getBadge(badge)
           const isActive = location.pathname === to || (to !== '/dashboard' && location.pathname.startsWith(to))
           return (
+            <Fragment key={to}>
+            {(index === 0 || items[index - 1].group !== group) && <div className="text-slate-500 text-xs font-semibold uppercase tracking-widest px-3 pt-4 pb-2">{group}</div>}
             <NavLink
-              key={to}
               to={to}
               onClick={onClose}
               className={`nav-item ${isActive ? 'nav-item-active' : 'nav-item-inactive'}`}
@@ -88,6 +97,7 @@ export default function Sidebar({ unreadMessages = 0, pendingTasks = 0, open = f
                 </span>
               )}
             </NavLink>
+            </Fragment>
           )
         })}
       </nav>

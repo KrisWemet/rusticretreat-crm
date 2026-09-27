@@ -4,12 +4,12 @@ import { useAuth } from '../../contexts/AuthContext'
 
 // Your own password, and (for the admin) who can log in to the CRM.
 export default function Settings() {
-  const { getAdminAxios, user } = useAuth()
+  const { getAdminAxios, user, logoutAdmin } = useAuth()
   const isAdmin = user?.role === 'admin'
   const [pw, setPw] = useState({ current_password: '', new_password: '', confirm: '' })
   const [users, setUsers] = useState([])
   const [adding, setAdding] = useState(false)
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'staff', password: '' })
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'staff', access_scope:'full', password: '' })
 
   const loadUsers = () => getAdminAxios().get('/api/auth/users').then(r => setUsers(r.data))
     .catch(err => toast.error(err.response?.data?.error || 'Could not load staff logins'))
@@ -21,7 +21,7 @@ export default function Settings() {
     if (pw.new_password !== pw.confirm) return toast.error('The two new passwords do not match')
     try {
       await getAdminAxios().post('/api/auth/change-password', { current_password: pw.current_password, new_password: pw.new_password })
-      toast.success('Password changed')
+      toast.success('Password changed. Sign in with your new password.'); logoutAdmin()
       setPw({ current_password: '', new_password: '', confirm: '' })
     } catch (err) { toast.error(err.response?.data?.error || 'Could not change the password') }
   }
@@ -31,7 +31,7 @@ export default function Settings() {
     try {
       await getAdminAxios().post('/api/auth/users', newUser)
       toast.success(`${newUser.name} can now log in`)
-      setNewUser({ name: '', email: '', role: 'staff', password: '' }); setAdding(false); loadUsers()
+      setNewUser({ name: '', email: '', role: 'staff', access_scope:'full', password: '' }); setAdding(false); loadUsers()
     } catch (err) { toast.error(err.response?.data?.error || 'Could not add the login') }
   }
 
@@ -94,6 +94,7 @@ export default function Settings() {
                 <option value="staff">Staff</option>
                 <option value="admin">Admin (can also manage logins and backups)</option>
               </select>
+              {newUser.role==='staff'&&<select aria-label="Staff access" className="input-field" value={newUser.access_scope} onChange={e=>setNewUser(u=>({...u,access_scope:e.target.value}))}><option value="full">Full venue staff</option><option value="operations">Assigned events only (no contracts or finances)</option></select>}
               <div className="sm:col-span-2 flex gap-2 justify-end">
                 <button type="button" onClick={() => setAdding(false)} className="btn-secondary">Cancel</button>
                 <button type="submit" className="btn-primary">Add login</button>
@@ -105,7 +106,7 @@ export default function Settings() {
               <li key={u.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
                 <div className="flex-1 min-w-[12rem]">
                   <p className="font-medium text-slate-800">{u.name} {u.id === user?.id && <span className="text-xs text-slate-400">(you)</span>}</p>
-                  <p className="text-xs text-slate-400">{u.email} · {u.role}{u.disabled ? ' · disabled' : ''}</p>
+                  <p className="text-xs text-slate-400">{u.email} · {u.role} · {u.access_scope==='operations'?'Assigned events only':'Full access'}{u.disabled ? ' · disabled' : ''}</p>{u.role==='staff'&&<button className="btn-ghost text-xs" onClick={async()=>{try{await getAdminAxios().patch(`/api/auth/users/${u.id}/scope`,{access_scope:u.access_scope==='operations'?'full':'operations'});toast.success('Access updated; old sessions revoked');loadUsers()}catch(e){toast.error(e.response?.data?.error||'Could not change access')}}}>Switch to {u.access_scope==='operations'?'full staff':'assigned events only'}</button>}
                 </div>
                 {u.id !== user?.id && (
                   <>

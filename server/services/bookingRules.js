@@ -35,7 +35,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 function toDay(value) {
   if (!value || !ISO_DATE.test(String(value).slice(0, 10))) return null;
   const t = Date.parse(String(value).slice(0, 10) + 'T00:00:00Z');
-  return Number.isNaN(t) ? null : t / DAY_MS;
+  return Number.isNaN(t) || new Date(t).toISOString().slice(0,10) !== String(value).slice(0,10) ? null : t / DAY_MS;
 }
 
 function fromDay(day) {
@@ -92,6 +92,13 @@ function lastDay(start, end, kind) {
  *                                   may be the ceremony day rather than arrival.
  * @throws BookingRuleError with a message staff and couples can act on
  */
+function assertCeremonyDate(date, booking) {
+  if (!date) return;
+  const ceremony = toDay(date), start = toDay(booking.event_date);
+  const end = toDay(booking.end_date || defaultEndDate(booking.event_date, booking.package_name) || booking.event_date);
+  if (ceremony == null || start == null || end == null || ceremony < start || ceremony > end) throw new BookingRuleError('The wedding / ceremony date must be a real date within the stay.', 400);
+}
+
 function assertBookable(db, booking, options = {}) {
   const { excludeBookingId = null, excludeCoupleId = null, checkPackage = true, checkWindow = true } = options;
 
@@ -120,7 +127,7 @@ function assertBookable(db, booking, options = {}) {
   }
 
   const guests = booking.guest_count == null || booking.guest_count === '' ? null : Number(booking.guest_count);
-  if (guests != null && (!Number.isFinite(guests) || guests < 0)) {
+  if (guests != null && (!Number.isSafeInteger(guests) || guests < 0)) {
     throw new BookingRuleError('Guest count must be a positive number.', 400);
   }
   if (guests != null && guests > MAX_RECEPTION_GUESTS) {
@@ -156,6 +163,15 @@ function assertBookable(db, booking, options = {}) {
     }
   }
 
+  const holds = db.prepare(`SELECT h.*, c.partner1_name FROM date_holds h JOIN couples c ON c.id=h.couple_id
+    WHERE h.released_at IS NULL AND datetime(h.expires_at)>datetime('now') AND c.status!='cancelled'
+    AND c.archived_at IS NULL AND h.couple_id != ?`).all(booking.couple_id || excludeCoupleId || -1);
+  for (const h of holds) {
+    const hs=toDay(h.event_date), he=toDay(h.end_date);
+    if (hs!=null && he!=null && start<=he+1 && hs<=occupiedUntil)
+      throw new BookingRuleError(`Those dates are held for ${h.partner1_name} until ${h.expires_at}. Release or let the hold expire before reserving them.`);
+  }
+
   const blocked = db.prepare('SELECT date, reason FROM blocked_dates WHERE date BETWEEN ? AND ? ORDER BY date LIMIT 1')
     .get(fromDay(start), fromDay(end));
   if (blocked) {
@@ -181,4 +197,4 @@ function defaultEndDate(eventDate, packageName) {
   return fromDay(start + length - 1);
 }
 
-module.exports = { assertBookable, BookingRuleError, sendRuleError, packageKind, defaultEndDate, MAX_RECEPTION_GUESTS };
+module.exports = { assertCeremonyDate, assertBookable, BookingRuleError, sendRuleError, packageKind, defaultEndDate, MAX_RECEPTION_GUESTS };

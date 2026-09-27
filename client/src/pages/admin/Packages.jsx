@@ -246,7 +246,7 @@ export default function Packages() {
                   <label htmlFor="packages-charged-3" className="label">Charged</label>
                   <select id="packages-charged-3" name="packages-charged-3" className="input-field" value={addonForm.unit} onChange={e => setAddonForm(f => ({ ...f, unit: e.target.value }))}>
                     <option value="flat">Flat fee</option>
-                    <option value="per_guest">Per guest (over 60)</option>
+                    <option value="per_guest">Per guest (81–100)</option>
                     <option value="per_night">Per night</option>
                   </select>
                 </div>

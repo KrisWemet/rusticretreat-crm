@@ -40,14 +40,15 @@ test('the calendar shows stays with their end date, holds, and leaves out cancel
   db.prepare("INSERT INTO bookings (couple_id, event_date) VALUES (?, '2032-07-09')").run(gone);
   db.prepare("INSERT INTO proposals (couple_id, title, status, event_date, package_name) VALUES (?, 'Q', 'sent', '2032-08-06', '5-Day Experience')").run(quoting);
   db.prepare("INSERT INTO contracts (couple_id, title, content, status, wedding_date) VALUES (?, 'C', 'x', 'sent', '2032-08-20')").run(signing);
+  db.prepare("INSERT INTO date_holds(couple_id,event_date,end_date,expires_at,reason) VALUES (?,'2032-08-06','2032-08-10',datetime('now','+7 days'),'Quote under review')").run(quoting);
   const { body } = await call('GET', '/api/calendar');
   const b = body.booked.find(x => x.couple_id === live);
   assert.equal(b.end_date, '2032-07-04', 'a 3-day stay ends two days later');
   assert.ok(!body.booked.some(x => x.couple_id === gone), 'cancelled couples hold nothing');
   const hold = body.holds.find(h => h.couple_id === quoting);
-  assert.equal(hold.kind, 'proposal');
+  assert.equal(hold.kind, 'hold');
   assert.equal(hold.end_date, '2032-08-10');
-  assert.equal(body.holds.find(h => h.couple_id === signing).kind, 'contract');
+  assert.ok(!body.holds.some(h=>h.couple_id===signing),'Sending a document alone does not create an inventory hold');
 });
 
 test('a range of dates can be blocked at once, within reason', async () => {
@@ -62,9 +63,12 @@ test('a range of dates can be blocked at once, within reason', async () => {
 test('changing a couple\'s status moves their pipeline card to match', async () => {
   const id = couple('inquiry');
   db.prepare("UPDATE couples SET pipeline_stage = 'proposal' WHERE id = ?").run(id);
+  assert.equal((await call('PUT', `/api/couples/${id}`, { status: 'booked' })).status, 409);
+  db.prepare("INSERT INTO bookings (couple_id, event_date) VALUES (?, '2031-07-05')").run(id);
   await call('PUT', `/api/couples/${id}`, { status: 'booked' });
   assert.equal(db.prepare('SELECT pipeline_stage FROM couples WHERE id = ?').get(id).pipeline_stage, 'booked');
-  await call('PUT', `/api/couples/${id}`, { status: 'cancelled' });
+  assert.equal((await call('PUT', `/api/couples/${id}`, { status: 'cancelled' })).status, 409);
+  await call('POST', `/api/couples/${id}/cancel`, { reason: 'Changed plans' });
   assert.equal(db.prepare('SELECT pipeline_stage FROM couples WHERE id = ?').get(id).pipeline_stage, 'lost');
 });
 

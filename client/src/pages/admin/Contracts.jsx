@@ -37,40 +37,8 @@ const statusStyle = {
   declined: 'bg-red-100 text-red-600',
 }
 
-const DEFAULT_TERMS = `1. EXCLUSIVE USE & DURATION
-The entire Rustic Retreat property is reserved exclusively for the Clients during the full package period. Check-in is 8:00 AM on the first day; checkout is 8:00 PM on the final day. No other events will be hosted during this time.
+const DEFAULT_TERMS = ''
 
-2. PAYMENT TERMS
-A non-refundable deposit of 25% of the total package price is required to secure the date. Remaining payments are scheduled per this agreement. The venue accepts e-transfer, credit card, or cheque.
-
-3. CANCELLATION POLICY
-Cancellations more than 90 days before the event forfeit the deposit only. Cancellations within 60–90 days incur a charge of 50% of the total. Cancellations within 60 days incur 100% of the total balance.
-
-4. ALCOHOL & AGLC LICENSING
-Clients are responsible for obtaining an AGLC (Alberta Gaming, Liquor & Cannabis) Special Event Licence. All bar service must comply with Alberta liquor laws. Rustic Retreat staff may hold vehicle keys to prevent impaired driving. ID checks are required for anyone appearing under 25.
-
-5. QUIET HOURS
-Amplified music must be reduced to a minimal level at the property line by 11:00 PM Sunday through Thursday, and by midnight on Friday, Saturday, and the wedding night. All guest generators must be turned off by 10:00 PM, no exceptions.
-
-6. OFF-GRID PROPERTY & POWER
-The property runs entirely on solar power. Clients must disclose all electrical requirements in advance. Generator rentals are available for additional power needs and must be arranged before the event.
-
-7. VENDORS & CATERING
-Clients may bring any licensed and insured vendors. There is no kitchen on-site — all food service must be self-contained. Vendors must carry their own liability insurance. All fireworks must be purchased and coordinated through Rustic Retreat.
-
-8. DÉCOR & PROPERTY CARE
-Nothing may be nailed, screwed, or stapled to any structure, tree, arch, or table. Loose glitter and confetti are prohibited. All borrowed décor items must be cleaned and returned to the décor shed before checkout.
-
-9. PETS
-Well-behaved, pre-approved pets are welcome. Pets staying in the cabin incur a $50 cleaning fee. No pets in the Bridal Suite or Décor Shed.
-
-10. DAMAGE & LIABILITY
-Clients are responsible for all damage caused by Clients, their guests, or their vendors. Clients are encouraged to obtain event liability insurance.
-
-11. GOVERNING LAW
-This Agreement is governed by the laws of the Province of Alberta, Canada.
-
-IN WITNESS WHEREOF, the Clients confirm they have read and agree to be legally bound by the terms of this Agreement, as evidenced by their electronic signature below.`
 
 function fmtDate(v) {
   try { return v ? format(parseISO(v), 'MMMM d, yyyy') : '___________________' } catch { return '___________________' }
@@ -724,7 +692,7 @@ export default function Contracts() {
                         </button>
                       )}
                       {((c.status === 'draft' && !c.locked_at) || c.source === 'external') && (
-                        <button onClick={() => deleteContract(c.id)} className="btn-ghost py-1 px-2 text-xs text-red-400 hover:bg-red-50">
+                        <button disabled={c.status === 'signed' || !!c.locked_at} aria-label={c.status === 'signed' || c.locked_at ? 'Signed agreement retained' : 'Delete draft contract'} title={c.status === 'signed' || c.locked_at ? 'Signed agreements are retained; archive the couple instead' : 'Delete draft contract'} onClick={() => deleteContract(c.id)} className="btn-ghost py-1 px-2 text-xs text-red-400 hover:bg-red-50">
                           <TrashIcon className="w-3.5 h-3.5" />
                         </button>
                       )}
@@ -784,9 +752,9 @@ export default function Contracts() {
                 checked={!form.template_packet}
                 onChange={() => setForm(v => ({ ...v, template_packet: '', title: 'Event Services Agreement' }))} />
               <div>
-                <div className="text-sm font-semibold text-slate-900">Free-text contract</div>
+                <div className="text-sm font-semibold text-slate-900">Custom agreement exception</div>
                 <div className="text-xs text-slate-400 mt-0.5">
-                  Type your own terms. No initials, no fill-in boxes — one signature per party.
+                  Enter separately approved terms. No initials, no fill-in boxes — one signature per party.
                 </div>
               </div>
             </label>

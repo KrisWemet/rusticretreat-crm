@@ -34,6 +34,8 @@ function Card({ title, action, children }) {
 const Empty = ({ children }) => <p className="text-sm text-gray-400">{children}</p>
 
 export default function CoupleOverview({ coupleId, api, refreshKey }) {
+  const [emailJobs,setEmailJobs]=useState([])
+  const [retrying,setRetrying]=useState(null)
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [newTask, setNewTask] = useState({ title: '', due_date: '' })
@@ -43,6 +45,7 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
     try {
       const r = await api.get(`/api/couples/${coupleId}/overview`)
       setData(r.data); setError(null)
+      try {setEmailJobs((await api.get('/api/operations/email-jobs')).data.filter(j=>j.couple_id===Number(coupleId)&&j.status!=='accepted'))} catch {setEmailJobs([])}
     } catch (err) {
       setError(err.response?.data?.error || 'Could not load this couple’s records')
     }
@@ -84,6 +87,11 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
 
   return (
     <>
+      <div className="flex justify-end"><button className="btn-secondary" onClick={async () => {
+        const win = window.open('', '_blank');
+        try { const r = await api.get(`/api/couples/${coupleId}/event-sheet`, { responseType: 'text' }); if (!win) throw new Error('Allow popups to print'); win.document.open(); win.document.write(r.data); win.document.close(); }
+        catch (err) { win?.close(); toast.error(err.message || 'Could not open event handover') }
+      }}>Print event handover</button></div>
       {/* At a glance */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-100 p-5">
@@ -95,7 +103,7 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
           <p className="text-sm text-gray-500">Next payment</p>
           {nextDue ? (
             <>
-              <p className={`text-2xl font-bold mt-1 ${nextDue.overdue ? 'text-red-600' : 'text-gray-900'}`}>{money(nextDue.amount)}</p>
+              <p className={`text-2xl font-bold mt-1 ${nextDue.overdue ? 'text-red-600' : 'text-gray-900'}`}>{money(nextDue.balance)}</p>
               <p className={`text-xs mt-2 ${nextDue.overdue ? 'text-red-600 font-medium' : 'text-gray-400'}`}>{nextDue.overdue ? 'Overdue since' : 'Due'} {day(nextDue.due_date)}</p>
             </>
           ) : <p className="text-sm text-gray-400 mt-2">{data.invoices.length ? 'All paid' : 'No payment schedule yet'}</p>}
@@ -118,7 +126,7 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Payments */}
-        <Card title="Payments" action={<Link to="/payments" className="text-sm text-rose-600 hover:underline">Open Payments</Link>}>
+        <Card title="Payments" action={<Link to={`/payments?couple=${coupleId}`} className="text-sm text-rose-600 hover:underline">Open Payments</Link>}>
           {data.invoices.length === 0 ? <Empty>No invoices yet. Create a payment schedule on the Payments page.</Empty> : (
             <ul className="divide-y divide-gray-50">
               {data.invoices.map(i => (
@@ -209,7 +217,8 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
         </Card>
 
         {/* Emails */}
-        <Card title="Emails sent">
+        <Card title="Email history">
+          {emailJobs.map(j=><div key={j.id} className="mb-3 rounded border border-red-100 p-3 text-sm"><p>{j.kind||'Email'}: {j.status==='failed'?'Not sent':'Outcome unknown'}</p><p className="text-xs text-red-600">{j.error}</p>{['contract-link','contract-signed','form-link','proposal'].includes(j.kind)?<p className="text-xs mt-1">Open the original agreement, form or proposal and use its resend action for a current link.</p>:<button className="btn-secondary mt-2" disabled={retrying===j.id} onClick={async()=>{const unknown=j.status!=='failed';if(!window.confirm(unknown?'Review the email provider’s history first. Confirm it was not accepted before retrying.':'Retry this failed email now?'))return;setRetrying(j.id);try{await api.post(`/api/operations/email-jobs/${j.id}/retry`,{reviewed_unknown:unknown});toast.success('Provider accepted the retry');load()}catch(e){toast.error(e.response?.data?.error||'Retry failed')}finally{setRetrying(null)}}}>Retry email</button>}</div>)}
           {data.emails.length === 0 ? <Empty>The CRM hasn’t emailed this couple yet.</Empty> : (
             <ul className="divide-y divide-gray-50">
               {data.emails.map(e => (
@@ -217,7 +226,7 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-gray-800 truncate">{e.subject}</p>
                     {e.delivered
-                      ? <CheckCircleIcon className="w-4 h-4 text-emerald-500 flex-shrink-0" title="Delivered to the mail service" />
+                      ? <CheckCircleIcon className="w-4 h-4 text-emerald-500 flex-shrink-0" title="Accepted by the mail service; inbox delivery is unconfirmed" />
                       : <span className="text-xs text-red-600 flex-shrink-0" title={e.error || ''}>Not sent</span>}
                   </div>
                   <p className="text-xs text-gray-400 truncate">{EMAIL_KIND[e.kind] || e.kind || 'Email'} · {stamp(e.at)} · to {e.to_addr}</p>

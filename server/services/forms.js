@@ -10,6 +10,7 @@ const db = require('../db');
 
 const FIELD_TYPES = ['text', 'textarea', 'number', 'date', 'select', 'checkbox'];
 const LINK_DAYS = 60;
+const RECORD_FIELDS = ['guest_count', 'phone', 'ceremony_location', 'reception_location', 'catering_type', 'special_requests'];
 
 // Save a form's questions without losing answers already given. Answers point
 // at a question's id (and are deleted with it), so questions are updated in
@@ -17,20 +18,20 @@ const LINK_DAYS = 60;
 function saveFields(formId, fields) {
   const current = new Set(db.prepare('SELECT id FROM form_fields WHERE form_id = ?').all(formId).map(r => r.id));
   const keep = new Set();
-  const update = db.prepare(`UPDATE form_fields SET label = ?, field_type = ?, options = ?, required = ?, order_index = ?
+  const update = db.prepare(`UPDATE form_fields SET label = ?, field_type = ?, options = ?, required = ?, order_index = ?, record_field = ?
                              WHERE id = ? AND form_id = ?`);
-  const insert = db.prepare(`INSERT INTO form_fields (form_id, label, field_type, options, required, order_index, field_key)
-                             VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  const insert = db.prepare(`INSERT INTO form_fields (form_id, label, field_type, options, required, order_index, field_key, record_field)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
   (fields || []).forEach((f, idx) => {
     const type = FIELD_TYPES.includes(f.field_type) ? f.field_type : 'text';
     const options = f.options ? (typeof f.options === 'string' ? f.options : JSON.stringify(f.options)) : null;
     const label = String(f.label || '').trim() || 'Question';
     const id = Number(f.id);
     if (id && current.has(id)) {
-      update.run(label, type, options, f.required ? 1 : 0, idx, id, formId);
+      update.run(label, type, options, f.required ? 1 : 0, idx, RECORD_FIELDS.includes(f.record_field) ? f.record_field : null, id, formId);
       keep.add(id);
     } else {
-      insert.run(formId, label, type, options, f.required ? 1 : 0, idx, f.field_key || null);
+      insert.run(formId, label, type, options, f.required ? 1 : 0, idx, f.field_key || null, RECORD_FIELDS.includes(f.record_field) ? f.record_field : null);
     }
   });
   for (const id of current) if (!keep.has(id)) db.prepare('DELETE FROM form_fields WHERE id = ?').run(id);
@@ -38,7 +39,7 @@ function saveFields(formId, fields) {
 
 function fieldsWithValues(assignment) {
   return db.prepare(`
-    SELECT ff.id, ff.label, ff.field_type, ff.options, ff.required, ff.order_index, ff.field_key, r.value
+    SELECT ff.id, ff.label, ff.field_type, ff.options, ff.required, ff.order_index, ff.field_key, ff.record_field, r.value
     FROM form_fields ff
     LEFT JOIN form_responses r ON r.field_id = ff.id AND r.assignment_id = ?
     WHERE ff.form_id = ?
@@ -54,13 +55,18 @@ function fullAssignment(id) {
   if (!assignment) return null;
   const form = db.prepare('SELECT id, title, description, system_key FROM forms WHERE id = ?').get(assignment.form_id);
   const { access_token, ...safe } = assignment;
-  return { assignment: { ...safe, has_link: !!access_token }, form, fields: fieldsWithValues(assignment) };
+  const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(assignment.couple_id);
+  const booking = db.prepare('SELECT * FROM bookings WHERE couple_id = ? ORDER BY id DESC LIMIT 1').get(assignment.couple_id);
+  const fields = fieldsWithValues(assignment).map(f => ({ ...f, value: f.value ?? (RECORD_FIELDS.includes(f.record_field) ? (f.record_field === 'phone' ? couple.phone : booking?.[f.record_field]) : null) }));
+  return { assignment: { ...safe, has_link: !!access_token }, form, fields };
 }
 
 // Replace an assignment's answers. `answers` maps field id to value; ids that
 // are not questions on this form are ignored. Required questions are checked
 // only when the answers are submitted as complete.
-function saveAnswers(assignment, answers, { by, complete = true } = {}) {
+function saveAnswers(assignment, answers, { by, complete = true, revision } = {}) {
+  const current = db.prepare('SELECT revision FROM form_assignments WHERE id = ?').get(assignment.id);
+  if (revision !== undefined && Number(revision) !== current.revision) return { ok: false, status: 409, error: 'These answers were changed by someone else. Reopen the form before saving.' };
   const fields = db.prepare('SELECT id, label, required FROM form_fields WHERE form_id = ?').all(assignment.form_id);
   const valid = new Set(fields.map(f => f.id));
   const clean = {};
@@ -72,11 +78,14 @@ function saveAnswers(assignment, answers, { by, complete = true } = {}) {
     if (missing.length) return { ok: false, error: `Please answer: ${missing.join(', ')}` };
   }
   db.transaction(() => {
+    const before = Object.fromEntries(db.prepare('SELECT field_id, value FROM form_responses WHERE assignment_id = ?').all(assignment.id).map(v => [v.field_id, v.value]));
+    db.prepare('INSERT INTO form_answer_versions (assignment_id, answers, completed, actor) VALUES (?, ?, ?, ?)').run(assignment.id, JSON.stringify(before), assignment.status === 'completed' ? 1 : 0, assignment.updated_by || assignment.filled_by || 'previous');
     db.prepare('DELETE FROM form_responses WHERE assignment_id = ?').run(assignment.id);
     const insert = db.prepare('INSERT INTO form_responses (assignment_id, field_id, value) VALUES (?, ?, ?)');
     for (const [fieldId, value] of Object.entries(clean)) insert.run(assignment.id, Number(fieldId), value);
     db.prepare(`UPDATE form_assignments SET
-                  status = CASE WHEN ? THEN 'completed' ELSE status END,
+                  status = CASE WHEN ? THEN 'completed' ELSE 'pending' END,
+                  revision = revision + 1,
                   submitted_at = CASE WHEN ? AND submitted_at IS NULL THEN datetime('now') ELSE submitted_at END,
                   filled_by = COALESCE(filled_by, ?), updated_by = ?, updated_at = datetime('now')
                 WHERE id = ?`)
@@ -162,6 +171,6 @@ function recordSystemSubmission(key, coupleId, values, extraFields = []) {
 }
 
 module.exports = {
-  saveFields, fieldsWithValues, fullAssignment, saveAnswers, issueLink, assignmentForToken,
+  RECORD_FIELDS, saveFields, fieldsWithValues, fullAssignment, saveAnswers, issueLink, assignmentForToken,
   ensureSystemForm, recordSystemSubmission, LINK_DAYS,
 };

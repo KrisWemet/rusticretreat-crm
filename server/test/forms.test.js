@@ -70,8 +70,8 @@ test('staff can fill in and correct answers; required questions are checked only
   assert.match(incomplete.body.error, /Ceremony time/);
   const done = await call('PUT', `/api/forms/assignments/${a.id}/responses`, { answers: { [time.id]: '3 pm', [pets.id]: 'No' } });
   assert.equal(done.body.assignment.status, 'completed');
-  assert.equal(done.body.assignment.filled_by, 'staff: Shannon');
-  assert.equal(done.body.assignment.updated_by, 'staff: Shannon');
+  assert.equal(done.body.assignment.filled_by, 'staff: '+db.prepare('SELECT name FROM users WHERE id=1').get().name);
+  assert.equal(done.body.assignment.updated_by, 'staff: '+db.prepare('SELECT name FROM users WHERE id=1').get().name);
   assert.equal((await call('PUT', `/api/forms/assignments/${a.id}/responses`, { answers: {} }, null)).status, 401);
 });
 
@@ -133,7 +133,7 @@ test('website enquiries and booking requests are saved as editable form response
   assert.equal(fixed.status, 200);
   assert.equal(fixed.body.fields.find(f => f.id === dj.id).value, 'Live band');
   assert.equal(fixed.body.assignment.filled_by, 'website');
-  assert.equal(fixed.body.assignment.updated_by, 'staff: Shannon');
+  assert.equal(fixed.body.assignment.updated_by, 'staff: '+db.prepare('SELECT name FROM users WHERE id=1').get().name);
 
   // The website forms are created once and reused.
   assert.equal(db.prepare("SELECT COUNT(*) n FROM forms WHERE system_key = 'website-enquiry'").get().n, 1);

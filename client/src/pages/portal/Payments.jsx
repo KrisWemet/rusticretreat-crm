@@ -47,8 +47,8 @@ export default function Payments() {
   const paid   = invoices.filter(i => i.paid)
   const unpaid = invoices.filter(i => !i.paid)
   const total  = invoices.reduce((s, i) => s + i.amount, 0)
-  const collected = paid.reduce((s, i) => s + i.amount, 0)
-  const remaining = unpaid.reduce((s, i) => s + i.amount, 0)
+  const collected = invoices.reduce((s, i) => s + i.amount_paid, 0)
+  const remaining = uninvoices.reduce((s, i) => s + i.amount_paid, 0)
 
   const progressPct = total > 0 ? Math.round((collected / total) * 100) : 0
 

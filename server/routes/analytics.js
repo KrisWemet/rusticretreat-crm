@@ -4,19 +4,11 @@ const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 
 router.get('/summary', authenticateToken, (req, res) => {
-  const revenue = db.prepare(`
-    SELECT
-      COALESCE(SUM(CASE WHEN paid = 1 THEN amount ELSE 0 END), 0) as collected,
-      COALESCE(SUM(CASE WHEN paid = 0 THEN amount ELSE 0 END), 0) as outstanding
-    FROM invoices
-  `).get();
-
-  const ytd = db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) as ytd
-    FROM invoices
-    WHERE paid = 1 AND strftime('%Y', paid_at) = strftime('%Y', 'now')
-  `).get();
-
+  const ledger = require('../services/ledger');
+  const allInvoices = db.prepare('SELECT * FROM invoices').all().map(ledger.invoiceView);
+  const revenue = { collected: ledger.money(allInvoices.reduce((s,i)=>s+ledger.cents(i.amount_paid),0)), outstanding: ledger.money(allInvoices.reduce((s,i)=>s+ledger.cents(i.balance),0)) };
+  const year = require('../services/schedule').albertaToday().slice(0,4);
+  const ytd = db.prepare("SELECT COALESCE(SUM(amount_cents),0) / 100.0 AS ytd FROM payment_entries WHERE substr(received_at,1,4)=?").get(year);
   const avgDeal = db.prepare(`
     SELECT COALESCE(AVG(total_price), 0) as avg
     FROM bookings WHERE total_price > 0
@@ -44,12 +36,9 @@ router.get('/summary', authenticateToken, (req, res) => {
 });
 
 router.get('/revenue', authenticateToken, (req, res) => {
-  const rows = db.prepare(`
-    SELECT strftime('%Y-%m', paid_at) as month, SUM(amount) as revenue, COUNT(*) as payments
-    FROM invoices
-    WHERE paid = 1 AND paid_at >= date('now', '-12 months')
-    GROUP BY month ORDER BY month ASC
-  `).all();
+  db.prepare('SELECT * FROM invoices').all().forEach(require('../services/ledger').invoiceView);
+  const rows = db.prepare(`SELECT substr(received_at,1,7) AS month, SUM(amount_cents) / 100.0 AS revenue, COUNT(*) AS payments
+    FROM payment_entries WHERE received_at >= date('now','-12 months') GROUP BY month ORDER BY month`).all();
   res.json(rows);
 });
 

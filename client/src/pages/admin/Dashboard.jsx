@@ -150,7 +150,7 @@ export default function Dashboard() {
   const modules = [
     { to: '/clients', icon: UsersIcon, label: 'Clients & Leads', description: 'Manage couples from initial inquiry through booking.', color: 'bg-violet-100 text-violet-600', badge: stats.newLeads },
     { to: '/bookings', icon: CalendarDaysIcon, label: 'Bookings', description: 'View and manage all event bookings, dates, and packages.', color: 'bg-blue-100 text-blue-600', badge: stats.upcomingCount },
-    { to: '/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages', description: 'Communicate with couples through the portal inbox.', color: 'bg-rose-100 text-rose-600', badge: stats.unreadMessages },
+    { to: '/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages', description: 'Keep couple conversations and send personal replies.', color: 'bg-rose-100 text-rose-600', badge: stats.unreadMessages },
     { to: '/tasks', icon: ClipboardDocumentListIcon, label: 'Tasks', description: 'Track internal to-dos, follow-ups, and preparations.', color: 'bg-amber-100 text-amber-600', badge: stats.overdueTasks },
     { to: '/vendors', icon: BuildingStorefrontIcon, label: 'Vendors', description: 'Manage vendor contacts, bookings, and partners.', color: 'bg-emerald-100 text-emerald-600', badge: 0 },
   ]
@@ -178,7 +178,7 @@ export default function Dashboard() {
             {format(new Date(), 'EEEE, MMMM d, yyyy')} · Here's what's happening at Rustic Retreat
           </p>
         </div>
-        <Link to="/clients" className="btn-primary">
+        <Link to="/clients?new=1" className="btn-primary">
           <SparklesIcon className="w-4 h-4" />
           New Inquiry
         </Link>
