@@ -292,37 +292,37 @@ export default function Proposals() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl my-8">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl">
               <h2 className="font-semibold text-slate-800">{editing === 'new' ? 'New Proposal' : 'Edit Proposal'}</h2>
-              <button onClick={() => setEditing(null)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+              <button onClick={() => setEditing(null)} aria-label="Close" className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
             </div>
 
             <div className="p-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="proposal-couple-1" className="label">Couple</label>
-                  <select id="proposal-couple-1" name="proposal-couple-1" className="input" value={form.couple_id} onChange={e => setForm(f => ({ ...f, couple_id: e.target.value }))}>
+                  <select id="proposal-couple-1" name="proposal-couple-1" className="input-field" value={form.couple_id} onChange={e => setForm(f => ({ ...f, couple_id: e.target.value }))}>
                     <option value="">Select couple…</option>
                     {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label htmlFor="proposal-proposal-title-2" className="label">Proposal Title</label>
-                  <input id="proposal-proposal-title-2" name="proposal-proposal-title-2" className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="3-Day Weekend Proposal" />
+                  <input id="proposal-proposal-title-2" name="proposal-proposal-title-2" className="input-field" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="3-Day Weekend Proposal" />
                 </div>
                 <div>
                   <label htmlFor="proposal-check-in-date-3" className="label">Check-In Date</label>
-                  <input id="proposal-check-in-date-3" name="proposal-check-in-date-3" type="date" className="input" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
+                  <input id="proposal-check-in-date-3" name="proposal-check-in-date-3" type="date" className="input-field" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
                 </div>
                 <div>
                   <label htmlFor="proposal-check-out-date-4" className="label">Check-Out Date</label>
-                  <input id="proposal-check-out-date-4" name="proposal-check-out-date-4" type="date" className="input" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+                  <input id="proposal-check-out-date-4" name="proposal-check-out-date-4" type="date" className="input-field" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
                 </div>
                 <div>
                   <label htmlFor="proposal-guest-count-5" className="label">Guest Count</label>
-                  <input id="proposal-guest-count-5" name="proposal-guest-count-5" type="number" min="1" max="80" className="input" value={form.guest_count} onChange={e => setForm(f => ({ ...f, guest_count: e.target.value }))} placeholder="e.g. 60" />
+                  <input id="proposal-guest-count-5" name="proposal-guest-count-5" type="number" min="1" max="80" className="input-field" value={form.guest_count} onChange={e => setForm(f => ({ ...f, guest_count: e.target.value }))} placeholder="e.g. 60" />
                 </div>
                 <div>
                   <label htmlFor="proposal-valid-until-6" className="label">Valid Until</label>
-                  <input id="proposal-valid-until-6" name="proposal-valid-until-6" type="date" className="input" value={form.valid_until} onChange={e => setForm(f => ({ ...f, valid_until: e.target.value }))} />
+                  <input id="proposal-valid-until-6" name="proposal-valid-until-6" type="date" className="input-field" value={form.valid_until} onChange={e => setForm(f => ({ ...f, valid_until: e.target.value }))} />
                 </div>
               </div>
 
@@ -348,8 +348,8 @@ export default function Proposals() {
               </div>
 
               {/* Line items */}
-              <div className="border border-slate-100 rounded-xl overflow-hidden">
-                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+              <div className="border border-slate-100 rounded-xl overflow-x-auto">
+                <div className="grid grid-cols-12 gap-2 px-3 py-2 min-w-[36rem] bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
                   <div className="col-span-5">Item</div>
                   <div className="col-span-2 text-right">Qty</div>
                   <div className="col-span-2 text-right">Unit $</div>
@@ -358,7 +358,7 @@ export default function Proposals() {
                 </div>
                 {form.items.length === 0 && <div className="px-3 py-6 text-center text-sm text-slate-300">Add a package or add-on above to start.</div>}
                 {form.items.map((it, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2 items-center border-t border-slate-50">
+                  <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2 min-w-[36rem] items-center border-t border-slate-50">
                     <input className="col-span-5 px-2 py-1.5 border border-slate-200 rounded-lg text-sm" value={it.label} onChange={e => setItem(idx, { label: e.target.value })} placeholder="Item name" />
                     <input type="number" className="col-span-2 px-2 py-1.5 border border-slate-200 rounded-lg text-sm text-right" value={it.quantity} onChange={e => setItem(idx, { quantity: e.target.value })} />
                     <input type="number" className="col-span-2 px-2 py-1.5 border border-slate-200 rounded-lg text-sm text-right" value={it.unit_price} onChange={e => setItem(idx, { unit_price: e.target.value })} />
@@ -390,7 +390,7 @@ export default function Proposals() {
 
               <div>
                 <label htmlFor="proposal-notes" className="label">Notes <span className="text-slate-400 font-normal">(shown to couple)</span></label>
-                <textarea id="proposal-notes" name="proposal-notes" className="input" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="A personal note about this proposal…" />
+                <textarea id="proposal-notes" name="proposal-notes" className="input-field" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="A personal note about this proposal…" />
               </div>
             </div>
 

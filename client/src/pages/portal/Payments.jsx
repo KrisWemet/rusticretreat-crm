@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import {
@@ -38,7 +39,7 @@ export default function Payments() {
       const { data } = await getCoupleAxios().post(`/api/payments/checkout/${inv.id}`)
       if (data.url) window.location.href = data.url
     } catch (err) {
-      alert(err.response?.data?.error || 'Could not start payment.')
+      toast.error(err.response?.data?.error || 'Could not start payment.')
       setPaying(null)
     }
   }

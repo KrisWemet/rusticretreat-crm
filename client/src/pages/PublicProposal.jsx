@@ -111,7 +111,7 @@ export default function PublicProposal() {
             <h1 className="text-2xl font-bold text-slate-900">{proposal.title}</h1>
             <div className="flex flex-wrap gap-x-6 gap-y-1 mt-3 text-sm text-slate-500">
               {proposal.event_date && <span><strong className="text-slate-700">Dates:</strong> {fmtDate(proposal.event_date)}{proposal.end_date ? ` – ${fmtDate(proposal.end_date)}` : ''}</span>}
-              {proposal.guest_count && <span><strong className="text-slate-700">Guests:</strong> {proposal.guest_count}</span>}
+              {!!proposal.guest_count && <span><strong className="text-slate-700">Guests:</strong> {proposal.guest_count}</span>}
             </div>
             {!isOpen && (
               <div className="mt-3 inline-block text-xs px-3 py-1 rounded-full bg-amber-50 text-amber-700 font-medium capitalize">

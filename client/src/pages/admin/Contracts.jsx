@@ -793,7 +793,7 @@ export default function Contracts() {
           </div>
 
           {/* Basic info */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="contract-couple" className="label">Client Couple <span className="text-red-500">*</span></label>
               <select
@@ -829,12 +829,12 @@ export default function Contracts() {
               <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Event Details</span>
               <span className="text-xs text-slate-400 ml-1">— auto-filled into contract · synced to client profile on signing</span>
             </div>
-            <div className="p-4 grid grid-cols-3 gap-4">
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Input type="date" label="Wedding Date" value={form.wedding_date} onChange={f('wedding_date')} />
               <Input label="Start Time" value={form.start_time} onChange={f('start_time')} placeholder="e.g. 4:00 PM" />
               <Input label="End Time" value={form.end_time} onChange={f('end_time')} placeholder="e.g. 11:00 PM" />
 
-              <Input type="number" label="Guest Count" value={form.guest_count} onChange={f('guest_count')} placeholder="e.g. 150" min="1" />
+              <Input type="number" label="Guest Count" value={form.guest_count} onChange={f('guest_count')} placeholder="e.g. 80 (100 at most)" min="1" max="100" />
               <Input label="Package" value={form.package_name} onChange={f('package_name')} placeholder="e.g. 3-Day Weekend" />
               <div>
                 <label className="label">Total Price (CAD $)</label>
@@ -905,7 +905,7 @@ export default function Contracts() {
                     )}
                   </div>
                 )}
-                {viewContract.guest_count && (
+                {!!viewContract.guest_count && (
                   <div className="bg-blue-50 rounded-xl p-3">
                     <div className="flex items-center gap-1.5 text-xs text-blue-500 mb-1">
                       <UserGroupIcon className="w-3.5 h-3.5" />
@@ -941,7 +941,7 @@ export default function Contracts() {
                   <CheckCircleSolid className="w-5 h-5 text-emerald-600" />
                   <span className="font-semibold text-emerald-800">Contract Signed</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div><span className="text-emerald-600">Signed by:</span> <strong>{viewContract.signer_name}</strong></div>
                   <div><span className="text-emerald-600">Signed on:</span> <strong>{viewContract.signed_at ? format(parseISO(viewContract.signed_at), 'MMM d, yyyy h:mm a') : '—'}</strong></div>
                 </div>

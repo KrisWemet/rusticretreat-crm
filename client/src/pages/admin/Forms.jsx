@@ -196,16 +196,16 @@ export default function Forms() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-8">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl">
               <h2 className="font-semibold text-slate-800">{editing === 'new' ? 'New Form' : 'Edit Form'}</h2>
-              <button onClick={() => setEditing(null)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+              <button onClick={() => setEditing(null)} aria-label="Close" className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
             </div>
             <div className="p-6 space-y-4">
               <div>
                 <label htmlFor="forms-form-title-1" className="label">Form Title</label>
-                <input id="forms-form-title-1" name="forms-form-title-1" className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Event Details Questionnaire" />
+                <input id="forms-form-title-1" name="forms-form-title-1" className="input-field" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Event Details Questionnaire" />
               </div>
               <div>
                 <label htmlFor="forms-description-2" className="label">Description</label>
-                <textarea id="forms-description-2" name="forms-description-2" className="input" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Shown to the couple above the questions…" />
+                <textarea id="forms-description-2" name="forms-description-2" className="input-field" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Shown to the couple above the questions…" />
               </div>
 
               <div className="space-y-3">
@@ -216,14 +216,14 @@ export default function Forms() {
                 {form.fields.map((field, idx) => (
                   <div key={idx} className="border border-slate-100 rounded-xl p-3 space-y-2 bg-slate-50/50">
                     <div className="flex gap-2">
-                      <input className="input flex-1" value={field.label} onChange={e => setField(idx, { label: e.target.value })} placeholder="Question label" />
-                      <select className="input w-36" value={field.field_type} onChange={e => setField(idx, { field_type: e.target.value })}>
+                      <input className="input-field flex-1" value={field.label} onChange={e => setField(idx, { label: e.target.value })} placeholder="Question label" />
+                      <select className="input-field w-36" value={field.field_type} onChange={e => setField(idx, { field_type: e.target.value })}>
                         {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
                       <button onClick={() => removeField(idx)} className="text-slate-300 hover:text-red-500 px-1"><TrashIcon className="w-4 h-4" /></button>
                     </div>
                     {field.field_type === 'select' && (
-                      <input className="input" value={field.options} onChange={e => setField(idx, { options: e.target.value })} placeholder="Options, comma-separated (e.g. Yes, No, Maybe)" />
+                      <input className="input-field" value={field.options} onChange={e => setField(idx, { options: e.target.value })} placeholder="Options, comma-separated (e.g. Yes, No, Maybe)" />
                     )}
                     <label className="flex items-center gap-2 text-xs text-slate-500">
                       <input type="checkbox" checked={field.required} onChange={e => setField(idx, { required: e.target.checked })} className="w-3.5 h-3.5 accent-rose-600" />
@@ -248,11 +248,11 @@ export default function Forms() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg my-8">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <h2 className="font-semibold text-slate-800">{manage.title}</h2>
-              <button onClick={() => setManage(null)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+              <button onClick={() => setManage(null)} aria-label="Close" className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
             </div>
             <div className="p-6 space-y-4">
               <div className="flex gap-2">
-                <select className="input flex-1" value={assignCouple} onChange={e => setAssignCouple(e.target.value)}>
+                <select className="input-field flex-1" value={assignCouple} onChange={e => setAssignCouple(e.target.value)}>
                   <option value="">Assign to couple…</option>
                   {couples.filter(c => !assignments.some(a => a.couple_id === c.id)).map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
                 </select>

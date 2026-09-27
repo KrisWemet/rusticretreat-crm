@@ -234,11 +234,11 @@ export default function Bookings() {
             <option value="">Select couple...</option>
             {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
           </Select>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Check-In Date" type="date" value={form.event_date} onChange={fPriced('event_date')} required />
             <Input label="Check-Out Date" type="date" value={form.end_date} onChange={f('end_date')} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Package" value={form.package_name} onChange={fPriced('package_name')}>
               <option value="">Select package...</option>
               {packageOptions.map(p => <option key={p.id} value={p.name}>{p.name}{p.is_active ? '' : ' (retired)'}</option>)}
@@ -246,7 +246,7 @@ export default function Bookings() {
             </Select>
             <Input label="Guest Count" type="number" min="1" max="100" value={form.guest_count} onChange={f('guest_count')} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Ceremony Location" value={form.ceremony_location} onChange={f('ceremony_location')} placeholder="Pick or type a location" list="ceremony-spaces" />
             <Input label="Reception / Dancing" value={form.reception_location} onChange={f('reception_location')} placeholder="Pick or type a location" list="reception-spaces" />
             <datalist id="ceremony-spaces">{spaces(CEREMONY_SPACES, 'ceremony_location').map(s => <option key={s} value={s} />)}</datalist>

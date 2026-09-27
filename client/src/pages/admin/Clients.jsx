@@ -50,7 +50,7 @@ export default function Clients() {
   // 300ms with no perceptible delay.
   useEffect(() => {
     const t = setTimeout(() => {
-      fetchCouples().catch(() => {}).finally(() => setLoading(false))
+      fetchCouples().catch(err => toast.error(err.response?.data?.error || 'Could not load couples. Check your connection and refresh.')).finally(() => setLoading(false))
     }, search ? 300 : 0)
     return () => clearTimeout(t)
   }, [search, statusFilter])
@@ -194,11 +194,11 @@ export default function Clients() {
       {/* Add Modal */}
       <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add New Couple" size="lg">
         <form onSubmit={handleAdd} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Partner 1 Name" value={form.partner1_name} onChange={f('partner1_name')} required />
             <Input label="Partner 2 Name" value={form.partner2_name} onChange={f('partner2_name')} required />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Partner 1 Email" type="email" value={form.email} onChange={f('email')} required />
             <Input
               label="Partner 2 Email"
@@ -212,21 +212,21 @@ export default function Clients() {
             Each partner signs the contract separately from their own address, so their signatures
             are independently attributable. Both addresses are required and must be different.
           </p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Phone" value={form.phone} onChange={f('phone')} />
             <Select label="Venue Package" value={form.venue_package} onChange={f('venue_package')}>
               <option value="">Not selected</option>
               {withCurrent(packages.filter(p => p.is_active).map(p => p.name), form.venue_package).map(n => <option key={n} value={n}>{n}</option>)}
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Wedding Date" type="date" value={form.wedding_date} onChange={f('wedding_date')} />
             <Select label="How they heard about us" value={form.referral_source} onChange={f('referral_source')}>
               <option value="">Not specified</option>
               {withCurrent(REFERRAL_SOURCES, form.referral_source).map(s => <option key={s} value={s}>{s}</option>)}
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Status" value={form.status} onChange={f('status')}>
               {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
             </Select>
