@@ -218,6 +218,38 @@ function deletePermanently(req, res, couple) {
   res.json({ message: 'Couple deleted permanently' });
 }
 
+// Everything about one couple in one request, for their client page: bookings,
+// payments and balance, contracts with signing progress, tasks, tours, the
+// emails the CRM sent them and what staff have done on their record.
+router.get('/:id/overview', authenticateToken, (req, res) => {
+  const id = Number(req.params.id);
+  const couple = db.prepare('SELECT id FROM couples WHERE id = ?').get(id);
+  if (!couple) return res.status(404).json({ error: 'Couple not found' });
+  const today = require('../services/schedule').albertaToday();
+
+  const invoices = db.prepare('SELECT * FROM invoices WHERE couple_id = ? ORDER BY due_date IS NULL, due_date, id').all(id);
+  const total = invoices.reduce((t, i) => t + Number(i.amount || 0), 0);
+  const paid = invoices.filter(i => i.paid).reduce((t, i) => t + Number(i.amount || 0), 0);
+
+  const contracts = db.prepare(`
+    SELECT id, title, status, source, sent_at, signed_at, signing_expires_at, wedding_date, package_name, total_price, created_at
+    FROM contracts WHERE couple_id = ? ORDER BY created_at DESC`).all(id)
+    .map(c => ({ ...c, signers: db.prepare('SELECT role, name, status, signed_at FROM contract_signers WHERE contract_id = ? ORDER BY sign_order').all(c.id) }));
+
+  res.json({
+    today,
+    bookings: db.prepare('SELECT * FROM bookings WHERE couple_id = ? ORDER BY event_date').all(id),
+    invoices: invoices.map(i => ({ ...i, overdue: !i.paid && i.due_date && i.due_date < today })),
+    balance: { total, paid, balance: total - paid },
+    contracts,
+    tasks: db.prepare('SELECT * FROM tasks WHERE couple_id = ? ORDER BY completed, due_date IS NULL, due_date, id').all(id),
+    tours: db.prepare('SELECT * FROM tours WHERE couple_id = ? ORDER BY COALESCE(scheduled_at, preferred_date, created_at) DESC').all(id),
+    emails: db.prepare('SELECT id, at, kind, to_addr, subject, delivered, error FROM email_log WHERE couple_id = ? ORDER BY at DESC, id DESC LIMIT 50').all(id),
+    activity: recentActivity({ coupleId: id, limit: 50 }),
+    messages: db.prepare('SELECT COUNT(*) AS n FROM messages WHERE couple_id = ?').get(id).n,
+  });
+});
+
 // What has happened on this couple's record, newest first
 router.get('/:id/activity', authenticateToken, (req, res) => {
   res.json(recentActivity({ coupleId: Number(req.params.id) }));

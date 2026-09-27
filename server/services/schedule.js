@@ -28,8 +28,10 @@ function albertaNow(at = new Date()) {
 const albertaToday = (at) => albertaNow(at).day;
 
 const jobs = [];
-function registerJob(name, hour, fn) {
-  jobs.push({ name, hour, fn });
+// `until` (optional) is the last hour a missed run may still catch up in:
+// a morning summary that could not go out at 7 am is pointless at 8 pm.
+function registerJob(name, hour, fn, { until = 23 } = {}) {
+  jobs.push({ name, hour, until, fn });
 }
 
 let onFailure = null; // (jobName, error) => void — set by the server to email the venue
@@ -43,7 +45,7 @@ async function tick(at = new Date()) {
   try {
     const { day, hour } = albertaNow(at);
     for (const job of jobs) {
-      if (hour < job.hour) continue;
+      if (hour < job.hour || hour > job.until) continue;
       const last = db.prepare('SELECT last_day FROM job_runs WHERE name = ?').get(job.name);
       if (last && last.last_day === day) continue;
       // Claim today before running, so an overlapping tick cannot start it twice.

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
+import TodayPanel from '../../components/TodayPanel'
 import {
   UsersIcon,
   CalendarDaysIcon,
@@ -82,18 +83,20 @@ export default function Dashboard() {
   const [recentMessages, setRecentMessages] = useState([])
   const [pendingTasks, setPendingTasks] = useState([])
   const [attention, setAttention] = useState({ expiring_proposals: [], stalled_proposals: [], overdue_invoices: [], needs_follow_up: [] })
+  const [today, setToday] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
       try {
         const api = getAdminAxios()
-        const [couplesRes, bookingsRes, msgsRes, tasksRes, attentionRes] = await Promise.all([
+        const [couplesRes, bookingsRes, msgsRes, tasksRes, attentionRes, todayRes] = await Promise.all([
           api.get('/api/couples'),
           api.get('/api/bookings'),
           api.get('/api/messages/all'),
           api.get('/api/tasks'),
           api.get('/api/analytics/attention'),
+          api.get('/api/analytics/today'),
         ])
 
         const couples = couplesRes.data
@@ -101,17 +104,20 @@ export default function Dashboard() {
         const messages = msgsRes.data || []
         const tasks = tasksRes.data || []
 
-        const today = new Date()
-        const in30 = new Date(today)
-        in30.setDate(today.getDate() + 30)
+        // Compared as calendar dates, so a wedding happening today still counts
+        // (comparing its midnight to the current time used to drop it).
+        const todayStr = format(new Date(), 'yyyy-MM-dd')
+        const in30 = new Date()
+        in30.setDate(in30.getDate() + 30)
+        const in30Str = format(in30, 'yyyy-MM-dd')
         const upcoming = bookings
-          .filter(b => { const d = parseISO(b.event_date); return d >= today && d <= in30 })
-          .sort((a, b) => new Date(a.event_date) - new Date(b.event_date))
+          .filter(b => b.event_date && b.event_date.slice(0, 10) >= todayStr && b.event_date.slice(0, 10) <= in30Str)
+          .sort((a, b) => a.event_date.localeCompare(b.event_date))
 
         const leads = couples.filter(c => c.status === 'lead' || c.status === 'inquiry')
         const unreadMsgs = messages.filter(m => m.sender_type === 'couple' && !m.read_at)
         const dueTasks = tasks.filter(t => !t.completed)
-        const overdueTasks = tasks.filter(t => !t.completed && t.due_date && new Date(t.due_date) < today)
+        const overdueTasks = tasks.filter(t => !t.completed && t.due_date && t.due_date.slice(0, 10) < todayStr)
 
         setStats({
           totalCouples: couples.length,
@@ -122,10 +128,12 @@ export default function Dashboard() {
           overdueTasks: overdueTasks.length,
           booked: couples.filter(c => c.status === 'booked').length,
         })
-        setRecentClients(couples.slice(-5).reverse())
+        // The server already lists couples newest first.
+        setRecentClients(couples.slice(0, 5))
         setUpcomingBookings(upcoming.slice(0, 5))
         setRecentMessages(messages.filter(m => m.sender_type === 'couple').slice(-4).reverse())
-        setPendingTasks(dueTasks.slice(0, 5))
+        setPendingTasks([...dueTasks].sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999')).slice(0, 5))
+        setToday(todayRes.data)
         setAttention({ expiring_proposals: [], stalled_proposals: [], overdue_invoices: [], needs_follow_up: [], ...(attentionRes.data || {}) })
       } catch (e) {
         // Surface this. A bare console.error here hid a broken dashboard for
@@ -147,7 +155,8 @@ export default function Dashboard() {
     { to: '/vendors', icon: BuildingStorefrontIcon, label: 'Vendors', description: 'Manage vendor contacts, bookings, and partners.', color: 'bg-emerald-100 text-emerald-600', badge: 0 },
   ]
 
-  const attentionCount = attention.needs_follow_up.length + attention.expiring_proposals.length + attention.stalled_proposals.length + attention.overdue_invoices.length
+  // Overdue payments are listed in the Today panel above, so not repeated here.
+  const attentionCount = attention.needs_follow_up.length + attention.expiring_proposals.length + attention.stalled_proposals.length
 
   if (loading) {
     return (
@@ -188,6 +197,8 @@ export default function Dashboard() {
           sub={stats.overdueTasks > 0 ? `${stats.overdueTasks} overdue` : 'on track'}
         />
       </div>
+
+      <TodayPanel data={today} />
 
       {/* Needs Attention */}
       {attentionCount > 0 && (
@@ -238,19 +249,6 @@ export default function Dashboard() {
                 <div className="text-right flex-shrink-0">
                   <div className="text-xs font-medium text-blue-700">No response</div>
                   <div className="text-xs text-slate-400">sent {p.sent_at ? format(parseISO(p.sent_at), 'MMM d') : '—'}</div>
-                </div>
-              </Link>
-            ))}
-            {attention.overdue_invoices.map(inv => (
-              <Link key={`oi-${inv.id}`} to="/payments" className="flex items-start gap-3 px-5 py-3 hover:bg-red-50 transition-colors">
-                <div className="w-2 h-2 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-slate-700">{inv.partner1_name} &amp; {inv.partner2_name}</div>
-                  <div className="text-xs text-slate-500 truncate">{inv.description}</div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="text-xs font-medium text-red-700">Overdue</div>
-                  <div className="text-xs text-slate-400">${Number(inv.amount).toLocaleString()} · due {inv.due_date ? format(parseISO(inv.due_date), 'MMM d') : '—'}</div>
                 </div>
               </Link>
             ))}

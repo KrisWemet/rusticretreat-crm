@@ -5,6 +5,13 @@ const { authenticateToken, authenticateCouple } = require('../middleware/auth');
 const email = require('../services/email');
 const sms = require('../services/sms');
 
+const PORTAL_ENABLED = () => process.env.ENABLE_COUPLE_PORTAL === '1';
+
+// Which ways of reaching a couple are switched on, for the composer.
+router.get('/config', authenticateToken, (req, res) => {
+  res.json({ portal_enabled: PORTAL_ENABLED(), sms_enabled: sms.isConfigured(), email_enabled: email.isConfigured() });
+});
+
 // Get all conversations (grouped by couple) - admin view
 router.get('/', authenticateToken, (req, res) => {
   const conversations = db.prepare(`
@@ -20,6 +27,7 @@ router.get('/', authenticateToken, (req, res) => {
       (SELECT content FROM messages WHERE couple_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message
     FROM couples c
     LEFT JOIN messages m ON c.id = m.couple_id
+    WHERE c.archived_at IS NULL
     GROUP BY c.id
     HAVING message_count > 0
     ORDER BY last_message_at DESC
@@ -63,8 +71,15 @@ router.get('/:coupleId', authenticateToken, (req, res) => {
 
 // Send message (admin/staff)
 router.post('/:coupleId', authenticateToken, async (req, res) => {
-  const { content, channel } = req.body;
+  const { content, subject } = req.body;
+  // Email is the default while the portal is switched off: a portal message
+  // would sit where the couple cannot see it.
+  const channel = req.body.channel || (PORTAL_ENABLED() ? 'portal' : 'email');
   if (!content) return res.status(400).json({ error: 'Message content required' });
+  if (!['sms', 'portal', 'email'].includes(channel)) return res.status(400).json({ error: 'Unknown channel' });
+  if (channel === 'portal' && !PORTAL_ENABLED()) {
+    return res.status(400).json({ error: 'The couple portal is switched off, so they would never see a portal message. Send it by email instead.' });
+  }
 
   const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.coupleId);
   if (!couple) return res.status(404).json({ error: 'Couple not found' });
@@ -86,9 +101,24 @@ router.post('/:coupleId', authenticateToken, async (req, res) => {
     }
   }
 
+  const wantsEmail = channel === 'email';
+  if (wantsEmail && !couple.email && !couple.partner2_email) {
+    return res.status(400).json({ error: 'No email address on file for this couple.' });
+  }
+
   let delivery = null;
   if (wantsSms) {
     delivery = await sms.sendSms({ to: couple.phone || couple.partner2_phone, body: content });
+  } else if (wantsEmail) {
+    // The whole message goes to both partners; replies come back to the venue.
+    delivery = await email.sendCoupleMessage({
+      to: [couple.email, couple.partner2_email].filter(Boolean),
+      coupleId: couple.id,
+      coupleNames: `${couple.partner1_name} & ${couple.partner2_name}`,
+      senderName: req.user.name,
+      subject: subject && String(subject).trim() ? String(subject).trim().slice(0, 200) : null,
+      body: content,
+    });
   }
 
   const result = db.prepare(`
@@ -98,17 +128,17 @@ router.post('/:coupleId', authenticateToken, async (req, res) => {
     req.params.coupleId,
     req.user.name,
     content,
-    wantsSms ? 'sms' : 'portal',
+    channel,
     wantsSms ? (delivery.to || null) : null,
     wantsSms ? (delivery.sid || null) : null,
-    // Recorded as it actually went, so a text that never left is visible as
-    // such instead of sitting in the thread looking sent.
-    wantsSms ? (delivery.delivered ? 'sent' : 'failed') : null,
+    // Recorded as it actually went, so a text or email that never left is
+    // visible as such instead of sitting in the thread looking sent.
+    delivery ? (delivery.delivered ? 'sent' : 'failed') : null,
   );
 
   const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
 
-  if (!wantsSms) {
+  if (channel === 'portal') {
     // Notify couple by email
     const preview = content.length > 200 ? content.slice(0, 197) + '...' : content;
     email.sendNewMessageCouple({

@@ -157,6 +157,12 @@ router.get('/proposals', authenticateToken, (req, res) => {
   });
 });
 
+// Today and this week, on Alberta dates (the same list as the 7 am email).
+router.get('/today', authenticateToken, (req, res) => {
+  const { albertaToday } = require('../services/schedule');
+  res.json(require('../services/today').todaySummary(albertaToday()));
+});
+
 // Dashboard "needs attention" — expiring/stalled proposals + overdue invoices.
 router.get('/attention', authenticateToken, (req, res) => {
   const in7days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);

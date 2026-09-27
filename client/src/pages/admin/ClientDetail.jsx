@@ -7,10 +7,11 @@ import Modal from '../../components/ui/Modal'
 import Input, { Select, Textarea } from '../../components/ui/Input'
 import {
   ArrowLeftIcon, PencilIcon, TrashIcon, PlusIcon, DocumentDuplicateIcon,
-  PrinterIcon, DocumentCheckIcon,
+  PrinterIcon, DocumentCheckIcon, EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import CoupleForms from '../../components/CoupleForms'
+import CoupleOverview from '../../components/CoupleOverview'
 import axios from 'axios'
 import { format, parseISO } from 'date-fns'
 import { REFERRAL_SOURCES, withCurrent } from '../../utils/options'
@@ -32,7 +33,7 @@ export default function ClientDetail() {
   const navigate = useNavigate()
   const { getAdminAxios, user } = useAuth()
   const [couple, setCouple] = useState(null)
-  const [stats, setStats] = useState(null)
+  const [loadError, setLoadError] = useState(null)
   const [proposals, setProposals] = useState([])
   const [loading, setLoading] = useState(true)
   const [showEdit, setShowEdit] = useState(false)
@@ -41,19 +42,20 @@ export default function ClientDetail() {
 
   const fetchData = async () => {
     const api = getAdminAxios()
-    const [coupleRes, statsRes, proposalsRes] = await Promise.all([
+    const [coupleRes, proposalsRes] = await Promise.all([
       api.get(`/api/couples/${id}`),
-      api.get(`/api/couples/${id}/stats`),
       api.get('/api/proposals'),
     ])
     setCouple(coupleRes.data)
-    setStats(statsRes.data)
     setProposals(proposalsRes.data.filter(p => p.couple_id === Number(id)))
     setForm(coupleRes.data)
   }
 
   useEffect(() => {
-    fetchData().catch(() => {}).finally(() => setLoading(false))
+    fetchData()
+      .then(() => setLoadError(null))
+      .catch(err => setLoadError(err.response?.status === 404 ? 'not-found' : (err.response?.data?.error || 'Could not load this couple. Check your connection and try again.')))
+      .finally(() => setLoading(false))
   }, [id])
 
   useEffect(() => { getAdminAxios().get('/api/packages').then(r => setPackages(r.data)).catch(() => {}) }, [])
@@ -148,7 +150,12 @@ export default function ClientDetail() {
     </div>
   )
 
-  if (!couple) return <div className="text-center py-12 text-gray-400">Couple not found</div>
+  if (!couple) return (
+    <div className="text-center py-12 text-gray-500 space-y-3">
+      <p>{loadError && loadError !== 'not-found' ? loadError : 'This couple could not be found. They may have been deleted.'}</p>
+      <button onClick={() => navigate('/clients')} className="btn-secondary">Back to Clients</button>
+    </div>
+  )
 
   const statusColor = {
     lead: 'lead', inquiry: 'inquiry', booked: 'booked',
@@ -156,13 +163,13 @@ export default function ClientDetail() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6 max-w-7xl">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
-        <button onClick={() => navigate('/clients')} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+        <button onClick={() => navigate('/clients')} aria-label="Back to clients" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
           <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
         </button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-[12rem]">
           <h1 className="text-2xl font-bold text-gray-900">
             {couple.partner1_name} & {couple.partner2_name}
           </h1>
@@ -188,6 +195,11 @@ export default function ClientDetail() {
             </Button>
           )
         )}
+        {(couple.email || couple.partner2_email) && (
+          <Link to={`/messages?couple=${couple.id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50">
+            <EnvelopeIcon className="w-4 h-4" /> Email
+          </Link>
+        )}
         <Button variant="secondary" size="sm" onClick={() => setShowEdit(true)}>
           <PencilIcon className="w-4 h-4" /> Edit
         </Button>
@@ -210,42 +222,6 @@ export default function ClientDetail() {
         </div>
       )}
 
-      {/* Stats */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <p className="text-sm text-gray-500">Guests</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.guests?.total || 0}</p>
-            <div className="flex gap-4 mt-2 text-xs text-gray-400">
-              <span className="text-green-600">{stats.guests?.accepted || 0} accepted</span>
-              <span className="text-red-500">{stats.guests?.declined || 0} declined</span>
-              <span className="text-amber-500">{stats.guests?.pending || 0} pending</span>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <p className="text-sm text-gray-500">Budget</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">
-              ${stats.budget?.total_actual?.toLocaleString() || 0}
-            </p>
-            <p className="text-xs text-gray-400 mt-2">
-              of ${stats.budget?.total_estimated?.toLocaleString() || 0} estimated
-            </p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 p-5">
-            <p className="text-sm text-gray-500">Checklist Progress</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">
-              {stats.checklist?.completed || 0}/{stats.checklist?.total || 0}
-            </p>
-            <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-rose-500 rounded-full transition-all"
-                style={{ width: `${stats.checklist?.total ? (stats.checklist.completed / stats.checklist.total * 100) : 0}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main info cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Contact Info */}
@@ -253,13 +229,15 @@ export default function ClientDetail() {
           <h2 className="font-semibold text-gray-900 mb-4">Contact Information</h2>
           <dl className="space-y-3">
             {[
-              { label: 'Email', value: couple.email },
-              { label: 'Phone', value: couple.phone || 'Not provided' },
+              { label: couple.partner1_name ? `${couple.partner1_name}'s email` : 'Email', value: couple.email ? <a href={`mailto:${couple.email}`} className="text-rose-600 hover:underline">{couple.email}</a> : 'Not provided' },
+              { label: couple.partner1_name ? `${couple.partner1_name}'s phone` : 'Phone', value: couple.phone ? <a href={`tel:${couple.phone}`} className="hover:underline">{couple.phone}</a> : 'Not provided' },
+              { label: couple.partner2_name ? `${couple.partner2_name}'s email` : 'Partner 2 email', value: couple.partner2_email ? <a href={`mailto:${couple.partner2_email}`} className="text-rose-600 hover:underline">{couple.partner2_email}</a> : 'Not provided' },
+              { label: couple.partner2_name ? `${couple.partner2_name}'s phone` : 'Partner 2 phone', value: couple.partner2_phone ? <a href={`tel:${couple.partner2_phone}`} className="hover:underline">{couple.partner2_phone}</a> : 'Not provided' },
               { label: 'Created', value: couple.created_at ? format(parseISO(couple.created_at), 'MMM d, yyyy') : '—' },
             ].map(({ label, value }) => (
-              <div key={label} className="flex justify-between text-sm">
-                <dt className="text-gray-500">{label}</dt>
-                <dd className="font-medium text-gray-900">{value}</dd>
+              <div key={label} className="flex justify-between gap-4 text-sm">
+                <dt className="text-gray-500 flex-shrink-0">{label}</dt>
+                <dd className="font-medium text-gray-900 text-right min-w-0 break-words">{value}</dd>
               </div>
             ))}
           </dl>
@@ -283,6 +261,8 @@ export default function ClientDetail() {
           </dl>
         </div>
       </div>
+
+      <CoupleOverview coupleId={id} api={getAdminAxios()} refreshKey={couple.updated_at || couple.contacted_at || couple.archived_at} />
 
       {/* Proposals */}
       <div className="bg-white rounded-xl border border-gray-100 p-6">

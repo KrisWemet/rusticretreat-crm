@@ -158,6 +158,16 @@ const housekeeping = require('./services/housekeeping');
 schedule.registerJob('backup', 2, () => require('./services/backup').dailyBackup());
 schedule.registerJob('complete-past-weddings', 3, ({ day }) => housekeeping.completePastWeddings(day));
 schedule.registerJob('expire-proposals', 3, ({ day }) => housekeeping.expireProposals(day));
+schedule.registerJob('morning-summary', 7, async ({ day }) => {
+  const today = require('./services/today');
+  const summary = today.todaySummary(day);
+  const items = today.itemCount(summary);
+  if (!items) return { sent: false, items };
+  if (!process.env.ADMIN_EMAIL && !process.env.SMTP_USER) return { sent: false, reason: 'No ADMIN_EMAIL set' };
+  const r = await require('./services/email').sendMorningSummary(summary);
+  if (!r.delivered) throw new Error(`Morning summary not sent: ${r.error}`);
+  return { sent: true, items };
+}, { until: 11 });
 schedule.registerJob('payment-reminders', 8, () => require('./services/paymentReminder').checkAndSendReminders());
 schedule.registerJob('follow-ups', 8, () => require('./services/leadNurture').checkFollowUps());
 // A job that fails (a backup above all) is emailed to the venue, not just logged.

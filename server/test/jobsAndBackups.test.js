@@ -43,6 +43,16 @@ test('a job runs once per Alberta day after its hour, survives restarts, and cat
   assert.equal(row.last_status, 'ok');
 });
 
+test('a job with a cut-off hour does not catch up late in the day', async () => {
+  const runs = [];
+  schedule.registerJob('test-morning', 7, ({ day }) => { runs.push(day); }, { until: 11 });
+  await schedule.tick(at('2026-07-13T02:00:00Z')); // 20:00 on the 12th in Alberta — too late
+  assert.deepEqual(runs, []);
+  await schedule.tick(at('2026-07-13T14:00:00Z')); // 08:00 on the 13th
+  assert.deepEqual(runs, ['2026-07-13']);
+  schedule._jobs.splice(schedule._jobs.findIndex(j => j.name === 'test-morning'), 1);
+});
+
 test('a failing job is recorded and reported to the failure handler', async () => {
   const alerts = [];
   schedule.setFailureHandler((name, err) => alerts.push([name, err.message]));
