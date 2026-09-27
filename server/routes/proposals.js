@@ -138,7 +138,7 @@ router.post('/:id/send', authenticateToken, async (req, res) => {
     db.prepare(`UPDATE couples SET pipeline_stage = 'proposal' WHERE id = ? AND pipeline_stage IN ('inquiry', 'tour')`)
       .run(proposal.couple_id);
 
-    let delivery = { delivered: true, error: null };
+    let delivery = { delivered: false, error: 'This couple has no email address on file' };
     if (proposal.couple_email) {
       const r = await email.sendProposal({
         to: proposal.couple_email,
@@ -397,6 +397,11 @@ router.post('/public/:token/accept', (req, res) => {
 router.post('/public/:token/decline', (req, res) => {
   const proposal = db.prepare('SELECT * FROM proposals WHERE public_token = ?').get(req.params.token);
   if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+  // Once accepted, the booking and invoices exist, so the link can no longer
+  // undo it; the couple has to talk to the venue.
+  if (proposal.status !== 'sent') {
+    return res.status(409).json({ error: `This proposal has already been ${proposal.status}. Please contact Rustic Retreat to make changes.` });
+  }
   db.prepare(`UPDATE proposals SET status = 'declined' WHERE id = ?`).run(proposal.id);
   res.json({ success: true });
 });

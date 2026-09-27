@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { defaultEndDate } = require('../services/bookingRules');
 const email = require('../services/email');
 const rateLimit = require('../middleware/rateLimit');
 const { recordWebsiteEnquiry, recordBookingRequest } = require('../services/websiteEnquiry');
@@ -15,28 +16,27 @@ function shiftDate(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
-// Build the set of unavailable dates: every day inside a booking span, the
-// full weekend (Fri–Sun) around each booked day (one wedding per weekend),
-// plus any manually blocked dates.
+// Build the set of unavailable dates the same way the booking rules see them
+// (services/bookingRules.js): every day of each booking, plus the reset day
+// after it, plus manually blocked dates. Cancelled couples hold nothing.
 function buildUnavailableDates() {
   const unavailable = new Set();
 
-  const bookings = db.prepare('SELECT event_date, end_date FROM bookings WHERE event_date IS NOT NULL').all();
+  const bookings = db.prepare(`
+    SELECT b.event_date, b.end_date, b.package_name FROM bookings b
+    JOIN couples c ON c.id = b.couple_id
+    WHERE b.event_date IS NOT NULL AND c.status != 'cancelled'
+  `).all();
   for (const b of bookings) {
-    const start = b.event_date;
-    const end = b.end_date || b.event_date;
-    let cursor = start;
+    const end = b.end_date || defaultEndDate(b.event_date, b.package_name) || b.event_date;
+    let cursor = b.event_date;
     let guard = 0;
     while (cursor <= end && guard < 60) {
       unavailable.add(cursor);
-      // Block the surrounding weekend (Fri/Sat/Sun) — one wedding per weekend.
-      const dow = new Date(cursor + 'T00:00:00').getDay(); // 0 Sun … 6 Sat
-      unavailable.add(shiftDate(cursor, 5 - dow));  // Friday
-      unavailable.add(shiftDate(cursor, 6 - dow));  // Saturday
-      unavailable.add(shiftDate(cursor, 7 - dow));  // Sunday
       cursor = shiftDate(cursor, 1);
       guard++;
     }
+    unavailable.add(shiftDate(end, 1)); // reset day
   }
 
   for (const row of db.prepare('SELECT date FROM blocked_dates').all()) {

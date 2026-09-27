@@ -10,3 +10,6 @@ server/uploads/
 dist/
 client/dist/
 server/.jwt-secret
+
+# Local database backups (they hold client details)
+server/backups/

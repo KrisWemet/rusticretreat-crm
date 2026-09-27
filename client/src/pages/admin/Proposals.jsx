@@ -144,8 +144,8 @@ export default function Proposals() {
         await api.put(`/api/proposals/${editing}`, payload)
       }
       if (thenSend) {
-        await api.post(`/api/proposals/${id}/send`)
-        toast.success('Proposal sent to couple')
+        const { data } = await api.post(`/api/proposals/${id}/send`)
+        sentToast(data)
       } else {
         toast.success('Proposal saved')
       }
@@ -155,10 +155,16 @@ export default function Proposals() {
     } finally { setSaving(false) }
   }
 
+  // The proposal link is live either way; only say "emailed" when it was.
+  function sentToast(data) {
+    if (data?.delivered) toast.success('Proposal emailed to the couple')
+    else toast.error(`Proposal is ready, but the email did not go out${data?.error ? ` (${data.error})` : ''}. Use the link button to copy it and send it yourself.`, { duration: 8000 })
+  }
+
   async function send(p) {
     try {
-      await api.post(`/api/proposals/${p.id}/send`)
-      toast.success('Proposal sent')
+      const { data } = await api.post(`/api/proposals/${p.id}/send`)
+      sentToast(data)
       load()
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to send') }
   }

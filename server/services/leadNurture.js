@@ -1,50 +1,55 @@
 const db = require('../db');
 const email = require('./email');
 
-// Automated follow-up for cold leads. Leads that sit in 'lead' or 'inquiry'
-// without converting get a gentle nudge to the couple at 3 days, and a
-// staff alert at 7 days so someone reaches out personally.
-async function checkAndNurtureLeads() {
-  const leads = db.prepare(`
-    SELECT id, partner1_name, partner2_name, email, phone, status,
-           nurture_3d_sent, nurture_7d_sent,
-           CAST(julianday('now') - julianday(created_at) AS INTEGER) AS days_old
-    FROM couples
-    WHERE status IN ('lead', 'inquiry')
-  `).all();
+// Enquiries nobody has followed up yet.
+//
+// Couples are never nudged automatically (the owner's choice, Sep 2026): the
+// venue is told instead, so every follow-up is personal. An enquiry counts as
+// followed up once it has a scheduled or completed tour, a sent proposal, a
+// booking, or staff have clicked "Mark contacted".
+function needsFollowUp({ minDays = 0 } = {}) {
+  return db.prepare(`
+    SELECT c.id, c.partner1_name, c.partner2_name, c.email, c.phone, c.status, c.created_at,
+           c.nurture_7d_sent,
+           CAST(julianday('now') - julianday(c.created_at) AS INTEGER) AS days_old
+    FROM couples c
+    WHERE c.status IN ('lead', 'inquiry')
+      AND c.contacted_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM tours t WHERE t.couple_id = c.id AND t.status IN ('scheduled', 'completed'))
+      AND NOT EXISTS (SELECT 1 FROM proposals p WHERE p.couple_id = c.id AND p.status IN ('sent', 'accepted'))
+      AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.couple_id = c.id)
+      AND julianday('now') - julianday(c.created_at) >= ?
+    ORDER BY c.created_at ASC
+  `).all(minDays);
+}
 
-  let nudged = 0;
+// Once an enquiry is a week old with no follow-up, email the venue (once).
+async function checkFollowUps() {
+  const waiting = needsFollowUp();
   let alerted = 0;
-  for (const lead of leads) {
-    const coupleNames = `${lead.partner1_name} & ${lead.partner2_name}`;
-
-    if (lead.days_old >= 3 && !lead.nurture_3d_sent && lead.email) {
-      await email.sendLeadNurture({ to: lead.email, coupleNames });
-      db.prepare('UPDATE couples SET nurture_3d_sent = 1 WHERE id = ?').run(lead.id);
-      nudged++;
-    }
-
-    if (lead.days_old >= 7 && !lead.nurture_7d_sent) {
-      await email.sendColdLeadAdmin({
-        coupleNames,
-        email: lead.email,
-        phone: lead.phone,
-        daysOld: lead.days_old,
-      });
+  for (const lead of waiting) {
+    if (lead.days_old < 7 || lead.nurture_7d_sent) continue;
+    const r = await email.sendColdLeadAdmin({
+      coupleNames: `${lead.partner1_name} & ${lead.partner2_name}`,
+      email: lead.email,
+      phone: lead.phone,
+      daysOld: lead.days_old,
+      coupleId: lead.id,
+    });
+    if (r && r.delivered) {
       db.prepare('UPDATE couples SET nurture_7d_sent = 1 WHERE id = ?').run(lead.id);
       alerted++;
     }
   }
-
-  console.log(`[LeadNurture] Checked ${leads.length} leads, sent ${nudged} nudges, ${alerted} staff alerts`);
+  console.log(`[FollowUp] ${waiting.length} enquiries need a follow-up, sent ${alerted} staff alerts`);
 }
 
 function startLeadNurtureScheduler() {
-  checkAndNurtureLeads().catch(err => console.error('[LeadNurture]', err.message));
+  checkFollowUps().catch(err => console.error('[FollowUp]', err.message));
   const timer = setInterval(() => {
-    checkAndNurtureLeads().catch(err => console.error('[LeadNurture]', err.message));
+    checkFollowUps().catch(err => console.error('[FollowUp]', err.message));
   }, 24 * 60 * 60 * 1000);
   timer.unref();
 }
 
-module.exports = { startLeadNurtureScheduler };
+module.exports = { startLeadNurtureScheduler, needsFollowUp, checkFollowUps };

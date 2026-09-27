@@ -172,4 +172,13 @@ function sendRuleError(res, err) {
   return false;
 }
 
-module.exports = { assertBookable, BookingRuleError, sendRuleError, packageKind, MAX_RECEPTION_GUESTS };
+// The last day of a stay that only has a start date: a 3-Day Weekend runs
+// three days, a 5-Day Experience five. Null for anything else.
+function defaultEndDate(eventDate, packageName) {
+  const start = toDay(eventDate);
+  const length = PACKAGE_LENGTH[packageKind(packageName)];
+  if (start == null || !length) return null;
+  return fromDay(start + length - 1);
+}
+
+module.exports = { assertBookable, BookingRuleError, sendRuleError, packageKind, defaultEndDate, MAX_RECEPTION_GUESTS };

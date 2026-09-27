@@ -44,7 +44,7 @@ export default function PublicProposal() {
     try {
       await axios.post(`/api/proposals/public/${token}/decline`)
       setDone('declined')
-    } catch { setError('Something went wrong.') }
+    } catch (e) { setError(e.response?.data?.error || 'Something went wrong.') }
     finally { setSubmitting(false) }
   }
 
