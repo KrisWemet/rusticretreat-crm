@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
-import Input, { Textarea } from '../../components/ui/Input'
+import Input, { Textarea, Select } from '../../components/ui/Input'
 import {
   MapIcon, CheckCircleIcon, XMarkIcon, CalendarDaysIcon,
-  PhoneIcon, EnvelopeIcon,
+  PhoneIcon, EnvelopeIcon, PlusIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
@@ -33,12 +33,45 @@ export default function Tours() {
   const [scheduling, setScheduling] = useState(null)
   const [scheduledAt, setScheduledAt] = useState('')
   const [notes, setNotes] = useState('')
+  const [notify, setNotify] = useState(true)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [couples, setCouples] = useState([])
+  const [addForm, setAddForm] = useState({ couple_id: '', name: '', email: '', phone: '', scheduled_at: '', notes: '' })
+  const [loadError, setLoadError] = useState(null)
 
   const fetchData = async () => {
     const r = await getAdminAxios().get('/api/tours')
     setTours(r.data)
   }
-  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
+  useEffect(() => {
+    fetchData()
+      .then(() => setLoadError(null))
+      .catch(err => setLoadError(err.response?.data?.error || 'Could not load tours'))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const openAdd = async () => {
+    setAddForm({ couple_id: '', name: '', email: '', phone: '', scheduled_at: '', notes: '' })
+    setAdding(true)
+    if (!couples.length) getAdminAxios().get('/api/couples').then(r => setCouples(r.data)).catch(() => {})
+  }
+  const pickCouple = (id) => {
+    const c = couples.find(x => String(x.id) === id)
+    setAddForm(p => ({ ...p, couple_id: id, ...(c ? { name: `${c.partner1_name} & ${c.partner2_name}`, email: c.email || '', phone: c.phone || '' } : {}) }))
+  }
+  const saveAdd = async (e) => {
+    e.preventDefault()
+    try {
+      await getAdminAxios().post('/api/tours', {
+        ...addForm, couple_id: addForm.couple_id || null,
+        scheduled_at: addForm.scheduled_at || null, status: addForm.scheduled_at ? 'scheduled' : 'requested',
+      })
+      toast.success(addForm.scheduled_at ? 'Tour added to the calendar' : 'Tour request added')
+      setAdding(false); fetchData()
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not add the tour') }
+  }
 
   const update = async (id, body, msg) => {
     try {
@@ -55,19 +88,29 @@ export default function Tours() {
     // Pre-fill with preferred date at 10:00 AM if available
     setScheduledAt(t.scheduled_at ? t.scheduled_at.slice(0, 16) : (t.preferred_date ? `${t.preferred_date}T10:00` : ''))
     setNotes(t.notes || '')
+    setNotify(!!t.email)
   }
 
   const saveSchedule = async (e) => {
     e.preventDefault()
     if (!scheduledAt) { toast.error('Pick a date and time'); return }
-    await update(scheduling.id, { scheduled_at: scheduledAt, status: 'scheduled', notes }, 'Tour scheduled')
-    setScheduling(null)
+    try {
+      const { data } = await getAdminAxios().put(`/api/tours/${scheduling.id}`, { scheduled_at: scheduledAt, status: 'scheduled', notes, notify })
+      if (notify && data.confirmation_sent === false) toast.error(`Tour scheduled, but the confirmation did not send: ${data.confirmation_error}`, { duration: 7000 })
+      else toast.success(notify ? 'Tour scheduled and confirmation emailed' : 'Tour scheduled')
+      setScheduling(null)
+      fetchData()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to schedule')
+    }
   }
 
   const remove = async (id) => {
     if (!confirm('Delete this tour request?')) return
-    await getAdminAxios().delete(`/api/tours/${id}`)
-    toast.success('Deleted'); fetchData()
+    try {
+      await getAdminAxios().delete(`/api/tours/${id}`)
+      toast.success('Deleted'); fetchData()
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not delete') }
   }
 
   const counts = {
@@ -78,26 +121,39 @@ export default function Tours() {
 
   return (
     <div className="p-6 space-y-5 max-w-6xl">
-      <div>
-        <h1 className="page-title">Site Tours</h1>
-        <p className="page-subtitle">{counts.requested} awaiting scheduling · {counts.scheduled} upcoming · {counts.completed} completed</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="page-title">Site Tours</h1>
+          <p className="page-subtitle">{counts.requested} awaiting scheduling · {counts.scheduled} upcoming · {counts.completed} completed</p>
+        </div>
+        <button className="btn-primary" onClick={openAdd}>
+          <PlusIcon className="w-4 h-4" /> Add tour
+        </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      {/* Counts double as filters: click one to see just those tours. */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {[
-          { label: 'Tour Requests', value: counts.requested, color: 'text-amber-700' },
-          { label: 'Scheduled', value: counts.scheduled, color: 'text-blue-700' },
-          { label: 'Completed', value: counts.completed, color: 'text-emerald-700' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="card p-4 text-center">
+          { key: 'requested', label: 'Tour Requests', value: counts.requested, color: 'text-amber-700' },
+          { key: 'scheduled', label: 'Scheduled', value: counts.scheduled, color: 'text-blue-700' },
+          { key: 'completed', label: 'Completed', value: counts.completed, color: 'text-emerald-700' },
+        ].map(({ key, label, value, color }) => (
+          <button key={key} onClick={() => setStatusFilter(statusFilter === key ? '' : key)}
+            aria-pressed={statusFilter === key}
+            className={`card p-3 sm:p-4 text-center transition-shadow hover:shadow-md ${statusFilter === key ? 'ring-2 ring-rose-400' : ''}`}>
             <div className={`text-2xl font-bold ${color}`}>{value}</div>
             <div className="text-xs text-slate-400 mt-0.5">{label}</div>
-          </div>
+          </button>
         ))}
       </div>
+      {statusFilter && (
+        <p className="text-xs text-slate-500">Showing {statusFilter} tours only. <button onClick={() => setStatusFilter('')} className="text-rose-600 hover:underline">Show all</button></p>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-7 w-7 border-2 border-rose-200 border-t-rose-600" /></div>
+      ) : loadError ? (
+        <div className="card py-10 text-center text-sm text-red-600">{loadError}</div>
       ) : tours.length === 0 ? (
         <div className="card py-16 text-center">
           <MapIcon className="w-12 h-12 text-slate-200 mx-auto mb-3" />
@@ -118,7 +174,7 @@ export default function Tours() {
               </tr>
             </thead>
             <tbody>
-              {tours.map(t => (
+              {tours.filter(t => !statusFilter || t.status === statusFilter).map(t => (
                 <tr key={t.id}>
                   <td>
                     {t.couple_id ? (
@@ -173,12 +229,35 @@ export default function Tours() {
             </p>
             <Input label="Tour Date & Time" type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} required />
             <Textarea label="Notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Anything to prep for this tour..." />
+            <label className={`flex items-center gap-2 text-sm ${scheduling.email ? 'text-slate-700' : 'text-slate-400'}`}>
+              <input type="checkbox" checked={notify && !!scheduling.email} disabled={!scheduling.email} onChange={e => setNotify(e.target.checked)} />
+              {scheduling.email ? `Email ${scheduling.email} a confirmation` : 'No email address, so no confirmation can be sent'}
+            </label>
             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
               <button type="button" className="btn-secondary" onClick={() => setScheduling(null)}>Cancel</button>
               <button type="submit" className="btn-primary">Schedule Tour</button>
             </div>
           </form>
         )}
+      </Modal>
+      <Modal isOpen={adding} onClose={() => setAdding(false)} title="Add a site tour">
+        <form onSubmit={saveAdd} className="space-y-4">
+          <Select label="Couple (optional)" value={addForm.couple_id} onChange={e => pickCouple(e.target.value)}>
+            <option value="">Someone not in the CRM yet</option>
+            {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
+          </Select>
+          <Input label="Visitor name" value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} required />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Email" type="email" value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))} />
+            <Input label="Phone" value={addForm.phone} onChange={e => setAddForm(p => ({ ...p, phone: e.target.value }))} />
+          </div>
+          <Input label="Date & time (leave empty for a request to schedule later)" type="datetime-local" value={addForm.scheduled_at} onChange={e => setAddForm(p => ({ ...p, scheduled_at: e.target.value }))} />
+          <Textarea label="Notes" value={addForm.notes} onChange={e => setAddForm(p => ({ ...p, notes: e.target.value }))} />
+          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+            <button type="button" className="btn-secondary" onClick={() => setAdding(false)}>Cancel</button>
+            <button type="submit" className="btn-primary">Add tour</button>
+          </div>
+        </form>
       </Modal>
     </div>
   )

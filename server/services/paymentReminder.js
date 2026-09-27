@@ -34,6 +34,7 @@ async function checkAndSendReminders() {
 
     const r = await email.sendPaymentReminder({
       to: [invoice.email, invoice.partner2_email].filter(Boolean),
+      coupleId: invoice.couple_id,
       coupleNames: `${invoice.partner1_name} & ${invoice.partner2_name}`,
       description: invoice.description,
       amount: invoice.amount,

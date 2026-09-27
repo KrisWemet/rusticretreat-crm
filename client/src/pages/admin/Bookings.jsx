@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
 import Input, { Select, Textarea } from '../../components/ui/Input'
-import { PlusIcon, CalendarDaysIcon, MapPinIcon, UsersIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, CalendarDaysIcon, MapPinIcon, UsersIcon, CurrencyDollarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
 import { packagePriceFor, withGst } from '../../utils/packagePrice'
@@ -37,6 +38,9 @@ export default function Bookings() {
   const [packages, setPackages] = useState([])
   const [addons, setAddons] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [search, setSearch] = useState('')
+  const [when, setWhen] = useState('upcoming')
   const [showForm, setShowForm] = useState(false)
   const [editBooking, setEditBooking] = useState(null)
   const [form, setForm] = useState(emptyForm)
@@ -78,7 +82,13 @@ export default function Bookings() {
     setAddons(aRes.data)
   }
 
-  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
+  useEffect(() => {
+    fetchData()
+      .then(() => setLoadError(null))
+      .catch(err => setLoadError(err.response?.data?.error || 'Could not load bookings'))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -99,13 +109,25 @@ export default function Bookings() {
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this booking?')) return
-    await getAdminAxios().delete(`/api/bookings/${id}`)
-    toast.success('Deleted'); fetchData()
+    try {
+      await getAdminAxios().delete(`/api/bookings/${id}`)
+      toast.success('Deleted'); fetchData()
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not delete the booking') }
   }
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const q = search.trim().toLowerCase()
+  const lastDay = (b) => (b.end_date || b.event_date || '').slice(0, 10)
+  const shown = bookings
+    .filter(b => !b.couple_archived_at)
+    .filter(b => when === 'all' || (when === 'upcoming' ? (!b.event_date || lastDay(b) >= todayStr) : (b.event_date && lastDay(b) < todayStr)))
+    .filter(b => !q || `${b.partner1_name} ${b.partner2_name} ${b.package_name || ''} ${b.couple_email || ''}`.toLowerCase().includes(q))
+  // Past bookings read best newest first.
+  if (when === 'past') shown.reverse()
 
   return (
     <div className="p-6 space-y-5 max-w-7xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="page-title">Bookings</h1>
           <p className="page-subtitle">{bookings.length} total bookings</p>
@@ -116,8 +138,27 @@ export default function Bookings() {
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1">
+          {[['upcoming', 'Upcoming'], ['past', 'Past'], ['all', 'All']].map(([key, label]) => (
+            <button key={key} onClick={() => setWhen(key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${when === key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1 min-w-[10rem]">
+          <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type="search" aria-label="Search bookings" placeholder="Search by couple, package or email…" value={search} onChange={e => setSearch(e.target.value)} className="input-field pl-9" />
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-7 w-7 border-2 border-rose-200 border-t-rose-600" /></div>
+      ) : loadError ? (
+        <div className="card py-10 text-center text-sm text-red-600">{loadError}</div>
+      ) : shown.length === 0 && bookings.length > 0 ? (
+        <div className="card py-12 text-center text-slate-400">No {when === 'all' ? '' : when} bookings{q ? ' match your search' : ''}.</div>
       ) : bookings.length === 0 ? (
         <div className="card py-16 text-center">
           <CalendarDaysIcon className="w-12 h-12 text-slate-200 mx-auto mb-3" />
@@ -138,10 +179,10 @@ export default function Bookings() {
               </tr>
             </thead>
             <tbody>
-              {bookings.map(b => (
+              {shown.map(b => (
                 <tr key={b.id}>
                   <td>
-                    <div className="font-medium text-slate-800">{b.partner1_name} & {b.partner2_name}</div>
+                    <Link to={`/clients/${b.couple_id}`} className="font-medium text-slate-800 hover:text-rose-600">{b.partner1_name} & {b.partner2_name}</Link>
                     {b.add_ons && <div className="text-xs text-slate-400 mt-0.5">Add-ons: {b.add_ons}</div>}
                   </td>
                   <td>
@@ -167,7 +208,7 @@ export default function Bookings() {
                   </td>
                   <td>
                     <div className="text-sm font-medium text-slate-800">${(b.total_price || 0).toLocaleString()} CAD</div>
-                    <div className="text-xs text-slate-400">Deposit: ${(b.deposit_paid || 0).toLocaleString()}</div>
+                    <div className="text-xs text-slate-400">{b.invoiced_total > 0 ? `Paid ${money(b.paid_total)} of ${money(b.invoiced_total)}` : 'No invoices yet'}</div>
                   </td>
                   <td>
                     <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${paymentStyle[b.payment_status] || 'bg-slate-100 text-slate-500'}`}>
@@ -221,10 +262,7 @@ export default function Bookings() {
               </select>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Select label="Payment Status" value={form.payment_status} onChange={f('payment_status')}>
-              {['pending','partial','paid','overdue'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-            </Select>
+          <div>
             <div className="space-y-1">
               <Input label="Total Package Price (CAD, incl. GST)" type="number" step="0.01" value={form.total_price} onChange={f('total_price')} placeholder="6825" />
               {expected != null && !totalDiffers && (
@@ -238,7 +276,7 @@ export default function Bookings() {
               )}
             </div>
           </div>
-          <Input label="Deposit Paid ($)" type="number" value={form.deposit_paid} onChange={f('deposit_paid')} />
+          <p className="text-xs text-slate-400">Payments are tracked as invoices on the Payments page; this booking's payment status follows them.</p>
           <Textarea label="Special Requests" value={form.special_requests} onChange={f('special_requests')} />
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
             <button type="button" className="btn-secondary" onClick={() => { setShowForm(false); setEditBooking(null) }}>Cancel</button>

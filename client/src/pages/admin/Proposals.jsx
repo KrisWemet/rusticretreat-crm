@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   PlusIcon, TrashIcon, PaperAirplaneIcon, PencilIcon,
@@ -23,6 +23,8 @@ const emptyForm = {
   items: [],
 }
 
+const INCLUDED_GUESTS = 80
+
 function fmtDate(v) {
   if (!v) return '—'
   try { return format(parseISO(v), 'MMM d, yyyy') } catch { return v }
@@ -39,6 +41,8 @@ export default function Proposals() {
   const [editing, setEditing] = useState(null) // null | 'new' | proposal id
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -90,6 +94,22 @@ export default function Proposals() {
     } catch { toast.error('Could not open proposal') }
   }
 
+  // Start a new draft from an existing proposal (same items and terms).
+  async function duplicate(id) {
+    try {
+      const { data } = await api.get(`/api/proposals/${id}`)
+      setForm({
+        couple_id: data.couple_id, title: `${data.title} (copy)`, package_name: data.package_name || '',
+        event_date: data.event_date || '', end_date: data.end_date || '',
+        guest_count: data.guest_count || '', tax_rate: data.tax_rate, deposit_pct: data.deposit_pct,
+        valid_until: '', notes: data.notes || '',
+        items: data.items.map(i => ({ label: i.label, description: i.description || '', quantity: i.quantity, unit_price: i.unit_price, amount: i.amount, kind: i.kind })),
+      })
+      setEditing('new')
+      toast.success('Copied into a new draft. Change what you need, then save.')
+    } catch { toast.error('Could not copy this proposal') }
+  }
+
   function setItem(idx, patch) {
     setForm(f => {
       const items = f.items.map((it, i) => {
@@ -121,7 +141,8 @@ export default function Proposals() {
   function addAddon(a) {
     const guests = Number(form.guest_count) || 0
     let qty = 1, label = a.name
-    if (a.unit === 'per_guest') { qty = Math.max(0, guests - 60); label = `${a.name}` }
+    // 80 guests are included in every package; the per-guest fee covers 81–100.
+    if (a.unit === 'per_guest') { qty = Math.max(0, guests - INCLUDED_GUESTS); label = `${a.name}` }
     const amount = Math.round(qty * a.price * 100) / 100
     setForm(f => ({ ...f, items: [...f.items, { label, description: a.description || '', quantity: qty, unit_price: a.price, amount, kind: 'addon' }] }))
   }
@@ -203,12 +224,24 @@ export default function Proposals() {
 
   return (
     <div className="p-6 space-y-5 max-w-6xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="page-title">Proposals</h1>
           <p className="page-subtitle">Build itemized quotes couples can accept online</p>
         </div>
         <button onClick={openNew} className="btn-primary"><PlusIcon className="w-4 h-4" /> New Proposal</button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 overflow-x-auto max-w-full">
+          {[['', 'All'], ['draft', 'Draft'], ['sent', 'Sent'], ['accepted', 'Accepted'], ['declined', 'Declined'], ['expired', 'Expired']].map(([key, label]) => (
+            <button key={key} onClick={() => setStatusFilter(key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${statusFilter === key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
+              {label}{key ? ` (${proposals.filter(p => p.status === key).length})` : ''}
+            </button>
+          ))}
+        </div>
+        <input type="search" aria-label="Search proposals" placeholder="Search by couple or title…" value={search} onChange={e => setSearch(e.target.value)} className="input-field flex-1 min-w-[10rem]" />
       </div>
 
       {loading ? (
@@ -224,10 +257,13 @@ export default function Proposals() {
           <table className="table">
             <thead><tr><th>Proposal</th><th>Couple</th><th>Event</th><th>Total</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {proposals.map(p => (
+              {proposals
+                .filter(p => !statusFilter || p.status === statusFilter)
+                .filter(p => !search.trim() || `${p.title} ${p.partner1_name} ${p.partner2_name}`.toLowerCase().includes(search.trim().toLowerCase()))
+                .map(p => (
                 <tr key={p.id}>
-                  <td><span className="font-medium text-slate-800">{p.title}</span></td>
-                  <td className="text-slate-600 text-sm">{p.partner1_name} & {p.partner2_name}</td>
+                  <td><button onClick={() => openEdit(p.id)} className="font-medium text-slate-800 hover:text-rose-600 text-left">{p.title}</button></td>
+                  <td className="text-slate-600 text-sm"><Link to={`/clients/${p.couple_id}`} className="hover:text-rose-600 hover:underline">{p.partner1_name} & {p.partner2_name}</Link></td>
                   <td className="text-slate-500 text-xs">{fmtDate(p.event_date)}</td>
                   <td className="font-semibold text-slate-800">${Number(p.total).toLocaleString()}</td>
                   <td><span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${STATUS[p.status]}`}>{p.status}</span></td>
@@ -238,7 +274,8 @@ export default function Proposals() {
                         <button onClick={() => send(p)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg" title="Send to couple"><PaperAirplaneIcon className="w-4 h-4" /></button>
                       )}
                       <button onClick={() => copyLink(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Copy link"><LinkIcon className="w-4 h-4" /></button>
-                      <button onClick={() => printProposal(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Print / PDF"><PrinterIcon className="w-4 h-4" /></button>
+                      <button onClick={() => printProposal(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Print / PDF" aria-label="Print"><PrinterIcon className="w-4 h-4" /></button>
+                      <button onClick={() => duplicate(p.id)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="Duplicate as a new draft" aria-label="Duplicate"><DocumentDuplicateIcon className="w-4 h-4" /></button>
                       <button onClick={() => del(p)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><TrashIcon className="w-4 h-4" /></button>
                     </div>
                   </td>
