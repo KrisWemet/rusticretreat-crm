@@ -41,3 +41,20 @@ test('bootstrap keeps real couples logged in and disables only seeded demo login
     assert.equal(byEmail[seeded], 0, `${seeded} was disabled`);
   }
 });
+
+test('a password changed in the CRM survives later boots while the bootstrap variable is still set', () => {
+  const pw = 'another-long-admin-password';
+  boot({ ADMIN_BOOTSTRAP_PASSWORD: pw }, '');
+  // The admin changes their password in Settings.
+  boot({}, `
+    const bcrypt = require('bcryptjs');
+    db.prepare("UPDATE users SET password_hash = ? WHERE email = 'admin@rusticretreat.com'").run(bcrypt.hashSync('changed-in-the-crm', 4));
+  `);
+  // A later deploy with the same variable still set must not reset it.
+  const out = boot({ ADMIN_BOOTSTRAP_PASSWORD: pw }, `
+    const bcrypt = require('bcryptjs');
+    const u = db.prepare("SELECT password_hash FROM users WHERE email = 'admin@rusticretreat.com'").get();
+    console.log(bcrypt.compareSync('changed-in-the-crm', u.password_hash));
+  `);
+  assert.equal(out.split('\n').pop(), 'true');
+});

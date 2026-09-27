@@ -4,6 +4,15 @@ const db = require('../db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { logActivity, recentActivity } = require('../services/activity');
 
+// The sales-board column for a status (see PATCH /:id/stage for the reverse).
+function stageForStatus(status, currentStage) {
+  if (status === 'booked' || status === 'completed') return 'booked';
+  if (status === 'cancelled') return 'lost';
+  if (status === 'inquiry') return ['tour', 'proposal'].includes(currentStage) ? currentStage : 'tour';
+  if (status === 'lead') return 'inquiry';
+  return currentStage || 'inquiry';
+}
+
 // Get all couples
 router.get('/', authenticateToken, (req, res) => {
   const { status, search, archived } = req.query;
@@ -131,6 +140,13 @@ router.put('/:id', authenticateToken, (req, res) => {
       req.params.id
     );
 
+    // Keep the sales-board column in step when the status is changed here, as
+    // the board keeps the status in step when a card is moved.
+    if (status && status !== couple.status) {
+      const stage = stageForStatus(status, couple.pipeline_stage);
+      if (stage !== couple.pipeline_stage) db.prepare('UPDATE couples SET pipeline_stage = ? WHERE id = ?').run(stage, req.params.id);
+    }
+
     const updated = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id);
     res.json(updated);
   } catch (err) {
@@ -143,6 +159,7 @@ router.put('/:id', authenticateToken, (req, res) => {
 
 // Update a couple's pipeline stage (used by the sales-board drag & drop)
 const PIPELINE_STAGES = ['inquiry', 'tour', 'proposal', 'booked', 'lost'];
+
 router.patch('/:id/stage', authenticateToken, (req, res) => {
   const { pipeline_stage, stage_order } = req.body;
   const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id);

@@ -19,6 +19,7 @@ import {
   ViewColumnsIcon,
   DocumentDuplicateIcon,
   ClipboardDocumentCheckIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
@@ -38,6 +39,7 @@ const navItems = [
   { to: '/analytics',  icon: ChartBarIcon,              label: 'Analytics' },
   { to: '/packages',   icon: CubeIcon,                  label: 'Packages' },
   { to: '/backups',    icon: ShieldCheckIcon,           label: 'Backups' },
+  { to: '/settings',   icon: Cog6ToothIcon,             label: 'Settings' },
 ]
 
 export default function Sidebar({ unreadMessages = 0, pendingTasks = 0, open = false, onClose = () => {} }) {

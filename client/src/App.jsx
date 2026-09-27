@@ -37,6 +37,8 @@ import FormsAdmin from './pages/admin/Forms'
 import PublicProposal from './pages/PublicProposal'
 import PublicForm from './pages/PublicForm'
 import PortalForms from './pages/portal/Forms'
+import Settings from './pages/admin/Settings'
+import NotFound from './pages/NotFound'
 
 function App() {
   return (
@@ -90,6 +92,8 @@ function App() {
             <Route path="analytics" element={<Analytics />} />
             <Route path="packages" element={<Packages />} />
             <Route path="backups" element={<Backups />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
 
           {/* Couple portal routes */}

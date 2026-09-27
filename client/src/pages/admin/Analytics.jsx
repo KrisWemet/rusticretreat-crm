@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import {
@@ -40,6 +41,7 @@ export default function Analytics() {
   const [occupancy, setOccupancy] = useState(null)
   const [occYear, setOccYear] = useState(new Date().getFullYear())
   const [propStats, setPropStats] = useState(null)
+  const [loadError, setLoadError] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -58,12 +60,15 @@ export default function Analytics() {
       setReferrals(ref.data)
       setPkgPerf(p.data)
       setPropStats(pr.data)
-    }).catch(console.error).finally(() => setLoading(false))
+    }).catch(err => {
+      console.error(err)
+      setLoadError(err.response?.data?.error || 'Could not load the analytics. Check your connection and refresh.')
+    }).finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
     getAdminAxios().get(`/api/analytics/occupancy?year=${occYear}`)
-      .then(r => setOccupancy(r.data)).catch(console.error)
+      .then(r => setOccupancy(r.data)).catch(() => toast.error('Could not load occupancy for that year'))
   }, [occYear])
 
   // Build 12-month chart data
@@ -95,6 +100,7 @@ export default function Analytics() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl">
+      {loadError && <div className="card p-4 text-sm text-red-600">{loadError}</div>}
       <div>
         <h1 className="page-title">Revenue & Analytics</h1>
         <p className="page-subtitle">{new Date().getFullYear()} business performance overview</p>

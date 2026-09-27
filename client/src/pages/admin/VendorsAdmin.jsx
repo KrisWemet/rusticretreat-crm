@@ -20,6 +20,7 @@ export default function VendorsAdmin() {
   const [showAdd, setShowAdd] = useState(false)
   const [search, setSearch] = useState('')
   const [form, setForm] = useState(emptyForm)
+  const [editingId, setEditingId] = useState(null)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const fetchData = async () => {
@@ -30,18 +31,34 @@ export default function VendorsAdmin() {
 
   useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
 
+  const openAdd = () => { setEditingId(null); setForm(emptyForm); setShowAdd(true) }
+  const openEdit = (v) => {
+    setEditingId(v.id)
+    setForm({ couple_id: String(v.couple_id), vendor_type: v.vendor_type || '', business_name: v.business_name || '', contact_name: v.contact_name || '',
+      phone: v.phone || '', email: v.email || '', website: v.website || '', notes: v.notes || '', booked: !!v.booked })
+    setShowAdd(true)
+  }
+
   const handleAdd = async (e) => {
     e.preventDefault()
     try {
-      await getAdminAxios().post(`/api/vendors/couple/${form.couple_id}`, form)
-      toast.success('Vendor added!'); setShowAdd(false); setForm(emptyForm); fetchData()
-    } catch { toast.error('Failed to add vendor') }
+      if (editingId) await getAdminAxios().put(`/api/vendors/${editingId}`, form)
+      else await getAdminAxios().post(`/api/vendors/couple/${form.couple_id}`, form)
+      toast.success(editingId ? 'Vendor updated' : 'Vendor added!'); setShowAdd(false); setForm(emptyForm); setEditingId(null); fetchData()
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to save vendor') }
+  }
+
+  const toggleBooked = async (v) => {
+    try { await getAdminAxios().put(`/api/vendors/${v.id}`, { booked: !v.booked }); fetchData() }
+    catch (err) { toast.error(err.response?.data?.error || 'Could not update') }
   }
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this vendor?')) return
-    await getAdminAxios().delete(`/api/vendors/${id}`)
-    toast.success('Deleted'); fetchData()
+    try {
+      await getAdminAxios().delete(`/api/vendors/${id}`)
+      toast.success('Deleted'); fetchData()
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not delete') }
   }
 
   const filtered = vendors.filter(v =>
@@ -57,12 +74,12 @@ export default function VendorsAdmin() {
 
   return (
     <div className="p-6 space-y-5 max-w-7xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="page-title">Vendor Directory</h1>
+          <h1 className="page-title">Couples' Vendors</h1>
           <p className="page-subtitle">{vendors.length} vendors across all clients</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowAdd(true)}>
+        <button className="btn-primary" onClick={openAdd}>
           <PlusIcon className="w-4 h-4" />
           Add Vendor
         </button>
@@ -128,11 +145,13 @@ export default function VendorsAdmin() {
                         )}
                       </td>
                       <td>
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${v.booked ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        <button onClick={() => toggleBooked(v)} title="Click to switch between booked and considering"
+                          className={`text-xs px-2.5 py-1 rounded-full font-medium ${v.booked ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                           {v.booked ? 'Booked' : 'Considering'}
-                        </span>
+                        </button>
                       </td>
-                      <td>
+                      <td className="whitespace-nowrap">
+                        <button onClick={() => openEdit(v)} className="text-xs text-slate-400 hover:text-slate-700 transition-colors mr-3">Edit</button>
                         <button onClick={() => handleDelete(v.id)} className="text-xs text-slate-400 hover:text-red-500 transition-colors">Delete</button>
                       </td>
                     </tr>
@@ -144,10 +163,10 @@ export default function VendorsAdmin() {
         </div>
       )}
 
-      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Vendor" size="lg">
+      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title={editingId ? 'Edit Vendor' : 'Add Vendor'} size="lg">
         <form onSubmit={handleAdd} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Select label="Couple" value={form.couple_id} onChange={f('couple_id')} required>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select label="Couple" value={form.couple_id} onChange={f('couple_id')} required disabled={!!editingId}>
               <option value="">Select couple...</option>
               {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
             </Select>
@@ -156,11 +175,11 @@ export default function VendorsAdmin() {
               {vendorTypes.map(t => <option key={t} value={t}>{t}</option>)}
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Business Name" value={form.business_name} onChange={f('business_name')} required />
             <Input label="Contact Name" value={form.contact_name} onChange={f('contact_name')} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Phone" value={form.phone} onChange={f('phone')} />
             <Input label="Email" type="email" value={form.email} onChange={f('email')} />
           </div>
@@ -172,7 +191,7 @@ export default function VendorsAdmin() {
           </label>
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
             <button type="button" className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
-            <button type="submit" className="btn-primary">Add Vendor</button>
+            <button type="submit" className="btn-primary">{editingId ? 'Save Vendor' : 'Add Vendor'}</button>
           </div>
         </form>
       </Modal>
