@@ -47,11 +47,14 @@ Both repos have their own PR numbers, and both have used the branch name `claude
 - **Daily jobs** (Alberta time, one runner, recorded in `job_runs`): backup 2 am; mark finished weddings completed and expire old proposals 3 am; morning summary email 7 am; payment reminders and follow-up alerts 8 am.
 - **More notes** live in `PROJECT_STATE.md` in that repo.
 
-### Repo A: the older, secondary CRM (`KrisWemet/rustic-retreat-crm`, with hyphen)
+### Repo A: the older CRM, **retired 27 Sep 2026** (`KrisWemet/rustic-retreat-crm`, with hyphen)
 
 - **Stack:** React, Vite, TypeScript, Tailwind 4 and Supabase (project `aztaffrywreshzyzraiz`).
-- **Hosting:** Vercel project `rustic_retreat_crm` at rusticretreatcrm.vercel.app.
-- **Status:** no longer the main system. The plan is to retire it later.
+- **Status:** retired. Nothing live uses it; the website and this CRM were checked for references before retiring.
+  - **Vercel** project `rustic_retreat_crm` (rusticretreatcrm.vercel.app) is **paused**. Resume it from the Vercel dashboard if ever needed.
+  - **Supabase** project `aztaffrywreshzyzraiz` is **paused**, with its data kept: the `legacy_backup` schema (6 old enquiries, settings, 2 profiles) and 4 package-catalogue rows. It can be restored from the Supabase dashboard. On the free plan a project paused for 90+ days can no longer be restored, but its backup stays downloadable.
+  - The repo's README carries a retirement notice. **Owner to-do:** archive the repo on GitHub (Settings → General → Danger Zone → Archive this repository). It becomes read-only, and can be unarchived later.
+  - **Future Claude sessions** should be started on this repo (`KrisWemet/rusticretreat-crm`), not repo A.
 
 ### The public website (`KrisWemet/rustic-retreat-weddings`)
 
@@ -286,8 +289,7 @@ The owner asked for a plan to finish the CRM. Decisions made along the way:
 4. **Later, optional:**
    - card payments (Stripe), text messages (SMS) and camping tracking: not built this round, by the owner's choice
    - a venue-wide preferred-vendor list (the Vendors page lists each couple's own vendors)
-   - retire repo A (the Vercel project and Supabase project `aztaffrywreshzyzraiz`, including its `legacy_backup` schema)
-   - turn on Supabase leaked-password protection
+   - delete repo A's paused Vercel and Supabase projects for good, if the owner is sure nothing in them is needed
    - add camping tracking
    - confirm the cancellation wording in the agreement
    - **dependency upgrades that need a major version:**
