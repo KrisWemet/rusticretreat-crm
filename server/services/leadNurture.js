@@ -43,14 +43,7 @@ async function checkFollowUps() {
     }
   }
   console.log(`[FollowUp] ${waiting.length} enquiries need a follow-up, sent ${alerted} staff alerts`);
+  return { waiting: waiting.length, alerted };
 }
 
-function startLeadNurtureScheduler() {
-  checkFollowUps().catch(err => console.error('[FollowUp]', err.message));
-  const timer = setInterval(() => {
-    checkFollowUps().catch(err => console.error('[FollowUp]', err.message));
-  }, 24 * 60 * 60 * 1000);
-  timer.unref();
-}
-
-module.exports = { startLeadNurtureScheduler, needsFollowUp, checkFollowUps };
+module.exports = { needsFollowUp, checkFollowUps };

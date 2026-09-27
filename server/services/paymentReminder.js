@@ -5,8 +5,8 @@ const email = require('./email');
 // if the 1-day one could not be sent). A reminder counts as sent only once the
 // email actually went out, so a failed send is retried the next day.
 async function checkAndSendReminders() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Days are counted on Alberta dates, not the server's (UTC) clock.
+  const today = new Date(require('./schedule').albertaToday() + 'T00:00:00');
 
   const unpaid = db.prepare(`
     SELECT i.*, c.email, c.partner2_email, c.partner1_name, c.partner2_name
@@ -55,12 +55,4 @@ async function checkAndSendReminders() {
   return { sent, failed };
 }
 
-function startReminderScheduler() {
-  checkAndSendReminders().catch(err => console.error('[PaymentReminder]', err.message));
-  const timer = setInterval(() => {
-    checkAndSendReminders().catch(err => console.error('[PaymentReminder]', err.message));
-  }, 24 * 60 * 60 * 1000);
-  timer.unref();
-}
-
-module.exports = { startReminderScheduler, checkAndSendReminders };
+module.exports = { checkAndSendReminders };

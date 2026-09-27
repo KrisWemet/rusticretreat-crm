@@ -1038,6 +1038,23 @@ function applyCredentialBootstrap() {
 }
 applyCredentialBootstrap();
 
+// ── Email log ────────────────────────────────────────────────────────────────
+// Every email the CRM sends (or tries to), so staff can see what a couple was
+// sent and whether it went out. Written by send() in services/email.js.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS email_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    couple_id INTEGER,
+    kind TEXT,
+    to_addr TEXT,
+    subject TEXT,
+    delivered INTEGER NOT NULL DEFAULT 0,
+    error TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_email_log_couple ON email_log(couple_id, at);
+`);
+
 // ── Activity log ─────────────────────────────────────────────────────────────
 // Who did what, and when, for the changes that matter afterwards: deletes,
 // archives, payments recorded, prices changed. detail holds a JSON snapshot of
@@ -1064,8 +1081,31 @@ db.exec(`
 // to be remembered and unset afterwards.
 db.exec(`CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
 
+// Before the first data migration of a boot touches a database that holds
+// real records, snapshot it, so a migration that goes wrong can be undone.
+// VACUUM INTO writes a consistent copy (WAL included) and runs synchronously,
+// which is what boot-time migrations need.
+let preMigrationSnapshotTaken = false;
+function preMigrationSnapshot(name) {
+  if (preMigrationSnapshotTaken) return;
+  preMigrationSnapshotTaken = true;
+  try {
+    if (!db.prepare('SELECT 1 FROM couples LIMIT 1').get()) return;
+    const dir = process.env.BACKUP_DIR || path.join(path.dirname(DB_PATH), 'backups');
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/\.\d+Z$/, 'Z').replace(/:/g, '-');
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+    const dest = path.join(dir, `pre-migration-${stamp}-${slug}.db`);
+    db.prepare('VACUUM INTO ?').run(dest);
+    console.log(`[migrate] Snapshot before "${name}": ${path.basename(dest)}`);
+  } catch (err) {
+    console.error(`[migrate] Could not snapshot before "${name}": ${err.message}`);
+  }
+}
+
 function runOnce(name, fn) {
   if (db.prepare('SELECT 1 FROM app_migrations WHERE name = ?').get(name)) return;
+  preMigrationSnapshot(name);
   try {
     db.transaction(() => {
       fn();
