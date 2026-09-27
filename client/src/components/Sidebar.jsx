@@ -20,9 +20,10 @@ import {
   DocumentDuplicateIcon,
   ClipboardDocumentCheckIcon,
   Cog6ToothIcon,
+  QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline'
 
-const navItems = [
+export const navItems = [
   { to: '/dashboard',  icon: HomeIcon,                  label: 'Dashboard' },
   { to: '/clients',    icon: UsersIcon,                 label: 'Clients & Leads' },
   { to: '/pipeline',   icon: ViewColumnsIcon,           label: 'Sales Pipeline' },
@@ -39,6 +40,7 @@ const navItems = [
   { to: '/analytics',  icon: ChartBarIcon,              label: 'Analytics' },
   { to: '/packages',   icon: CubeIcon,                  label: 'Packages' },
   { to: '/backups',    icon: ShieldCheckIcon,           label: 'Backups' },
+  { to: '/help',       icon: QuestionMarkCircleIcon,    label: 'Help & Guides' },
   { to: '/settings',   icon: Cog6ToothIcon,             label: 'Settings' },
 ]
 

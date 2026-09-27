@@ -4,6 +4,7 @@ import { Bars3Icon } from '@heroicons/react/24/outline'
 import { useAuth } from '../contexts/AuthContext'
 import Sidebar from './Sidebar'
 import CoupleSearch from './CoupleSearch'
+import HelpPanel from './HelpPanel'
 
 export default function Layout() {
   const { user, loading, getAdminAxios } = useAuth()
@@ -71,6 +72,7 @@ export default function Layout() {
           <div className="flex-1 flex justify-end">
             <CoupleSearch />
           </div>
+          <HelpPanel />
         </header>
         <main className="flex-1 overflow-y-auto">
           <Outlet />
