@@ -262,6 +262,13 @@ The owner asked for a plan to finish the CRM. Decisions made along the way:
 
 ---
 
+### Built-in help: Help & Guides (27 Sep 2026)
+
+- **Where:** "Help & Guides" in the sidebar (`/help`), and a **Help (?)** button in the header of every page. Pressing `?` also opens help for the current page.
+- **What:** a guide for each page, 8 step-by-step recipes (starting with "New enquiry → booked wedding"), common questions, and search.
+- **Editing:** all the text lives in `client/src/help/guides.js`. **When a screen changes, update its guide there.** `server/test/helpContent.test.js` fails CI if a sidebar page has no guide or a link is broken.
+- **Also fixed:** the Packages add-on type said "Per guest (over 60)"; it now says over 80, matching the extra-guest rule.
+
 ## Open items
 
 1. **Shannon & Chris booking shows $6,439.**

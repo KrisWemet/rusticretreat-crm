@@ -38,6 +38,7 @@ import PublicProposal from './pages/PublicProposal'
 import PublicForm from './pages/PublicForm'
 import PortalForms from './pages/portal/Forms'
 import Settings from './pages/admin/Settings'
+import Help from './pages/admin/Help'
 import NotFound from './pages/NotFound'
 
 function App() {
@@ -92,6 +93,8 @@ function App() {
             <Route path="analytics" element={<Analytics />} />
             <Route path="packages" element={<Packages />} />
             <Route path="backups" element={<Backups />} />
+            <Route path="help" element={<Help />} />
+            <Route path="help/:slug" element={<Help />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
           </Route>
