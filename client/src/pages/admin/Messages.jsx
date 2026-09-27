@@ -1,59 +1,111 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { PaperAirplaneIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { PaperAirplaneIcon, ChatBubbleLeftRightIcon, MagnifyingGlassIcon, ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
 import { MESSAGE_TEMPLATES, firstNames } from '../../utils/options'
 
+const CHANNEL_LABEL = { email: 'Email', sms: 'SMS', portal: 'Portal' }
+
 export default function Messages() {
-  const { getAdminAxios, user } = useAuth()
+  const { getAdminAxios } = useAuth()
+  const [params, setParams] = useSearchParams()
   const [conversations, setConversations] = useState([])
   const [selectedCouple, setSelectedCouple] = useState(null)
   const [messages, setMessages] = useState([])
   const [newMessage, setNewMessage] = useState('')
+  const [subject, setSubject] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [sending, setSending] = useState(false)
   const [search, setSearch] = useState('')
-  // 'sms' sends the words to their phone; 'portal' stores the message and only
-  // emails a short "you have a message" nudge. Defaulted per couple on select.
-  const [channel, setChannel] = useState('portal')
+  const [config, setConfig] = useState({ portal_enabled: false, sms_enabled: false, email_enabled: true })
+  // 'email' sends the whole message to both partners (replies come back to the
+  // venue's inbox); 'sms' sends it to their phone; 'portal' only while the
+  // couple portal is switched on.
+  const [channel, setChannel] = useState('email')
   const messagesEndRef = useRef(null)
 
   const fetchConversations = async () => {
-    const api = getAdminAxios()
-    const r = await api.get('/api/messages')
+    const r = await getAdminAxios().get('/api/messages')
     setConversations(r.data)
+    setLoadError(null)
   }
 
-  useEffect(() => { fetchConversations().catch(() => {}).finally(() => setLoading(false)) }, [])
-
-  const selectCouple = async (conv) => {
-    setSelectedCouple(conv)
-    // Prefer texting when we hold a number and they have not opted out —
-    // that is the channel couples actually answer on.
-    const canText = (conv.phone || conv.partner2_phone) && !conv.sms_opted_out_at
-    setChannel(canText ? 'sms' : 'portal')
-    const api = getAdminAxios()
-    const r = await api.get(`/api/messages/${conv.couple_id}`)
-    setMessages(r.data)
+  useEffect(() => {
+    getAdminAxios().get('/api/messages/config').then(r => setConfig(r.data)).catch(() => {})
     fetchConversations()
+      .catch(err => setLoadError(err.response?.data?.error || 'Could not load conversations'))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const openThread = async (conv) => {
+    setSelectedCouple(conv)
+    const canTextNow = config.sms_enabled && (conv.phone || conv.partner2_phone) && !conv.sms_opted_out_at
+    setChannel(canTextNow ? 'sms' : 'email')
+    setSubject('')
+    try {
+      const r = await getAdminAxios().get(`/api/messages/${conv.couple_id}`)
+      setMessages(r.data)
+      fetchConversations().catch(() => {})
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not open this conversation')
+    }
   }
+
+  // /messages?couple=ID (from a client page) opens that couple's thread, even
+  // if nothing has been sent to them yet.
+  const coupleParam = params.get('couple')
+  useEffect(() => {
+    if (!coupleParam) return
+    getAdminAxios().get(`/api/couples/${coupleParam}`)
+      .then(r => openThread({ couple_id: r.data.id, ...r.data }))
+      .catch(() => toast.error('Could not find that couple'))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coupleParam])
+
+  // New replies (texts, portal messages) show up without reloading the page.
+  useEffect(() => {
+    if (!selectedCouple) return
+    const t = setInterval(() => {
+      getAdminAxios().get(`/api/messages/${selectedCouple.couple_id}`).then(r => setMessages(r.data)).catch(() => {})
+    }, 30000)
+    return () => clearInterval(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCouple?.couple_id])
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const sendMessage = async (e) => {
     e.preventDefault()
-    if (!newMessage.trim() || !selectedCouple) return
+    if (!newMessage.trim() || !selectedCouple || sending) return
+    setSending(true)
     try {
-      const api = getAdminAxios()
-      const r = await api.post(`/api/messages/${selectedCouple.couple_id}`, { content: newMessage, channel })
+      const r = await getAdminAxios().post(`/api/messages/${selectedCouple.couple_id}`, {
+        content: newMessage, channel, subject: channel === 'email' ? subject : undefined,
+      })
       setMessages(prev => [...prev, r.data])
-      setNewMessage('')
-      // A text can be saved to the thread and still never have reached the
-      // phone. Saying so beats letting it sit there looking delivered.
-      if (channel === 'sms' && r.data.delivery && !r.data.delivery.delivered) {
-        toast.error(`Saved, but the text did not send: ${r.data.delivery.error}`)
+      setNewMessage(''); setSubject('')
+      fetchConversations().catch(() => {})
+      // A message can be saved to the thread and still never have left.
+      // Saying so beats letting it sit there looking delivered.
+      if (r.data.delivery && !r.data.delivery.delivered) {
+        toast.error(`Saved, but the ${channel === 'sms' ? 'text' : 'email'} did not send: ${r.data.delivery.error}`, { duration: 8000 })
+      } else if (channel === 'email') {
+        toast.success('Email sent')
       }
-    } catch (err) { toast.error(err?.response?.data?.error || 'Failed to send') }
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Failed to send')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const closeThread = () => {
+    setSelectedCouple(null)
+    if (coupleParam) setParams({})
   }
 
   const filtered = conversations.filter(c =>
@@ -61,31 +113,46 @@ export default function Messages() {
   )
   const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0)
   const hasPhone = !!(selectedCouple?.phone || selectedCouple?.partner2_phone)
+  const hasEmail = !!(selectedCouple?.email || selectedCouple?.partner2_email)
   const optedOut = !!selectedCouple?.sms_opted_out_at
-  const canText = hasPhone && !optedOut
+  const canText = config.sms_enabled && hasPhone && !optedOut
+  const channelButton = (key, label, enabled, title) => (
+    <button
+      type="button"
+      onClick={() => setChannel(key)}
+      disabled={!enabled}
+      title={title}
+      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-40 ${
+        channel === key ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+      }`}
+    >
+      {label}
+    </button>
+  )
 
   return (
-    <div className="p-6 flex flex-col max-w-7xl" style={{ height: 'calc(100vh - 0px)' }}>
+    <div className="p-4 sm:p-6 flex flex-col max-w-7xl h-[calc(100vh-57px)]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5 flex-shrink-0">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div>
           <h1 className="page-title">Messages</h1>
           <p className="page-subtitle">
             {totalUnread > 0 ? `${totalUnread} unread message${totalUnread > 1 ? 's' : ''}` : 'All messages read'}
+            {' · '}To write to a couple for the first time, use “Email” on their client page.
           </p>
         </div>
       </div>
 
-      {/* Two-pane layout */}
-      <div className="card overflow-hidden flex flex-1" style={{ minHeight: 0, height: 'calc(100vh - 160px)' }}>
+      {/* Two panes on wide screens; one at a time on a phone. */}
+      <div className="card overflow-hidden flex flex-1 min-h-0">
         {/* Left: conversation list */}
-        <div className="w-72 border-r border-slate-100 flex flex-col flex-shrink-0">
+        <div className={`${selectedCouple ? 'hidden md:flex' : 'flex'} w-full md:w-72 md:border-r border-slate-100 flex-col flex-shrink-0 min-h-0`}>
           <div className="p-3 border-b border-slate-100">
             <div className="relative">
               <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                id="messages-search" name="messages-search" aria-label="Search couples" placeholder="Search couples..."
+                id="messages-search" name="messages-search" aria-label="Search conversations" placeholder="Search conversations..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="input-field pl-9 py-1.5 text-xs"
@@ -95,12 +162,17 @@ export default function Messages() {
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-5 w-5 border-2 border-rose-200 border-t-rose-600" /></div>
+            ) : loadError ? (
+              <div className="text-center py-8 text-sm text-red-600 space-y-2">
+                <p>{loadError}</p>
+                <button onClick={() => fetchConversations().catch(err => setLoadError(err.response?.data?.error || 'Could not load conversations'))} className="btn-ghost text-xs">Try again</button>
+              </div>
             ) : filtered.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-sm">No conversations</div>
+              <div className="text-center py-8 text-slate-400 text-sm">No conversations yet</div>
             ) : filtered.map(conv => (
               <button
                 key={conv.couple_id}
-                onClick={() => selectCouple(conv)}
+                onClick={() => openThread(conv)}
                 className={`w-full text-left px-4 py-3.5 border-b border-slate-50 transition-colors hover:bg-slate-50 ${
                   selectedCouple?.couple_id === conv.couple_id ? 'bg-rose-50 border-l-2 border-l-rose-500 pl-3.5' : ''
                 }`}
@@ -131,45 +203,48 @@ export default function Messages() {
         </div>
 
         {/* Right: message area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className={`${selectedCouple ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0`}>
           {!selectedCouple ? (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
               <ChatBubbleLeftRightIcon className="w-12 h-12 text-slate-200" />
               <div className="text-center">
                 <p className="text-sm font-medium text-slate-500">Select a conversation</p>
-                <p className="text-xs text-slate-400 mt-1">Choose a couple from the left to view messages</p>
+                <p className="text-xs text-slate-400 mt-1">Choose a couple from the list to see their messages</p>
               </div>
             </div>
           ) : (
             <>
               {/* Conversation header */}
-              <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
+              <div className="px-4 sm:px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-rose-100 rounded-full flex items-center justify-center">
+                  <button onClick={closeThread} aria-label="Back to conversations" className="md:hidden p-1 -ml-1 rounded-lg text-slate-500 hover:bg-slate-100">
+                    <ArrowLeftIcon className="w-5 h-5" />
+                  </button>
+                  <div className="w-9 h-9 bg-rose-100 rounded-full flex items-center justify-center flex-shrink-0">
                     <span className="text-rose-600 text-sm font-semibold">
                       {selectedCouple.partner1_name?.charAt(0)}{selectedCouple.partner2_name?.charAt(0)}
                     </span>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">{selectedCouple.partner1_name} & {selectedCouple.partner2_name}</p>
-                    <p className="text-xs text-slate-400">{selectedCouple.email}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{selectedCouple.partner1_name} & {selectedCouple.partner2_name}</p>
+                    <p className="text-xs text-slate-400 truncate">{[selectedCouple.email, selectedCouple.partner2_email].filter(Boolean).join(', ')}</p>
                   </div>
                 </div>
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 min-h-0">
                 {messages.length === 0 && (
-                  <div className="text-center py-8 text-slate-400 text-sm">No messages yet. Start the conversation!</div>
+                  <div className="text-center py-8 text-slate-400 text-sm">No messages yet. Write the first one below.</div>
                 )}
                 {messages.map(msg => (
                   <div key={msg.id} className={`flex ${msg.sender_type === 'staff' ? 'justify-end' : 'justify-start'}`}>
-                    <div className="max-w-sm lg:max-w-lg">
+                    <div className="max-w-[85%] lg:max-w-lg">
                       <p className={`text-xs mb-1 text-slate-400 ${msg.sender_type === 'staff' ? 'text-right' : ''}`}>
                         {msg.sender_name}
-                        {msg.channel === 'sms' && (
+                        {msg.channel && msg.channel !== 'portal' && (
                           <span className="ml-1.5 px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-medium align-middle">
-                            SMS
+                            {CHANNEL_LABEL[msg.channel] || msg.channel}
                           </span>
                         )}
                       </p>
@@ -178,13 +253,13 @@ export default function Messages() {
                           ? 'bg-rose-600 text-white rounded-tr-sm'
                           : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm shadow-sm'
                       }`}>
-                        <p className="text-sm leading-relaxed">{msg.content}</p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
                       </div>
                       <p className={`text-xs mt-1 text-slate-400 ${msg.sender_type === 'staff' ? 'text-right' : ''}`}>
                         {msg.created_at ? format(parseISO(msg.created_at), 'MMM d, h:mm a') : ''}
-                        {msg.sender_type === 'staff' && msg.channel === 'sms' && msg.delivery_status && (
+                        {msg.sender_type === 'staff' && msg.delivery_status && (
                           <span className={msg.delivery_status === 'failed' ? 'ml-1.5 text-rose-500' : 'ml-1.5'}>
-                            · {msg.delivery_status}
+                            · {msg.delivery_status === 'failed' ? 'not sent' : 'sent'}
                           </span>
                         )}
                       </p>
@@ -194,29 +269,12 @@ export default function Messages() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input */}
-              <form onSubmit={sendMessage} className="p-4 border-t border-slate-100 flex-shrink-0">
-                <div className="flex items-center gap-2 mb-2">
-                  <button
-                    type="button"
-                    onClick={() => setChannel('sms')}
-                    disabled={!canText}
-                    title={canText ? 'Send to their phone' : 'No phone number on file for this couple'}
-                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-40 ${
-                      channel === 'sms' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Text
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChannel('portal')}
-                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                      channel === 'portal' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    Portal message
-                  </button>
+              {/* Composer */}
+              <form onSubmit={sendMessage} className="p-3 sm:p-4 border-t border-slate-100 flex-shrink-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {channelButton('email', 'Email', hasEmail, hasEmail ? 'Email the whole message to both partners' : 'No email address on file')}
+                  {config.sms_enabled && channelButton('sms', 'Text', canText, canText ? 'Send to their phone' : optedOut ? 'They replied STOP' : 'No phone number on file')}
+                  {config.portal_enabled && channelButton('portal', 'Portal message', true, 'Post in their wedding portal')}
                   <select
                     aria-label="Insert a quick reply"
                     value=""
@@ -229,26 +287,34 @@ export default function Messages() {
                     <option value="">Quick reply...</option>
                     {MESSAGE_TEMPLATES.map(m => <option key={m.label} value={m.label}>{m.label}</option>)}
                   </select>
-                  {optedOut && (
-                    <span className="text-xs text-amber-600">Replied STOP — texts are blocked</span>
-                  )}
-                  {!optedOut && !hasPhone && (
-                    <span className="text-xs text-slate-400">No phone number on file</span>
-                  )}
                 </div>
-                <div className="flex gap-3">
+                {channel === 'email' && (
                   <input
                     type="text"
+                    value={subject}
+                    onChange={e => setSubject(e.target.value)}
+                    placeholder="Subject (optional)"
+                    aria-label="Email subject"
+                    className="input-field py-1.5 text-sm"
+                  />
+                )}
+                <div className="flex gap-3 items-end">
+                  <textarea
                     value={newMessage}
                     onChange={e => setNewMessage(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendMessage(e) }}
+                    rows={channel === 'email' ? 4 : 2}
+                    aria-label="Message"
                     placeholder={channel === 'sms'
-                      ? `Text ${selectedCouple.partner1_name} & ${selectedCouple.partner2_name}...`
-                      : `Message ${selectedCouple.partner1_name} & ${selectedCouple.partner2_name}...`}
-                    className="flex-1 input-field"
+                      ? `Text ${firstNames(selectedCouple)}...`
+                      : channel === 'email' ? `Email ${firstNames(selectedCouple)} — replies come back to your inbox...`
+                      : `Message ${firstNames(selectedCouple)}...`}
+                    className="flex-1 input-field resize-y"
                   />
                   <button
                     type="submit"
-                    disabled={!newMessage.trim()}
+                    disabled={!newMessage.trim() || sending || (channel === 'email' && !hasEmail)}
+                    aria-label="Send"
                     className="bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white p-2.5 rounded-lg transition-colors flex-shrink-0"
                   >
                     <PaperAirplaneIcon className="w-4 h-4" />

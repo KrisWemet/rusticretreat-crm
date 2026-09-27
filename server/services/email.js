@@ -123,6 +123,63 @@ function logEmail({ to, subject, coupleId, kind, result }) {
   }
 }
 
+// ── A message from staff to a couple, sent in full by email ────────────────
+// Replies go to the venue's own inbox (REPLY_TO_EMAIL, else ADMIN_EMAIL), not
+// to the no-reply sending address.
+async function sendCoupleMessage({ to, coupleId, coupleNames, senderName, subject, body }) {
+  const replyTo = process.env.REPLY_TO_EMAIL || ADMIN_EMAIL || undefined;
+  return send({
+    to, coupleId, replyTo,
+    kind: 'message',
+    subject: subject || `A message from ${senderName} at Rustic Retreat`,
+    text: `${body}\n\n— ${senderName}, Rustic Retreat\n\nJust reply to this email.`,
+    html: `<div style="white-space:pre-wrap;font-size:15px;line-height:1.5">${esc(body)}</div>
+<p style="margin-top:20px">— ${esc(senderName)}, Rustic Retreat</p>
+<p style="color:#94a3b8;font-size:12px">Just reply to this email.</p>`,
+  });
+}
+
+// ── Morning summary to the venue (7 am, services/schedule.js) ───────────────
+function fmtDay(iso) {
+  return new Date(iso.slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+function fmtTime(iso) {
+  const m = /T(\d{2}):(\d{2})/.exec(iso || '');
+  if (!m) return '';
+  const h = Number(m[1]);
+  return `${((h + 11) % 12) + 1}:${m[2]} ${h < 12 ? 'am' : 'pm'}`;
+}
+
+async function sendMorningSummary(s) {
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  const link = (path) => `${BASE_URL}${path}`;
+  const sections = [];
+  const add = (title, rows, path) => { if (rows.length) sections.push({ title, rows, path }); };
+
+  add('Weddings this week', s.weddings_week.map(w =>
+    `${w.couple_names} — ${fmtDay(w.event_date)}${w.end_date !== w.event_date ? ` to ${fmtDay(w.end_date)}` : ''}${w.on_site ? ' (on site now)' : ''}${w.guest_count ? `, ${w.guest_count} guests` : ''}`), '/calendar');
+  add('Tours today', s.tours_today.map(t => `${fmtTime(t.scheduled_at)} — ${t.name}${t.phone ? ` (${t.phone})` : ''}`), '/tours');
+  add('Tours later this week', s.tours_week.map(t => `${fmtDay(t.scheduled_at)} ${fmtTime(t.scheduled_at)} — ${t.name}`), '/tours');
+  add('Needs a follow-up', s.follow_ups.map(c =>
+    `${c.couple_names} — enquired ${c.days_old === 0 ? 'today' : `${c.days_old} day${c.days_old === 1 ? '' : 's'} ago`}${c.email ? ` (${c.email})` : ''}`), '/dashboard');
+  add('Tasks due', s.tasks_due.map(t => `${t.overdue ? 'OVERDUE ' : ''}${t.title}${t.couple_names ? ` — ${t.couple_names}` : ''}${t.overdue ? ` (was due ${fmtDay(t.due_date)})` : ''}`), '/tasks');
+  add('Payments due this week', s.payments_due.map(p =>
+    `${p.overdue ? 'OVERDUE ' : ''}${p.couple_names} — ${p.description}, $${money(p.amount)} due ${fmtDay(p.due_date)}`), '/payments');
+  add('Contracts waiting for a signature', s.contracts_waiting.map(c => `${c.couple_names} — "${c.title}", waiting on ${c.waiting_on || 'a signer'}`), '/contracts');
+  add('Forms sent but not returned', s.forms_waiting.map(f => `${f.couple_names} — "${f.title}", sent ${fmtDay(f.link_sent_at)}`), '/forms');
+  if (s.tour_requests) add('Tour requests to schedule', [`${s.tour_requests} tour request${s.tour_requests === 1 ? '' : 's'} not scheduled yet`], '/tours');
+
+  const heading = `Your day at Rustic Retreat — ${fmtDay(s.today)}`;
+  const text = [heading, '', ...sections.flatMap(sec => [sec.title.toUpperCase(), ...sec.rows.map(r => `• ${r}`), `Open: ${link(sec.path)}`, ''])].join('\n');
+  const html = `<p style="font-size:16px"><strong>${esc(heading)}</strong></p>` + sections.map(sec => `
+<h3 style="margin:20px 0 6px;font-size:14px;color:#334155">${esc(sec.title)}</h3>
+<ul style="margin:0;padding-left:18px;color:#334155">${sec.rows.map(r => `<li style="margin:3px 0">${esc(r).replace(/^OVERDUE /, '<strong style="color:#dc2626">Overdue</strong> ')}</li>`).join('')}</ul>
+<p style="margin:6px 0 0"><a href="${esc(link(sec.path))}" style="color:#e11d48;font-size:13px">Open in the CRM →</a></p>`).join('') +
+    `<p style="color:#94a3b8;font-size:12px;margin-top:28px">Sent every morning at 7 am when there is something to show.</p>`;
+
+  return send({ to: ADMIN_EMAIL, kind: 'morning-summary', subject: `Today at Rustic Retreat: ${fmtDay(s.today)}`, text, html });
+}
+
 // ── A daily job failed — tell the venue ──────────────────────────────────────
 async function sendJobFailureAdmin({ job, error }) {
   if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
@@ -472,6 +529,9 @@ async function sendUnmatchedSmsAdmin({ fromNumber, text, receivedAt }) {
 
 module.exports = {
   send,
+  isConfigured: () => configured,
+  sendCoupleMessage,
+  sendMorningSummary,
   sendJobFailureAdmin,
   esc,
   dueWording,
