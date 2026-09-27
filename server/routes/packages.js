@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const { logActivity } = require('../services/activity');
 const { normaliseSeasonPrices, present } = require('../services/packagePricing');
 
 // Reject bad season prices with a message staff can act on.
@@ -51,11 +52,21 @@ router.put('/:id', authenticateToken, (req, res) => {
     seasonValue,
     req.params.id,
   );
+  const after = db.prepare('SELECT * FROM packages WHERE id = ?').get(req.params.id);
+  const changed = ['name', 'price', 'season_prices', 'is_active', 'max_guests']
+    .filter(k => String(pkg[k] ?? '') !== String(after[k] ?? ''));
+  if (changed.length) {
+    logActivity(req, { action: 'package.updated', entity: 'package', entityId: pkg.id,
+      summary: `Changed ${changed.join(', ')} on "${pkg.name}"`,
+      detail: Object.fromEntries(changed.map(k => [k, { from: pkg[k], to: after[k] }])) });
+  }
   res.json(present(db.prepare('SELECT * FROM packages WHERE id = ?').get(req.params.id)));
 });
 
 router.delete('/:id', authenticateToken, (req, res) => {
+  const pkg = db.prepare('SELECT * FROM packages WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM packages WHERE id = ?').run(req.params.id);
+  if (pkg) logActivity(req, { action: 'package.deleted', entity: 'package', entityId: pkg.id, summary: `Deleted package "${pkg.name}"`, detail: pkg });
   res.json({ success: true });
 });
 

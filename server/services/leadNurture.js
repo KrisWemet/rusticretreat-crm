@@ -15,6 +15,7 @@ function needsFollowUp({ minDays = 0 } = {}) {
     FROM couples c
     WHERE c.status IN ('lead', 'inquiry')
       AND c.contacted_at IS NULL
+      AND c.archived_at IS NULL
       AND NOT EXISTS (SELECT 1 FROM tours t WHERE t.couple_id = c.id AND t.status IN ('scheduled', 'completed'))
       AND NOT EXISTS (SELECT 1 FROM proposals p WHERE p.couple_id = c.id AND p.status IN ('sent', 'accepted'))
       AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.couple_id = c.id)

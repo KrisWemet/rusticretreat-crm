@@ -16,6 +16,7 @@ async function checkAndSendReminders() {
       AND i.due_date IS NOT NULL
       AND c.email IS NOT NULL
       AND c.status != 'cancelled'
+      AND c.archived_at IS NULL
   `).all();
 
   let sent = 0;

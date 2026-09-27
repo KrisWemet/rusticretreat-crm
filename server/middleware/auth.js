@@ -129,4 +129,12 @@ function authenticateAny(req, res, next) {
   }
 }
 
-module.exports = { authenticateToken, authenticateCouple, authenticateAny, JWT_SECRET };
+// For staff routes only the owner should use (after authenticateToken).
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Only an admin can do this' });
+  }
+  next();
+}
+
+module.exports = { authenticateToken, authenticateCouple, authenticateAny, requireAdmin, JWT_SECRET };

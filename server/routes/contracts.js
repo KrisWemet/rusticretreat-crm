@@ -6,6 +6,7 @@ const { buildPaymentSchedule } = require('../services/paymentSchedule');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
+const { logActivity } = require('../services/activity');
 const email = require('../services/email');
 const rateLimit = require('../middleware/rateLimit');
 const { ETRANSFER_EMAIL } = require('../venue');
@@ -427,9 +428,24 @@ router.delete('/:id/files/:fileId', authenticateToken, (req, res) => {
 });
 
 // ── Admin: delete contract ───────────────────────────────────────────────────
+// A signed contract is a legal record: only an admin can remove one, and only
+// by confirming it explicitly. Every deletion is logged with a snapshot.
 router.delete('/:id', authenticateToken, (req, res) => {
   try {
-    db.prepare('DELETE FROM contracts WHERE id = ?').run(req.params.id);
+    const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
+    if (!contract) return res.status(404).json({ error: 'Not found' });
+    if (contract.status === 'signed') {
+      if (req.user?.role !== 'admin') {
+        return res.status(403).json({ error: 'A signed contract can only be deleted by an admin.' });
+      }
+      if (req.query.confirm !== 'signed') {
+        return res.status(409).json({ error: 'This contract is signed. Confirm to delete it permanently.', needs_confirm: true });
+      }
+    }
+    const { content, signature_data, ...snapshot } = contract;
+    db.prepare('DELETE FROM contracts WHERE id = ?').run(contract.id);
+    logActivity(req, { action: 'contract.deleted', entity: 'contract', entityId: contract.id, coupleId: contract.couple_id,
+      summary: `Deleted ${contract.status} contract "${contract.title}"`, detail: snapshot });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

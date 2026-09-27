@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { logActivity, recentActivity } = require('../services/activity');
 
 // Get all couples
 router.get('/', authenticateToken, (req, res) => {
-  const { status, search } = req.query;
+  const { status, search, archived } = req.query;
   let query = 'SELECT * FROM couples';
   const params = [];
-  const conditions = [];
+  // Archived couples are hidden unless asked for (?archived=1 lists only them).
+  const conditions = [archived === '1' ? 'archived_at IS NOT NULL' : 'archived_at IS NULL'];
 
   if (status) {
     conditions.push('status = ?');
@@ -16,8 +18,8 @@ router.get('/', authenticateToken, (req, res) => {
   }
 
   if (search) {
-    conditions.push('(partner1_name LIKE ? OR partner2_name LIKE ? OR email LIKE ?)');
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    conditions.push('(partner1_name LIKE ? OR partner2_name LIKE ? OR email LIKE ? OR partner2_email LIKE ? OR phone LIKE ? OR partner2_phone LIKE ?)');
+    params.push(...Array(6).fill(`%${search}%`));
   }
 
   if (conditions.length > 0) {
@@ -173,13 +175,52 @@ router.patch('/:id/contacted', authenticateToken, (req, res) => {
   res.json(db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id));
 });
 
-// Delete couple
+// Archive a couple: hidden from lists, but every record is kept and they can
+// be restored. This is what "Delete" does for everyone.
 router.delete('/:id', authenticateToken, (req, res) => {
   const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id);
   if (!couple) return res.status(404).json({ error: 'Couple not found' });
 
-  db.prepare('DELETE FROM couples WHERE id = ?').run(req.params.id);
-  res.json({ message: 'Couple deleted successfully' });
+  if (req.query.permanent === '1') return deletePermanently(req, res, couple);
+
+  db.prepare("UPDATE couples SET archived_at = datetime('now') WHERE id = ?").run(couple.id);
+  logActivity(req, { action: 'couple.archived', entity: 'couple', entityId: couple.id, coupleId: couple.id,
+    summary: `Archived ${couple.partner1_name} & ${couple.partner2_name}` });
+  res.json({ message: 'Couple archived', archived: true });
+});
+
+router.patch('/:id/restore', authenticateToken, (req, res) => {
+  const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id);
+  if (!couple) return res.status(404).json({ error: 'Couple not found' });
+  db.prepare('UPDATE couples SET archived_at = NULL WHERE id = ?').run(couple.id);
+  logActivity(req, { action: 'couple.restored', entity: 'couple', entityId: couple.id, coupleId: couple.id,
+    summary: `Restored ${couple.partner1_name} & ${couple.partner2_name}` });
+  res.json(db.prepare('SELECT * FROM couples WHERE id = ?').get(couple.id));
+});
+
+// Permanent delete removes the couple and everything they own. Admin only,
+// only once archived, and never while they have a signed contract or a paid
+// invoice: those are records the business has to keep.
+function deletePermanently(req, res, couple) {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Only an admin can delete a couple permanently' });
+  if (!couple.archived_at) return res.status(409).json({ error: 'Archive the couple first' });
+  const signed = db.prepare("SELECT COUNT(*) AS n FROM contracts WHERE couple_id = ? AND status = 'signed'").get(couple.id).n;
+  const paid = db.prepare('SELECT COUNT(*) AS n FROM invoices WHERE couple_id = ? AND paid = 1').get(couple.id).n;
+  if (signed || paid) {
+    return res.status(409).json({
+      error: `This couple has ${[signed && `${signed} signed contract${signed > 1 ? 's' : ''}`, paid && `${paid} paid invoice${paid > 1 ? 's' : ''}`].filter(Boolean).join(' and ')}, so they stay archived rather than deleted.`,
+    });
+  }
+  const { password_hash, ...snapshot } = couple;
+  db.prepare('DELETE FROM couples WHERE id = ?').run(couple.id);
+  logActivity(req, { action: 'couple.deleted', entity: 'couple', entityId: couple.id, coupleId: couple.id,
+    summary: `Permanently deleted ${couple.partner1_name} & ${couple.partner2_name}`, detail: snapshot });
+  res.json({ message: 'Couple deleted permanently' });
+}
+
+// What has happened on this couple's record, newest first
+router.get('/:id/activity', authenticateToken, (req, res) => {
+  res.json(recentActivity({ coupleId: Number(req.params.id) }));
 });
 
 // Get couple stats

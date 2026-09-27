@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db');
+const rateLimit = require('../middleware/rateLimit');
 const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
 const { assertBookable, sendRuleError, BookingRuleError } = require('../services/bookingRules');
@@ -298,7 +299,12 @@ router.get('/:id/print', authenticateToken, (req, res) => {
 });
 
 // ── Public: view a proposal by token (no auth) ───────────────────────────────
-router.get('/public/:token', (req, res) => {
+// Public links are guessable only by brute force; these limits make that
+// impractical without getting in a real couple's way.
+const publicViewLimit = rateLimit({ windowMs: 10 * 60000, max: 60 });
+const publicActionLimit = rateLimit({ windowMs: 15 * 60000, max: 10 });
+
+router.get('/public/:token', publicViewLimit, (req, res) => {
   const proposal = db.prepare(`
     SELECT p.*, c.partner1_name, c.partner2_name
     FROM proposals p JOIN couples c ON c.id = p.couple_id
@@ -315,7 +321,7 @@ router.get('/public/:token', (req, res) => {
 });
 
 // ── Public: accept a proposal → creates booking + payment schedule ───────────
-router.post('/public/:token/accept', (req, res) => {
+router.post('/public/:token/accept', publicActionLimit, (req, res) => {
   const { accepted_name } = req.body;
   if (!accepted_name) return res.status(400).json({ error: 'Please type your name to accept' });
 
@@ -394,7 +400,7 @@ router.post('/public/:token/accept', (req, res) => {
 });
 
 // ── Public: decline a proposal ───────────────────────────────────────────────
-router.post('/public/:token/decline', (req, res) => {
+router.post('/public/:token/decline', publicActionLimit, (req, res) => {
   const proposal = db.prepare('SELECT * FROM proposals WHERE public_token = ?').get(req.params.token);
   if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
   // Once accepted, the booking and invoices exist, so the link can no longer

@@ -1,18 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const backup = require('../services/backup');
 
 // A backup file is the entire business — every couple, price, signature and
 // contract — in one download. Staff-level access is not enough for that, so
 // every route here is admin-only.
-function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-}
 
 // ── List available backups ───────────────────────────────────────────────────
 router.get('/', authenticateToken, requireAdmin, (req, res) => {

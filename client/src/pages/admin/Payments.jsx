@@ -205,9 +205,13 @@ export default function Payments() {
 
   const deleteInvoice = async (id) => {
     if (!confirm('Delete this invoice?')) return
-    await getAdminAxios().delete(`/api/invoices/${id}`)
-    toast.success('Deleted')
-    fetchData()
+    try {
+      await getAdminAxios().delete(`/api/invoices/${id}`)
+      toast.success('Deleted')
+      fetchData()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete', { duration: 6000 })
+    }
   }
 
   const filtered = filterCouple ? invoices.filter(i => String(i.couple_id) === filterCouple) : invoices
