@@ -142,32 +142,37 @@ export function AuthProvider({ children }) {
     return instance
   }
 
+  // One client each for staff and couples, created once and shared by every
+  // page. They used to be rebuilt on every call (often on every render), which
+  // made them unusable as effect dependencies and, in the contract editor, reset
+  // work in progress. The token is read on each request, so a new login is used
+  // straight away.
+  //
   // The admin token travels only on requests made through this client, never as
   // a global axios default, so public pages (signing, proposals, forms) do not
   // send it even when staff are logged in on the same browser.
-  const getAdminAxios = () => {
-    const token = localStorage.getItem('adminToken')
-    return attachInterceptors(
-      axios.create({
-        timeout: REQUEST_TIMEOUT_MS,
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      endSession,
-    )
-  }
-
-  const getCoupleAxios = () => {
-    const token = localStorage.getItem('coupleToken')
-    return attachInterceptors(
-      axios.create({
-        timeout: REQUEST_TIMEOUT_MS,
-        headers: { Authorization: `Bearer ${token}` },
-      }),
+  const endSessionRef = useRef(endSession)
+  endSessionRef.current = endSession
+  const clients = useRef(null)
+  if (!clients.current) {
+    const make = (storageKey, onUnauthorised) => {
+      const instance = axios.create({ timeout: REQUEST_TIMEOUT_MS })
+      instance.interceptors.request.use(config => {
+        const token = localStorage.getItem(storageKey)
+        if (token) config.headers.Authorization = `Bearer ${token}`
+        return config
+      })
+      return attachInterceptors(instance, onUnauthorised)
+    }
+    clients.current = {
+      admin: make('adminToken', () => endSessionRef.current()),
       // The couple side has never force-logged-out on a 401 and this change is
       // not the place to start doing it — only the network handling is shared.
-      undefined,
-    )
+      couple: make('coupleToken', undefined),
+    }
   }
+  const getAdminAxios = useCallback(() => clients.current.admin, [])
+  const getCoupleAxios = useCallback(() => clients.current.couple, [])
 
   return (
     <AuthContext.Provider value={{

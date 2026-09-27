@@ -85,7 +85,7 @@ export default function Payments() {
     setCouples(cRes.data)
   }
 
-  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(err => toast.error(err.response?.data?.error || 'Could not load payments. Check your connection and refresh.')).finally(() => setLoading(false)) }, [])
 
   const preview = async (total, checkIn) =>
     (await getAdminAxios().post('/api/invoices/schedule-preview', { total_price: Number(total), wedding_date: checkIn || null })).data
@@ -584,7 +584,7 @@ export default function Payments() {
             </p>
           </div>
           <Input label="Description" value={form.description} onChange={f('description')} required placeholder="e.g. Booking Deposit (25%)" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="payment-amount" className="label">Amount ($) <span className="text-red-500">*</span></label>
               <input id="payment-amount" name="payment-amount" type="number" min="0" step="0.01" required value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value, payment: '' }))} className="input-field" placeholder="0.00" />
@@ -617,7 +617,7 @@ export default function Payments() {
               {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="schedule-total-price" className="label">Total Contract Price ($) <span className="text-red-500">*</span></label>
               <input id="schedule-total-price" name="schedule-total-price" type="number" min="0" step="0.01" required value={scheduleForm.total_price} onChange={sf('total_price')} className="input-field" placeholder="0.00" />
@@ -636,7 +636,7 @@ export default function Payments() {
                 </p>
               )}
               {scheduleItems.map((it, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                <div key={i} className="grid grid-cols-6 sm:grid-cols-12 gap-2 items-center border-b border-slate-100 pb-2 sm:border-0 sm:pb-0">
                   <input aria-label={`Payment ${i + 1} description`} className="input-field col-span-6" value={it.description} onChange={editItem(i, 'description')} required />
                   <input aria-label={`Payment ${i + 1} amount`} type="number" min="0.01" step="0.01" className="input-field col-span-2" value={it.amount} onChange={editItem(i, 'amount')} required />
                   <input aria-label={`Payment ${i + 1} due date`} type="date" className="input-field col-span-3" value={it.due_date} onChange={editItem(i, 'due_date')} />

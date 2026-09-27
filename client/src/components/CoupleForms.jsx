@@ -18,7 +18,7 @@ export default function CoupleForms({ coupleId, api }) {
   const [pick, setPick] = useState('')
   const [open, setOpen] = useState(null)
 
-  const load = () => api.get(`/api/forms/couple/${coupleId}`).then(r => setItems(r.data)).catch(() => {})
+  const load = () => api.get(`/api/forms/couple/${coupleId}`).then(r => setItems(r.data)).catch(err => toast.error(err.response?.data?.error || "Could not load this couple's forms. Check your connection and refresh."))
   useEffect(() => {
     load()
     api.get('/api/forms').then(r => setForms(r.data.filter(f => f.is_active && !f.system_key))).catch(() => {})

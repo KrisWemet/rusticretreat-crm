@@ -29,7 +29,7 @@ export default function VendorsAdmin() {
     setVendors(vRes.data); setCouples(cRes.data)
   }
 
-  useEffect(() => { fetchData().catch(() => {}).finally(() => setLoading(false)) }, [])
+  useEffect(() => { fetchData().catch(err => toast.error(err.response?.data?.error || 'Could not load vendors. Check your connection and refresh.')).finally(() => setLoading(false)) }, [])
 
   const openAdd = () => { setEditingId(null); setForm(emptyForm); setShowAdd(true) }
   const openEdit = (v) => {

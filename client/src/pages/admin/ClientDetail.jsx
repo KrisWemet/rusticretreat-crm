@@ -334,11 +334,11 @@ export default function ClientDetail() {
       {/* Edit Modal */}
       <Modal isOpen={showEdit} onClose={() => setShowEdit(false)} title="Edit Couple" size="lg">
         <form onSubmit={handleEdit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Partner 1 Name" value={form.partner1_name || ''} onChange={e => setForm(f => ({...f, partner1_name: e.target.value}))} required />
             <Input label="Partner 2 Name" value={form.partner2_name || ''} onChange={e => setForm(f => ({...f, partner2_name: e.target.value}))} required />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Partner 1 Email" type="email" value={form.email || ''} onChange={e => setForm(f => ({...f, email: e.target.value}))} required />
             {/* Without this field a couple who arrived through the website form
                 could never be given a contract: signing requires partner 2's own
@@ -346,11 +346,11 @@ export default function ClientDetail() {
                 nowhere else in the app to add it. */}
             <Input label="Partner 2 Email" type="email" value={form.partner2_email || ''} onChange={e => setForm(f => ({...f, partner2_email: e.target.value}))} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Phone" value={form.phone || ''} onChange={e => setForm(f => ({...f, phone: e.target.value}))} />
             <Input label="Wedding Date" type="date" value={form.wedding_date || ''} onChange={e => setForm(f => ({...f, wedding_date: e.target.value}))} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Venue Package" value={form.venue_package || ''} onChange={e => setForm(f => ({...f, venue_package: e.target.value}))}>
               <option value="">Not selected</option>
               {withCurrent(packages.filter(p => p.is_active).map(p => p.name), form.venue_package).map(n => <option key={n} value={n}>{n}</option>)}
@@ -360,7 +360,7 @@ export default function ClientDetail() {
               {withCurrent(REFERRAL_SOURCES, form.referral_source).map(s => <option key={s} value={s}>{s}</option>)}
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Status" value={form.status || 'lead'} onChange={e => setForm(f => ({...f, status: e.target.value}))}>
               {['lead', 'inquiry', 'booked', 'completed', 'cancelled'].map(s => (
                 <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>

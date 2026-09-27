@@ -77,7 +77,7 @@ export function RecordSignedContractModal({ isOpen, onClose, onSaved, api, coupl
           For a contract signed on paper or through another service. It is saved as <strong>signed</strong> with the
           file attached, so every agreement is in one place. Nothing is emailed to the couple.
         </p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select label="Couple" value={form.couple_id} onChange={pickCouple} required>
             <option value="">Select couple...</option>
             {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
@@ -156,7 +156,7 @@ export function EditDraftContractModal({ contract, onClose, onSaved, api, packag
             Drafts can be changed until the venue signs. Signing locks the wording, so the couple signs exactly what the venue did.
           </p>
           <Input label="Contract title" value={form.title} onChange={f('title')} required />
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input label="Wedding date" type="date" value={form.wedding_date} onChange={f('wedding_date')} />
             <Input label="Start time" value={form.start_time} onChange={f('start_time')} />
             <Input label="End time" value={form.end_time} onChange={f('end_time')} />

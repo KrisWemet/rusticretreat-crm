@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast'
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import axios from 'axios'
@@ -97,11 +98,11 @@ export default function SignContract() {
   const handleSign = async (e) => {
     e.preventDefault()
     if (!signatureData) {
-      alert('Please draw your signature before submitting.')
+      toast.error('Please draw your signature before submitting.')
       return
     }
     if (!agreed) {
-      alert('Please confirm you agree to the terms.')
+      toast.error('Please confirm you agree to the terms.')
       return
     }
     // Check locally first so the couple is walked to the gap rather than told
@@ -127,13 +128,13 @@ export default function SignContract() {
         for (const m of data.missing_fields) marks[m.key] = true
         setInvalidFields(marks)
         jumpToField(data.missing_fields[0].key)
-        alert(`${data.missing_fields.length} required box${data.missing_fields.length === 1 ? '' : 'es'} still need filling in. We have highlighted them for you.`)
+        toast.error(`${data.missing_fields.length} required box${data.missing_fields.length === 1 ? '' : 'es'} still need filling in. We have highlighted them for you.`)
       } else if (data.missing_initials?.length) {
         setMyInitials(m => m)
         jumpToNext()
-        alert(data.error)
+        toast.error(data.error)
       } else {
-        alert(data.error || 'Failed to submit signature. Please try again.')
+        toast.error(data.error || 'Failed to submit signature. Please try again.')
       }
     } finally {
       setSubmitting(false)
