@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const email = require('../services/email');
 
 // ── Admin: list all tours ────────────────────────────────────────────────────
 router.get('/', authenticateToken, (req, res) => {
@@ -29,11 +30,11 @@ router.post('/', authenticateToken, (req, res) => {
 });
 
 // ── Admin: update a tour (schedule / complete / reschedule) ──────────────────
-router.put('/:id', authenticateToken, (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   const tour = db.prepare('SELECT * FROM tours WHERE id = ?').get(req.params.id);
   if (!tour) return res.status(404).json({ error: 'Tour not found' });
 
-  const { scheduled_at, status, notes, preferred_date } = req.body;
+  const { scheduled_at, status, notes, preferred_date, notify } = req.body;
   db.prepare(`
     UPDATE tours SET scheduled_at = ?, status = ?, notes = ?, preferred_date = ? WHERE id = ?
   `).run(
@@ -43,7 +44,18 @@ router.put('/:id', authenticateToken, (req, res) => {
     preferred_date !== undefined ? preferred_date : tour.preferred_date,
     req.params.id,
   );
-  res.json(db.prepare('SELECT * FROM tours WHERE id = ?').get(req.params.id));
+  const updated = db.prepare('SELECT * FROM tours WHERE id = ?').get(req.params.id);
+
+  // Staff tick "email a confirmation" when scheduling; nothing goes out otherwise.
+  let confirmation = null;
+  if (notify && updated.status === 'scheduled' && updated.scheduled_at) {
+    const couple = updated.couple_id ? db.prepare('SELECT * FROM couples WHERE id = ?').get(updated.couple_id) : null;
+    const to = [...new Set([updated.email, couple?.email, couple?.partner2_email].filter(Boolean).map(a => a.toLowerCase()))];
+    confirmation = to.length
+      ? await email.sendTourConfirmation({ to, coupleId: updated.couple_id, name: updated.name, scheduledAt: updated.scheduled_at })
+      : { delivered: false, error: 'No email address for this visitor' };
+  }
+  res.json({ ...updated, confirmation_sent: confirmation ? confirmation.delivered : null, confirmation_error: confirmation && !confirmation.delivered ? confirmation.error : null });
 });
 
 // ── Admin: delete a tour ─────────────────────────────────────────────────────

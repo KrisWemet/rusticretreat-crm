@@ -58,6 +58,17 @@ router.get('/', authenticateToken, (req, res) => {
   res.json(rows);
 });
 
+// ── Admin: forms sent to couples and not yet returned ────────────────────────
+router.get('/awaiting', authenticateToken, (req, res) => {
+  res.json(db.prepare(`
+    SELECT fa.id, fa.form_id, fa.couple_id, fa.link_sent_at, fa.token_expires_at, f.title,
+           c.partner1_name, c.partner2_name, c.email
+    FROM form_assignments fa JOIN forms f ON f.id = fa.form_id JOIN couples c ON c.id = fa.couple_id
+    WHERE fa.status = 'pending' AND fa.link_sent_at IS NOT NULL AND c.archived_at IS NULL
+    ORDER BY fa.link_sent_at
+  `).all());
+});
+
 router.get('/:id', authenticateToken, (req, res) => {
   const form = getFullForm(req.params.id);
   if (!form) return res.status(404).json({ error: 'Form not found' });

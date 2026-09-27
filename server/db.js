@@ -487,6 +487,8 @@ for (const col of [
   'ALTER TABLE packages ADD COLUMN season_prices TEXT',
   // When staff last marked an enquiry as personally followed up
   'ALTER TABLE couples ADD COLUMN contacted_at DATETIME',
+  // The e-Transfer reference, cheque number or similar for a recorded payment
+  'ALTER TABLE invoices ADD COLUMN payment_reference TEXT',
   // Archived couples are hidden from lists but keep all their records
   'ALTER TABLE couples ADD COLUMN archived_at DATETIME',
 ]) { try { db.exec(col); } catch (_) {} }
@@ -641,7 +643,7 @@ try {
       ['Pet Cabin Stay', 'Bring your dog and have them stay in the cabin. One-time cleaning fee.', 50, 'flat'],
       ['Fireworks Display', 'Venue-coordinated fireworks display (must be booked through Rustic Retreat).', 250, 'flat'],
       ['Generator Rental', 'Diesel generator rental for caterers or extra power needs (off-grid property).', 200, 'flat'],
-      ['Extra Guest (over 60)', 'Per-guest fee for celebrations between 61 and 80 guests.', 25, 'per_guest'],
+      ['Extra Guest (over 80)', 'Per-guest fee for each guest from 81 to 100 (80 are included; 100 is the most the reception holds).', 25, 'per_guest'],
       ['Rehearsal Dinner Setup', 'Tables, lighting, and firewood set up for a Friday rehearsal dinner.', 350, 'flat'],
       ['Day-of Coordination', 'On-site Rustic Retreat coordinator for your ceremony day.', 600, 'flat'],
       ['Late Checkout', 'Extend your final-day checkout to noon the following day.', 150, 'flat'],
@@ -948,7 +950,7 @@ IN WITNESS WHEREOF, the Clients confirm they have read and agree to be legally b
   const propId = propTotal.lastInsertRowid;
   const insertPropItem = db.prepare(`INSERT INTO proposal_items (proposal_id, label, description, quantity, unit_price, amount, kind, order_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
   insertPropItem.run(propId, '3-Day Weekend Package', 'Fri–Sun exclusive property access', 1, 6500, 6500, 'package', 0);
-  insertPropItem.run(propId, 'Extra Guest (over 60)', '4 guests over 60 @ $25', 4, 25, 100, 'addon', 1);
+  insertPropItem.run(propId, 'Extra Guest (over 80)', '4 guests over 80 @ $25', 4, 25, 100, 'addon', 1);
   insertPropItem.run(propId, 'Pet Cabin Stay', 'Dog staying in the cabin', 1, 50, 50, 'addon', 2);
   insertPropItem.run(propId, 'Rehearsal Dinner Setup', 'Friday evening rehearsal dinner', 1, 350, 350, 'addon', 3);
 
@@ -1131,6 +1133,15 @@ runOnce('pipeline-backfill-v1', () => {
       db.prepare('UPDATE couples SET pipeline_stage = ? WHERE id = ?').run(stage, c.id);
     }
   }
+});
+
+// The rental agreement includes 80 guests and charges $25 for each guest from
+// 81 to 100. The add-on catalog was seeded as "over 60", which contradicted it.
+runOnce('extra-guest-over-80', () => {
+  const r = db.prepare(`UPDATE addons SET name = 'Extra Guest (over 80)',
+      description = 'Per-guest fee for each guest from 81 to 100 (80 are included; 100 is the most the reception holds).'
+    WHERE name = 'Extra Guest (over 60)'`).run();
+  if (r.changes) console.log(`[migrate] Extra-guest add-on now counts guests over 80.`);
 });
 
 runOnce('package-season-prices-2028', () => {

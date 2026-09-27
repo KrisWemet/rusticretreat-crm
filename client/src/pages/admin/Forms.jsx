@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import FillFormModal from '../../components/FillFormModal'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   PlusIcon, TrashIcon, PencilIcon, ClipboardDocumentCheckIcon,
-  UserPlusIcon, EyeIcon, XMarkIcon,
+  UserPlusIcon, EyeIcon, XMarkIcon, PaperAirplaneIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
@@ -33,10 +34,11 @@ export default function Forms() {
   const [assignCouple, setAssignCouple] = useState('')
   const [viewing, setViewing] = useState(null) // { assignment, responses }
   const [filling, setFilling] = useState(null) // assignment id open for staff entry
+  const [awaiting, setAwaiting] = useState([])
 
   function load() {
-    Promise.all([api.get('/api/forms'), api.get('/api/couples')])
-      .then(([f, c]) => { setForms(f.data); setCouples(c.data) })
+    Promise.all([api.get('/api/forms'), api.get('/api/couples'), api.get('/api/forms/awaiting')])
+      .then(([f, c, w]) => { setForms(f.data); setCouples(c.data); setAwaiting(w.data) })
       .catch(() => toast.error('Failed to load forms'))
       .finally(() => setLoading(false))
   }
@@ -86,13 +88,26 @@ export default function Forms() {
 
   async function del(f) {
     if (!confirm(`Delete "${f.title}"? Responses will be lost.`)) return
-    await api.delete(`/api/forms/${f.id}`); toast.success('Deleted'); load()
+    try { await api.delete(`/api/forms/${f.id}`); toast.success('Deleted'); load() }
+    catch (e) { toast.error(e.response?.data?.error || 'Failed to delete') }
+  }
+
+  // Email the couple a fresh private link (the old one stops working).
+  async function resend(a) {
+    try {
+      const { data } = await api.post(`/api/forms/assignments/${a.id}/link`, {})
+      if (data.sent) toast.success(`Link emailed to ${data.sent_to}`)
+      else toast.error(`The email did not go out${data.error ? ` (${data.error})` : ''}.`, { duration: 7000 })
+      load()
+    } catch (e) { toast.error(e.response?.data?.error || 'Could not send the link') }
   }
 
   async function openManage(f) {
     setManage(f); setAssignCouple('')
-    const { data } = await api.get(`/api/forms/${f.id}/assignments`)
-    setAssignments(data)
+    try {
+      const { data } = await api.get(`/api/forms/${f.id}/assignments`)
+      setAssignments(data)
+    } catch (e) { toast.error(e.response?.data?.error || 'Could not load who has this form') }
   }
   async function assign() {
     if (!assignCouple) return
@@ -104,19 +119,43 @@ export default function Forms() {
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to assign') }
   }
   async function viewResponses(a) {
-    const { data } = await api.get(`/api/forms/assignments/${a.id}/responses`)
-    setViewing({ assignment: a, responses: data.responses })
+    try {
+      const { data } = await api.get(`/api/forms/assignments/${a.id}/responses`)
+      setViewing({ assignment: a, responses: data.responses })
+    } catch (e) { toast.error(e.response?.data?.error || 'Could not load the answers') }
   }
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="page-title">Forms & Questionnaires</h1>
           <p className="page-subtitle">Collect event details from couples without the email back-and-forth</p>
         </div>
         <button onClick={openNew} className="btn-primary"><PlusIcon className="w-4 h-4" /> New Form</button>
       </div>
+
+      {awaiting.length > 0 && (
+        <div className="card p-5">
+          <h2 className="text-sm font-semibold text-slate-800 mb-3">Waiting on couples ({awaiting.length})</h2>
+          <ul className="divide-y divide-slate-50">
+            {awaiting.map(a => (
+              <li key={a.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                <div className="flex-1 min-w-[12rem]">
+                  <Link to={`/clients/${a.couple_id}`} className="font-medium text-slate-800 hover:text-rose-600">{a.partner1_name} & {a.partner2_name}</Link>
+                  <span className="text-slate-500"> — {a.title}</span>
+                  <div className="text-xs text-slate-400">
+                    Link sent {format(parseISO(a.link_sent_at.replace(' ', 'T') + 'Z'), 'MMM d')}
+                    {a.token_expires_at && new Date(a.token_expires_at) < new Date() ? ' · link expired' : ''}
+                  </div>
+                </div>
+                <button onClick={() => resend(a)} className="btn-ghost py-1 px-2 text-xs text-rose-600"><PaperAirplaneIcon className="w-3.5 h-3.5" /> Resend link</button>
+                <button onClick={() => setFilling(a.id)} className="btn-ghost py-1 px-2 text-xs text-slate-500"><PencilIcon className="w-3.5 h-3.5" /> Fill in</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-7 w-7 border-2 border-rose-200 border-t-rose-500" /></div>
@@ -215,7 +254,7 @@ export default function Forms() {
               <div className="flex gap-2">
                 <select className="input flex-1" value={assignCouple} onChange={e => setAssignCouple(e.target.value)}>
                   <option value="">Assign to couple…</option>
-                  {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
+                  {couples.filter(c => !assignments.some(a => a.couple_id === c.id)).map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
                 </select>
                 <button onClick={assign} className="btn-primary">Assign</button>
               </div>
@@ -231,7 +270,10 @@ export default function Forms() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{a.status}</span>
-                      <button onClick={() => setFilling(a.id)} className="p-1 text-slate-400 hover:text-slate-700" title="View, fill in or edit answers"><PencilIcon className="w-4 h-4" /></button>
+                      {a.status === 'completed' && (
+                        <button onClick={() => viewResponses(a)} className="p-1 text-slate-400 hover:text-slate-700" title="Read the answers" aria-label="Read the answers"><EyeIcon className="w-4 h-4" /></button>
+                      )}
+                      <button onClick={() => setFilling(a.id)} className="p-1 text-slate-400 hover:text-slate-700" title="Fill in or edit answers" aria-label="Fill in or edit answers"><PencilIcon className="w-4 h-4" /></button>
                     </div>
                   </div>
                 ))}
@@ -241,7 +283,7 @@ export default function Forms() {
         </div>
       )}
 
-      <FillFormModal assignmentId={filling} api={api} onClose={() => setFilling(null)} onSaved={() => manage && openManage(manage)} />
+      <FillFormModal assignmentId={filling} api={api} onClose={() => setFilling(null)} onSaved={() => { if (manage) openManage(manage); load() }} />
 
       {/* Response viewer */}
       {viewing && (

@@ -123,6 +123,26 @@ function logEmail({ to, subject, coupleId, kind, result }) {
   }
 }
 
+// ── Site tour confirmation to the visitor (sent only when staff tick it) ────
+async function sendTourConfirmation({ to, coupleId, name, scheduledAt }) {
+  // Tour times are entered as Alberta local time, e.g. "2026-10-03T10:00".
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(scheduledAt || '');
+  const day = m ? new Date(m[1] + 'T12:00:00Z').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : scheduledAt;
+  const h = m ? Number(m[2]) : null;
+  const time = m ? `${((h + 11) % 12) + 1}:${m[3]} ${h < 12 ? 'am' : 'pm'}` : '';
+  const when = `${day}${time ? ` at ${time}` : ''}`;
+  return send({
+    to, coupleId, kind: 'tour-confirmation',
+    replyTo: process.env.REPLY_TO_EMAIL || ADMIN_EMAIL || undefined,
+    subject: `Your site tour at Rustic Retreat — ${day}`,
+    text: `Hi ${name},\n\nYour site tour of Rustic Retreat is booked for ${when}.\n\nIf that time no longer works, just reply to this email and we'll find another.\n\nWe look forward to showing you around!\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(name)}</strong>,</p>
+<p>Your site tour of Rustic Retreat is booked for <strong>${esc(when)}</strong>.</p>
+<p>If that time no longer works, just reply to this email and we'll find another.</p>
+<p>We look forward to showing you around!<br>Rustic Retreat</p>`,
+  });
+}
+
 // ── A message from staff to a couple, sent in full by email ────────────────
 // Replies go to the venue's own inbox (REPLY_TO_EMAIL, else ADMIN_EMAIL), not
 // to the no-reply sending address.
@@ -374,10 +394,11 @@ function dueWording(daysUntilDue) {
   return `in ${daysUntilDue} days`;
 }
 
-async function sendPaymentReminder({ to, coupleNames, description, amount, dueDate, daysUntilDue }) {
+async function sendPaymentReminder({ to, coupleId, coupleNames, description, amount, dueDate, daysUntilDue }) {
   const urgency = dueWording(daysUntilDue);
   const pay = howToPay({ coupleNames, description });
   return send({
+    coupleId,
     kind: 'payment-reminder',
     to,
     subject: `Payment reminder: ${description} due ${urgency}`,
@@ -396,7 +417,7 @@ ${pay.html}
 }
 
 // ── Payment receipt to couple ────────────────────────────────────────────────
-async function sendPaymentReceipt({ to, coupleNames, description, amount, paymentMethod, paidDate, balance }) {
+async function sendPaymentReceipt({ to, coupleId, coupleNames, description, amount, paymentMethod, paidDate, balance }) {
   const balanceLine = balance > 0
     ? `Remaining balance: $${money(balance)} CAD`
     : 'Your balance is paid in full — thank you!';
@@ -406,6 +427,7 @@ async function sendPaymentReceipt({ to, coupleNames, description, amount, paymen
     : { text: '\n\nQuestions about your payment schedule? Just reply to this email.',
         html: '<p>Questions about your payment schedule? Just reply to this email.</p>' };
   return send({
+    coupleId,
     kind: 'payment-receipt',
     to,
     subject: `Payment received — ${description} (Rustic Retreat)`,
@@ -529,6 +551,7 @@ async function sendUnmatchedSmsAdmin({ fromNumber, text, receivedAt }) {
 
 module.exports = {
   send,
+  sendTourConfirmation,
   isConfigured: () => configured,
   sendCoupleMessage,
   sendMorningSummary,

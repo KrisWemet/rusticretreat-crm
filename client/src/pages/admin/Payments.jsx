@@ -13,6 +13,9 @@ import {
   SparklesIcon,
   ScissorsIcon,
   XMarkIcon,
+  PencilIcon,
+  EnvelopeIcon,
+  PrinterIcon,
 } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid'
 import toast from 'react-hot-toast'
@@ -22,6 +25,13 @@ const EMPTY_FORM = {
   couple_id: '', description: '', amount: '', due_date: '', notes: '', payment: '',
 }
 const EMPTY_SCHEDULE = { couple_id: '', total_price: '', wedding_date: '' }
+const PAYMENT_METHODS = ['E-Transfer', 'Cash', 'Cheque', 'Credit Card', 'Other']
+const STATUS_FILTERS = [
+  { key: '', label: 'All' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'paid', label: 'Paid' },
+]
 
 const round2 = (n) => Math.round(Number(n) * 100) / 100
 const money = (n) => `$${Number(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -61,6 +71,12 @@ export default function Payments() {
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
   const sf = (k) => (e) => setScheduleForm(p => ({ ...p, [k]: e.target.value }))
   const [filterCouple, setFilterCouple] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  // Record payment (date, method, reference, receipt) and edit-invoice dialogs
+  const [paying, setPaying] = useState(null)
+  const [payForm, setPayForm] = useState({ paid_at: '', payment_method: 'E-Transfer', reference: '', send_receipt: true })
+  const [editing, setEditing] = useState(null)
+  const [editForm, setEditForm] = useState({ description: '', amount: '', due_date: '', notes: '' })
 
   const fetchData = async () => {
     const api = getAdminAxios()
@@ -193,13 +209,75 @@ export default function Payments() {
     }
   }
 
+  // Unpaid → opens "Record payment" so the date, method and reference are kept.
+  // Paid → marks it unpaid again (after a confirm), e.g. if recorded by mistake.
   const togglePaid = async (inv) => {
+    if (!inv.paid) {
+      setPayForm({ paid_at: format(new Date(), 'yyyy-MM-dd'), payment_method: 'E-Transfer', reference: '', send_receipt: true })
+      setPaying(inv)
+      return
+    }
+    if (!confirm(`Mark "${inv.description}" as NOT paid?`)) return
     try {
-      await getAdminAxios().patch(`/api/invoices/${inv.id}/paid`, { paid: !inv.paid })
-      toast.success(inv.paid ? 'Marked unpaid' : 'Marked paid!')
+      await getAdminAxios().patch(`/api/invoices/${inv.id}/paid`, { paid: false })
+      toast.success('Marked unpaid')
       fetchData()
-    } catch {
-      toast.error('Failed to update')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update')
+    }
+  }
+
+  const recordPayment = async (e) => {
+    e.preventDefault()
+    try {
+      const { data } = await getAdminAxios().patch(`/api/invoices/${paying.id}/paid`, { paid: true, ...payForm })
+      if (payForm.send_receipt && data.receipt_sent === false) toast.error(`Payment recorded, but the receipt did not send: ${data.receipt_error}`, { duration: 7000 })
+      else toast.success(payForm.send_receipt && data.receipt_sent ? 'Payment recorded and receipt emailed' : 'Payment recorded')
+      setPaying(null)
+      fetchData()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to record the payment')
+    }
+  }
+
+  const openEdit = (inv) => {
+    setEditForm({ description: inv.description, amount: String(inv.amount), due_date: inv.due_date || '', notes: inv.notes || '' })
+    setEditing(inv)
+  }
+
+  const saveEdit = async (e) => {
+    e.preventDefault()
+    try {
+      await getAdminAxios().put(`/api/invoices/${editing.id}`, {
+        description: editForm.description.trim(), amount: Number(editForm.amount), due_date: editForm.due_date || null, notes: editForm.notes || null,
+      })
+      toast.success('Invoice updated')
+      setEditing(null)
+      fetchData()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update the invoice')
+    }
+  }
+
+  const sendReminder = async (inv) => {
+    if (!confirm(`Email ${inv.partner1_name} & ${inv.partner2_name} a reminder about "${inv.description}" now?`)) return
+    try {
+      await getAdminAxios().post(`/api/invoices/${inv.id}/remind`)
+      toast.success('Reminder emailed')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'The reminder did not send', { duration: 7000 })
+    }
+  }
+
+  // Fetched with the auth header, then shown in a new tab ready to print.
+  const printStatement = async () => {
+    const win = window.open('', '_blank')
+    try {
+      const { data } = await getAdminAxios().get(`/api/invoices/couple/${filterCouple}/statement/print`, { responseType: 'text' })
+      win.document.open(); win.document.write(data); win.document.close()
+    } catch (err) {
+      win?.close()
+      toast.error('Could not open the statement')
     }
   }
 
@@ -214,14 +292,22 @@ export default function Payments() {
     }
   }
 
-  const filtered = filterCouple ? invoices.filter(i => String(i.couple_id) === filterCouple) : invoices
-  const totalOwed    = filtered.filter(i => !i.paid).reduce((s, i) => s + i.amount, 0)
-  const totalCollected = filtered.filter(i => i.paid).reduce((s, i) => s + i.amount, 0)
-  const overdue      = filtered.filter(i => !i.paid && i.due_date && isPast(parseISO(i.due_date)) && !isToday(parseISO(i.due_date)))
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const isOverdue = (i) => !i.paid && i.due_date && i.due_date < todayStr
+  const byCouple = filterCouple ? invoices.filter(i => String(i.couple_id) === filterCouple) : invoices
+  const filtered = byCouple.filter(i =>
+    !filterStatus ||
+    (filterStatus === 'paid' && i.paid) ||
+    (filterStatus === 'overdue' && isOverdue(i)) ||
+    (filterStatus === 'upcoming' && !i.paid && !isOverdue(i)))
+  // Totals follow the client filter, not the status tabs, so they stay meaningful.
+  const totalOwed    = byCouple.filter(i => !i.paid).reduce((s, i) => s + i.amount, 0)
+  const totalCollected = byCouple.filter(i => i.paid).reduce((s, i) => s + i.amount, 0)
+  const overdue      = byCouple.filter(isOverdue)
 
   return (
     <div className="p-6 space-y-5 max-w-7xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="page-title">Payments</h1>
           <p className="page-subtitle">{invoices.length} invoices · {overdue.length > 0 ? `${overdue.length} overdue` : 'no overdue'}</p>
@@ -239,7 +325,7 @@ export default function Payments() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
@@ -268,22 +354,30 @@ export default function Payments() {
               <ExclamationTriangleIcon className={`w-5 h-5 ${overdue.length > 0 ? 'text-red-600' : 'text-slate-400'}`} />
             </div>
             <div>
-              <div className={`text-xl font-bold ${overdue.length > 0 ? 'text-red-700' : 'text-slate-800'}`}>{overdue.length}</div>
+              <button onClick={() => setFilterStatus('overdue')} className={`text-xl font-bold hover:underline ${overdue.length > 0 ? 'text-red-700' : 'text-slate-800'}`}>{overdue.length}</button>
               <div className="text-xs text-slate-400">Overdue</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex items-center gap-3">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1">
+          {STATUS_FILTERS.map(s => (
+            <button key={s.key} onClick={() => setFilterStatus(s.key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${filterStatus === s.key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
         <select
           id="payments-filter-couple"
           name="payments-filter-couple"
           aria-label="Filter invoices by client"
           value={filterCouple}
           onChange={e => setFilterCouple(e.target.value)}
-          className="input-field w-64"
+          className="input-field w-full sm:w-64"
         >
           <option value="">All clients</option>
           {couples.map(c => (
@@ -291,7 +385,12 @@ export default function Payments() {
           ))}
         </select>
         {filterCouple && (
-          <button onClick={() => setFilterCouple('')} className="text-xs text-slate-400 hover:text-slate-600">Clear filter</button>
+          <>
+            <button onClick={printStatement} className="btn-secondary py-1.5 text-xs">
+              <PrinterIcon className="w-4 h-4" /> Print statement
+            </button>
+            <button onClick={() => setFilterCouple('')} className="text-xs text-slate-400 hover:text-slate-600">Clear filter</button>
+          </>
         )}
       </div>
 
@@ -301,8 +400,14 @@ export default function Payments() {
       ) : filtered.length === 0 ? (
         <div className="card py-16 text-center">
           <CurrencyDollarIcon className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400 font-medium">No invoices yet</p>
-          <p className="text-xs text-slate-300 mt-1">Use "Auto Schedule" to generate a standard 3-payment schedule, or add invoices manually.</p>
+          {invoices.length === 0 ? (
+            <>
+              <p className="text-slate-400 font-medium">No invoices yet</p>
+              <p className="text-xs text-slate-300 mt-1">Use "Auto Schedule" to generate a standard 3-payment schedule, or add invoices manually.</p>
+            </>
+          ) : (
+            <p className="text-slate-400 font-medium">No invoices match these filters</p>
+          )}
         </div>
       ) : (
         <div className="card overflow-x-auto">
@@ -357,11 +462,21 @@ export default function Payments() {
                       {/* !! matters: inv.paid is SQLite's integer 0, and React
                           renders a bare 0 as the text "0", not as nothing. */}
                       {!!inv.paid && inv.paid_at && (
-                        <div className="text-xs text-slate-400 mt-0.5">{format(parseISO(inv.paid_at), 'MMM d')}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          {format(parseISO(inv.paid_at), 'MMM d')}{inv.payment_method ? ` · ${inv.payment_method}` : ''}{inv.payment_reference ? ` · ${inv.payment_reference}` : ''}
+                        </div>
                       )}
                     </td>
-                    <td>
-                      <button onClick={() => deleteInvoice(inv.id)} className="btn-ghost py-1 px-2 text-xs text-red-400 hover:bg-red-50">
+                    <td className="whitespace-nowrap">
+                      {!inv.paid && (
+                        <button onClick={() => sendReminder(inv)} title="Email a payment reminder now" aria-label="Email a payment reminder" className="btn-ghost py-1 px-2 text-xs text-slate-500">
+                          <EnvelopeIcon className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button onClick={() => openEdit(inv)} title="Edit" aria-label="Edit invoice" className="btn-ghost py-1 px-2 text-xs text-slate-500">
+                        <PencilIcon className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => deleteInvoice(inv.id)} title="Delete" aria-label="Delete invoice" className="btn-ghost py-1 px-2 text-xs text-red-400 hover:bg-red-50">
                         <TrashIcon className="w-3.5 h-3.5" />
                       </button>
                     </td>
@@ -372,6 +487,72 @@ export default function Payments() {
           </table>
         </div>
       )}
+
+      {/* Record payment */}
+      <Modal isOpen={!!paying} onClose={() => setPaying(null)} title="Record payment">
+        {paying && (
+          <form onSubmit={recordPayment} className="space-y-4">
+            <p className="text-sm text-slate-600">
+              <strong>{paying.partner1_name} &amp; {paying.partner2_name}</strong> — {paying.description}, {money(paying.amount)}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="pay-date" className="label">Date received</label>
+                <input id="pay-date" type="date" required value={payForm.paid_at} onChange={e => setPayForm(p => ({ ...p, paid_at: e.target.value }))} className="input-field" />
+              </div>
+              <div>
+                <label htmlFor="pay-method" className="label">Method</label>
+                <select id="pay-method" value={payForm.payment_method} onChange={e => setPayForm(p => ({ ...p, payment_method: e.target.value }))} className="input-field">
+                  {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="pay-ref" className="label">Reference <span className="text-slate-400 font-normal">(e-Transfer reference, cheque number…)</span></label>
+              <input id="pay-ref" type="text" value={payForm.reference} onChange={e => setPayForm(p => ({ ...p, reference: e.target.value }))} className="input-field" />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={payForm.send_receipt} onChange={e => setPayForm(p => ({ ...p, send_receipt: e.target.checked }))} />
+              Email a receipt to the couple
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setPaying(null)} className="btn-secondary">Cancel</button>
+              <button type="submit" className="btn-primary">Record payment</button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Edit invoice */}
+      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="Edit invoice">
+        {editing && (
+          <form onSubmit={saveEdit} className="space-y-4">
+            <div>
+              <label htmlFor="edit-desc" className="label">Description</label>
+              <input id="edit-desc" required value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} className="input-field" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="edit-amount" className="label">Amount (incl. GST)</label>
+                <input id="edit-amount" type="number" min="0" step="0.01" required value={editForm.amount} onChange={e => setEditForm(p => ({ ...p, amount: e.target.value }))} className="input-field" />
+              </div>
+              <div>
+                <label htmlFor="edit-due" className="label">Due date</label>
+                <input id="edit-due" type="date" value={editForm.due_date} onChange={e => setEditForm(p => ({ ...p, due_date: e.target.value }))} className="input-field" />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="edit-notes" className="label">Notes</label>
+              <input id="edit-notes" value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} className="input-field" />
+            </div>
+            {!!editing.paid && <p className="text-xs text-amber-700">This invoice is already paid. Changes are recorded in the couple's history.</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setEditing(null)} className="btn-secondary">Cancel</button>
+              <button type="submit" className="btn-primary">Save</button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {/* Add invoice modal */}
       <Modal isOpen={showAdd} onClose={() => { setShowAdd(false); setForm(EMPTY_FORM); setAddBooking(null) }} title="Add Invoice">

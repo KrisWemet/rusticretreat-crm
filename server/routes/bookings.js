@@ -8,12 +8,23 @@ const { assertBookable, sendRuleError } = require('../services/bookingRules');
 // Get all bookings
 router.get('/', authenticateToken, (req, res) => {
   const bookings = db.prepare(`
-    SELECT b.*, c.partner1_name, c.partner2_name, c.email as couple_email, c.phone as couple_phone
+    SELECT b.*, c.partner1_name, c.partner2_name, c.email as couple_email, c.phone as couple_phone,
+           c.status AS couple_status, c.archived_at AS couple_archived_at,
+           (SELECT COALESCE(SUM(amount), 0) FROM invoices i WHERE i.couple_id = b.couple_id) AS invoiced_total,
+           (SELECT COALESCE(SUM(amount), 0) FROM invoices i WHERE i.couple_id = b.couple_id AND i.paid = 1) AS paid_total,
+           (SELECT COUNT(*) FROM invoices i WHERE i.couple_id = b.couple_id AND i.paid = 0 AND i.due_date < ?) AS overdue_count
     FROM bookings b
     JOIN couples c ON b.couple_id = c.id
     ORDER BY b.event_date ASC
-  `).all();
-  res.json(bookings);
+  `).all(require('../services/schedule').albertaToday());
+  // Payment status follows the couple's invoices rather than a hand-typed field.
+  res.json(bookings.map(b => ({
+    ...b,
+    payment_status: b.invoiced_total === 0 ? 'no invoices'
+      : b.paid_total >= b.invoiced_total - 0.005 ? 'paid'
+      : b.overdue_count > 0 ? 'overdue'
+      : b.paid_total > 0 ? 'partial' : 'pending',
+  })));
 });
 
 // Get booking by id
