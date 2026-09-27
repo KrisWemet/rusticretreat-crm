@@ -97,12 +97,10 @@ router.post(
     if (!row)
       return res.status(404).json({ error: "Unresolved receipt not found" });
     if (!req.body.reason?.trim())
-      return res
-        .status(400)
-        .json({
-          error:
-            "Record how you matched or refunded this receipt in the provider history",
-        });
+      return res.status(400).json({
+        error:
+          "Record how you matched or refunded this receipt in the provider history",
+      });
     db.prepare(
       "UPDATE unmatched_card_receipts SET resolved_at=datetime('now'),resolution=? WHERE id=?",
     ).run(req.body.reason.trim(), row.id);
@@ -182,9 +180,14 @@ router.post("/templates", requireAdmin, (req, res) => {
     });
   const r = db
     .prepare(
-      "INSERT INTO workflow_templates(title,offset_days,owner) VALUES(?,?,?)",
+      "INSERT INTO workflow_templates(title,offset_days,owner,reference_date) VALUES(?,?,?,?)",
     )
-    .run(title.trim(), Number(offset_days), owner || null);
+    .run(
+      title.trim(),
+      Number(offset_days),
+      owner || null,
+      req.body.reference_date === "checkout" ? "checkout" : "ceremony",
+    );
   res
     .status(201)
     .json(
@@ -205,7 +208,7 @@ router.put("/templates/:id", requireAdmin, (req, res) => {
   )
     return res.status(400).json({ error: "Invalid task template" });
   db.prepare(
-    "UPDATE workflow_templates SET title=?,offset_days=?,owner=?,active=? WHERE id=?",
+    "UPDATE workflow_templates SET title=?,offset_days=?,owner=?,active=?,reference_date=? WHERE id=?",
   ).run(
     req.body.title || t.title,
     Number(req.body.offset_days ?? t.offset_days),

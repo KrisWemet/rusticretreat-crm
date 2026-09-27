@@ -329,6 +329,10 @@ test("reusable relative task templates add missing work without duplication", as
     .all(operatingId);
   assert.equal(tasks.length, 6);
   assert.equal(
+    tasks.find((t) => t.workflow_key === "booking-workflow:closeout").due_date,
+    "2027-09-06",
+  );
+  assert.equal(
     tasks.find((t) => t.title === body.title).due_date,
     "2027-09-02",
   );

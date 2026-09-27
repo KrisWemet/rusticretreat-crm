@@ -608,6 +608,26 @@ export default function ClientDetail() {
           Reopen reservation
         </button>
       )}
+      <nav
+        aria-label="Actions for this couple"
+        className="flex flex-wrap gap-2"
+      >
+        <Link className="btn-secondary" to={`/messages?couple=${id}`}>
+          Open conversation
+        </Link>
+        <Link className="btn-secondary" to={`/tours?couple=${id}&new=1`}>
+          Schedule tour
+        </Link>
+        <Link className="btn-secondary" to={`/contracts?couple=${id}&new=1`}>
+          Prepare agreement
+        </Link>
+        <Link className="btn-secondary" to={`/bookings?couple=${id}&new=1`}>
+          Create reservation
+        </Link>
+        <Link className="btn-secondary" to={`/payments?couple=${id}`}>
+          Record payment
+        </Link>
+      </nav>
       <CoupleOverview
         coupleId={id}
         api={getAdminAxios()}

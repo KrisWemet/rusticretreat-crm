@@ -21,9 +21,10 @@ import {
   DocumentDuplicateIcon,
   ClipboardDocumentCheckIcon,
   Cog6ToothIcon,
+  QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline'
 
-const navItems = [
+export const navItems = [
   { to: '/dashboard',  icon: HomeIcon,                  label: 'Dashboard' },
   { to: '/clients',    icon: UsersIcon,                 label: 'Clients & Leads' },
   { to: '/pipeline',   icon: ViewColumnsIcon,           label: 'Sales Pipeline' },
@@ -40,6 +41,7 @@ const navItems = [
   { to: '/analytics',  icon: ChartBarIcon,              label: 'Analytics' },
   { to: '/packages',   icon: CubeIcon,                  label: 'Packages' },
   { to: '/backups',    icon: ShieldCheckIcon,           label: 'Backups' },
+  { to: '/help',       icon: QuestionMarkCircleIcon,    label: 'Help & Guides' },
   { to: '/settings',   icon: Cog6ToothIcon,             label: 'Settings' },
 ]
 
@@ -51,9 +53,9 @@ export default function Sidebar({ unreadMessages = 0, pendingTasks = 0, open = f
     ['Daily work', ['/dashboard','/messages','/tasks']],
     ['Enquiries and sales', ['/clients','/pipeline','/tours','/proposals']],
     ['Event preparation', ['/calendar','/bookings','/contracts','/payments','/forms','/vendors']],
-    ['Administration', ['/analytics','/packages','/backups','/settings']],
+    ['Administration', ['/analytics','/packages','/backups','/settings','/help']],
   ]
-  const items = user?.access_scope==='operations'?[{to:'/operations',label:'Assigned events',icon:ClipboardDocumentListIcon,group:'Event work'},{to:'/settings',label:'Settings',icon:Cog6ToothIcon,group:'Account'}]:groups.flatMap(([group, paths]) => paths.map(to => ({ ...navItems.find(n => n.to === to), group }))).filter(n => n.to !== '/backups' || user?.role === 'admin')
+  const items = user?.access_scope==='operations'?[{to:'/operations',label:'Assigned events',icon:ClipboardDocumentListIcon,group:'Event work'},{to:'/settings',label:'Settings',icon:Cog6ToothIcon,group:'Account'},{to:'/help',label:'Help & Guides',icon:QuestionMarkCircleIcon,group:'Account'}]:groups.flatMap(([group, paths]) => paths.map(to => ({ ...navItems.find(n => n.to === to), group }))).filter(n => n.to !== '/backups' || user?.role === 'admin')
 
   const getBadge = (badge) => {
     if (badge === 'messages' && unreadMessages > 0) return unreadMessages

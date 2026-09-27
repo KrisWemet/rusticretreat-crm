@@ -18,7 +18,24 @@ function ensureTasks(coupleId, date, { reschedule = false } = {}) {
     const title = template.title,
       offset = template.offset_days;
     const id = `booking-workflow:${key}`;
-    const due = new Date(date + "T12:00:00Z");
+    const booking =
+      template.reference_date === "checkout"
+        ? db
+            .prepare(
+              "SELECT event_date,end_date,package_name FROM bookings WHERE couple_id=?",
+            )
+            .get(coupleId)
+        : null;
+    const base =
+      booking?.end_date ||
+      (booking
+        ? require("./bookingRules").defaultEndDate(
+            booking.event_date,
+            booking.package_name,
+          )
+        : null) ||
+      date;
+    const due = new Date(base + "T12:00:00Z");
     due.setUTCDate(due.getUTCDate() + offset);
     const dueDate = due.toISOString().slice(0, 10);
     const existing = db

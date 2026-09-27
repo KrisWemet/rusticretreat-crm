@@ -275,6 +275,9 @@ router.post('/', authenticateToken, (req, res) => {
           event_date: wedding_date || couple.wedding_date,
           setup_date: req.body.check_in,
           teardown_date: req.body.check_out,
+          event_type: 'Wedding',
+          package: /5[ -]?day/i.test(package_name || '') ? '5-day' : /3[ -]?day/i.test(package_name || '') ? '3-day' : null,
+          total_package_fee: total_price == null ? null : String(total_price),
           agreement_date: require('../services/schedule').albertaToday(),
         };
         tpl.saveValues(

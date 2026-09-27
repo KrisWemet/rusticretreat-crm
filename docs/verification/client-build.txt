@@ -1,0 +1,94 @@
+
+> rusticretreat-client@1.0.0 build
+> vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 1097 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                    1.69 kB │ gzip:  0.75 kB
+dist/assets/index-Bt4um5UH.css                    54.06 kB │ gzip:  9.55 kB
+dist/assets/isPast-DJ2Lt2kQ.js                     0.09 kB │ gzip:  0.10 kB
+dist/assets/startOfMonth-Cixx4jak.js               0.12 kB │ gzip:  0.13 kB
+dist/assets/addDays-BrgQv6xi.js                    0.14 kB │ gzip:  0.14 kB
+dist/assets/isToday-BRzfG7T6.js                    0.19 kB │ gzip:  0.16 kB
+dist/assets/packagePrice-DH16nqUZ.js               0.20 kB │ gzip:  0.17 kB
+dist/assets/differenceInDays-B0OYACcJ.js           0.46 kB │ gzip:  0.27 kB
+dist/assets/PlusIcon-BjPk1LwK.js                   0.50 kB │ gzip:  0.36 kB
+dist/assets/ChevronRightIcon-BVoHD4Cg.js           0.50 kB │ gzip:  0.36 kB
+dist/assets/ArrowLeftIcon-CyIj1K_r.js              0.51 kB │ gzip:  0.37 kB
+dist/assets/CheckCircleIcon-CGFh2gxK.js            0.54 kB │ gzip:  0.39 kB
+dist/assets/XCircleIcon-BBM4zSeV.js                0.54 kB │ gzip:  0.39 kB
+dist/assets/PaperAirplaneIcon-CQ9E2J6y.js          0.57 kB │ gzip:  0.41 kB
+dist/assets/ArrowTrendingUpIcon-Vww5gkME.js        0.58 kB │ gzip:  0.41 kB
+dist/assets/ArrowDownTrayIcon-CkUuptR2.js          0.58 kB │ gzip:  0.40 kB
+dist/assets/PencilIcon-CIWaOmE1.js                 0.64 kB │ gzip:  0.44 kB
+dist/assets/ArrowPathIcon-BM6ZQSrI.js              0.64 kB │ gzip:  0.44 kB
+dist/assets/LinkIcon-BkkETyDk.js                   0.64 kB │ gzip:  0.41 kB
+dist/assets/LockClosedIcon-D3A_aYFn.js             0.65 kB │ gzip:  0.42 kB
+dist/assets/NotFound-BqTjIM4b.js                   0.65 kB │ gzip:  0.39 kB
+dist/assets/ExclamationTriangleIcon-AyV4_w0S.js    0.65 kB │ gzip:  0.46 kB
+dist/assets/CheckCircleIcon-CRyBouIp.js            0.66 kB │ gzip:  0.44 kB
+dist/assets/MapPinIcon-DcYrq2Q9.js                 0.67 kB │ gzip:  0.41 kB
+dist/assets/KeyIcon-bQa0zvjK.js                    0.68 kB │ gzip:  0.48 kB
+dist/assets/EnvelopeIcon-D_MBqmX9.js               0.73 kB │ gzip:  0.44 kB
+dist/assets/EyeIcon-DT_KjZU2.js                    0.77 kB │ gzip:  0.48 kB
+dist/assets/PhoneIcon-DT4klQGK.js                  0.83 kB │ gzip:  0.55 kB
+dist/assets/TrashIcon-BPgw-IAp.js                  0.89 kB │ gzip:  0.56 kB
+dist/assets/GlobeAltIcon-DpPwOGSO.js               0.95 kB │ gzip:  0.58 kB
+dist/assets/PrinterIcon-BkncXjmg.js                1.09 kB │ gzip:  0.64 kB
+dist/assets/SparklesIcon-WkOBqp5D.js               1.09 kB │ gzip:  0.57 kB
+dist/assets/FormFields-BfOtJGvi.js                 1.66 kB │ gzip:  0.75 kB
+dist/assets/options-qDm72rY-.js                    1.95 kB │ gzip:  0.93 kB
+dist/assets/Modal-Dwg4N5wR.js                      1.99 kB │ gzip:  0.95 kB
+dist/assets/Button-BHBkbaXt.js                     2.04 kB │ gzip:  0.78 kB
+dist/assets/AssignedEvents-CUnMPcpU.js             2.16 kB │ gzip:  0.98 kB
+dist/assets/Input-ByGc0BXP.js                      2.49 kB │ gzip:  0.68 kB
+dist/assets/PublicForm-tPBPUL-b.js                 3.28 kB │ gzip:  1.42 kB
+dist/assets/Login-DavLyMMf.js                      3.74 kB │ gzip:  1.42 kB
+dist/assets/PortalMessages-CyVhuMoi.js             3.86 kB │ gzip:  1.48 kB
+dist/assets/Settings-Dj3MJcb4.js                   4.43 kB │ gzip:  1.56 kB
+dist/assets/Help-FfSpupeQ.js                       4.65 kB │ gzip:  1.64 kB
+dist/assets/Pipeline-C0Sb_RBq.js                   4.81 kB │ gzip:  1.97 kB
+dist/assets/Forms-C1tW-uUt.js                      4.85 kB │ gzip:  1.82 kB
+dist/assets/PortalLogin-DOCag_J2.js                5.00 kB │ gzip:  1.77 kB
+dist/assets/Timeline-CcRk53k-.js                   5.07 kB │ gzip:  1.84 kB
+dist/assets/FillFormModal-B96B8maD.js              5.87 kB │ gzip:  2.26 kB
+dist/assets/VendorList-DbgBNi3Q.js                 6.22 kB │ gzip:  2.05 kB
+dist/assets/Backups-CjTkiRFu.js                    6.49 kB │ gzip:  2.40 kB
+dist/assets/Checklist-HC9MJbhW.js                  6.52 kB │ gzip:  2.28 kB
+dist/assets/Settings-DBv2j6AS.js                   6.76 kB │ gzip:  2.04 kB
+dist/assets/Payments-HfiXSFYu.js                   7.41 kB │ gzip:  2.59 kB
+dist/assets/Documents-BgwWhHpc.js                  7.72 kB │ gzip:  2.47 kB
+dist/assets/jsx-runtime-OQpaS_Dv.js                7.77 kB │ gzip:  2.99 kB
+dist/assets/GuestList-BwNc5yZV.js                  8.00 kB │ gzip:  2.63 kB
+dist/assets/VendorsAdmin-H58x3c3X.js               8.07 kB │ gzip:  2.73 kB
+dist/assets/PortalDashboard-BBwqQapw.js            8.76 kB │ gzip:  2.73 kB
+dist/assets/Clients-DHGpaFhG.js                    8.80 kB │ gzip:  2.89 kB
+dist/assets/Budget-2_1UR0yO.js                     8.86 kB │ gzip:  2.71 kB
+dist/assets/PublicProposal-CfuzsRfX.js             9.10 kB │ gzip:  2.70 kB
+dist/assets/Tasks-dDmdJYMo.js                      9.51 kB │ gzip:  3.15 kB
+dist/assets/Messages-DRgawQty.js                  10.45 kB │ gzip:  3.56 kB
+dist/assets/Tours-C-c35Ao4.js                     10.91 kB │ gzip:  3.51 kB
+dist/assets/Inquire-DslJsd4Q.js                   11.57 kB │ gzip:  3.17 kB
+dist/assets/dist-DKw-9djV.js                      11.87 kB │ gzip:  4.71 kB
+dist/assets/Bookings-B7Ck85CF.js                  12.86 kB │ gzip:  4.30 kB
+dist/assets/Analytics-B2cSGEDu.js                 13.57 kB │ gzip:  3.64 kB
+dist/assets/VenueCalendar-72gcsq5_.js             13.96 kB │ gzip:  4.38 kB
+dist/assets/Forms-LGi3AvxE.js                     14.99 kB │ gzip:  4.37 kB
+dist/assets/Packages-DTeZDTW-.js                  15.02 kB │ gzip:  3.75 kB
+dist/assets/ContractDocument-CXtGqA3S.js          15.73 kB │ gzip:  4.80 kB
+dist/assets/EventOperations-Cth2GcaU.js           15.82 kB │ gzip:  4.64 kB
+dist/assets/Proposals-D-riDa2m.js                 18.24 kB │ gzip:  4.95 kB
+dist/assets/SignContract-DODGSRCv.js              18.54 kB │ gzip:  5.58 kB
+dist/assets/parseISO-CwaI6FGF.js                  21.93 kB │ gzip:  6.54 kB
+dist/assets/Dashboard-s4TqE9Cz.js                 23.28 kB │ gzip:  6.04 kB
+dist/assets/Payments-BP-QSuUv.js                  31.32 kB │ gzip:  8.60 kB
+dist/assets/ClientDetail-B2AMG-L-.js              33.57 kB │ gzip:  8.77 kB
+dist/assets/chunk-OB3PAWPO-C3CSlP_P.js            40.27 kB │ gzip: 14.48 kB
+dist/assets/axios-P5NTEkrs.js                     49.95 kB │ gzip: 18.75 kB
+dist/assets/Contracts-Db_SeiHG.js                 55.42 kB │ gzip: 14.39 kB
+dist/assets/index-CtdZkAvh.js                    212.12 kB │ gzip: 66.64 kB
+
+✓ built in 679ms

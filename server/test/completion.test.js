@@ -670,3 +670,54 @@ test("proposal preparation reuses a known ceremony date separately from access d
     "2027-09-11",
   );
 });
+
+test("couple search finds ceremony and stay dates without showing archived records", async () => {
+  const id = couple();
+  db.prepare("UPDATE couples SET wedding_date='2033-07-16' WHERE id=?").run(id);
+  db.prepare(
+    "INSERT INTO bookings(couple_id,event_date,end_date) VALUES(?,'2033-07-15','2033-07-17')",
+  ).run(id);
+  for (const date of ["2033-07-16", "2033-07-15", "2033-07-17"]) {
+    const result = await call("GET", "/api/couples?search=" + date);
+    assert.equal(result.status, 200);
+    assert.ok(result.body.some((c) => c.id === id));
+  }
+  db.prepare("UPDATE couples SET archived_at=datetime('now') WHERE id=?").run(
+    id,
+  );
+  assert.ok(
+    !(await call("GET", "/api/couples?search=2033-07-16")).body.some(
+      (c) => c.id === id,
+    ),
+  );
+  assert.ok(
+    (await call("GET", "/api/couples?archived=1&search=2033-07-16")).body.some(
+      (c) => c.id === id,
+    ),
+  );
+});
+
+test("a staff-created seasonal agreement prefills the same known dates and price as a proposal", async () => {
+  const id = couple();
+  const result = await call("POST", "/api/contracts", {
+    couple_id: id,
+    title: "Synthetic prefilled rental",
+    template_packet: "rental-2027",
+    wedding_date: "2027-07-10",
+    check_in: "2027-07-09",
+    check_out: "2027-07-11",
+    package_name: "3-Day Weekend",
+    total_price: 12600,
+  });
+  assert.equal(result.status, 201);
+  const values = require("../services/contractTemplate").getValues(
+    result.body.id,
+  ).values;
+  assert.equal(values.event_date, "2027-07-10");
+  assert.equal(values.setup_date, "2027-07-09");
+  assert.equal(values.teardown_date, "2027-07-11");
+  assert.equal(values.package, "3-day");
+  assert.equal(values.total_package_fee, "12600");
+  assert.equal(result.body.check_in, "2027-07-09");
+  assert.equal(result.body.check_out, "2027-07-11");
+});

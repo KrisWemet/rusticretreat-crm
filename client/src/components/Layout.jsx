@@ -4,6 +4,7 @@ import { Bars3Icon } from '@heroicons/react/24/outline'
 import { useAuth } from '../contexts/AuthContext'
 import Sidebar from './Sidebar'
 import CoupleSearch from './CoupleSearch'
+import HelpPanel from './HelpPanel'
 
 export default function Layout() {
   const { user, loading, getAdminAxios } = useAuth()
@@ -42,7 +43,7 @@ export default function Layout() {
 
   if (!user) return <Navigate to="/login" replace />
 
-  if(user.access_scope==='operations' && !['/operations','/settings'].includes(location.pathname))return <Navigate to="/operations" replace />
+  if(user.access_scope==='operations' && !['/operations','/settings','/help'].includes(location.pathname))return <Navigate to="/operations" replace />
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -73,6 +74,7 @@ export default function Layout() {
           <div className="flex-1 flex justify-end">
             {user.access_scope!=='operations'&&<CoupleSearch />}
           </div>
+          <HelpPanel />
         </header>
         <main className="flex-1 overflow-y-auto">
           <Outlet />

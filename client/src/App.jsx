@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import PageErrorBoundary from './components/PageErrorBoundary'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './contexts/AuthContext'
@@ -41,6 +42,7 @@ const PortalForms = lazy(() => import('./pages/portal/Forms'))
 const Settings = lazy(() => import('./pages/admin/Settings'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
+const Help=lazy(()=>import('./pages/admin/Help'))
 const AssignedEvents=lazy(()=>import('./pages/admin/AssignedEvents'))
 
 function App() {
@@ -67,6 +69,7 @@ function App() {
             },
           }}
         />
+        <PageErrorBoundary>
         <Suspense fallback={<div role="status" className="p-6 text-slate-500">Loading page…</div>}>
         <Routes>
           {/* Public: no auth needed */}
@@ -97,6 +100,8 @@ function App() {
             <Route path="analytics" element={<Analytics />} />
             <Route path="packages" element={<Packages />} />
             <Route path="backups" element={<Backups />} />
+            <Route path="help" element={<Help />} />
+            <Route path="help/:slug" element={<Help />} />
             <Route path="settings" element={<Settings />} />
             <Route path="*" element={<NotFound />} />
           </Route>
@@ -119,6 +124,7 @@ function App() {
           </Route>
         </Routes>
         </Suspense>
+        </PageErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   )

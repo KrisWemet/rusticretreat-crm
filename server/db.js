@@ -1314,4 +1314,6 @@ db.exec(`CREATE TABLE IF NOT EXISTS unmatched_card_receipts (
  id TEXT PRIMARY KEY, amount_cents INTEGER NOT NULL, currency TEXT NOT NULL,
  invoice_hint TEXT, reason TEXT NOT NULL, resolved_at TEXT, resolution TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );`);
+try{db.exec("ALTER TABLE workflow_templates ADD COLUMN reference_date TEXT NOT NULL DEFAULT 'ceremony'")}catch(e){if(!e.message.includes('duplicate column'))throw e}
+runOnce('workflow-closeout-reference-v1',()=>db.prepare("UPDATE workflow_templates SET reference_date='checkout' WHERE id=5").run());
 module.exports = db;

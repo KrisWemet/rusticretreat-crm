@@ -29,8 +29,8 @@ router.get('/', authenticateToken, (req, res) => {
   }
 
   if (search) {
-    conditions.push('(partner1_name LIKE ? OR partner2_name LIKE ? OR email LIKE ? OR partner2_email LIKE ? OR phone LIKE ? OR partner2_phone LIKE ?)');
-    params.push(...Array(6).fill(`%${search}%`));
+    conditions.push('(partner1_name LIKE ? OR partner2_name LIKE ? OR email LIKE ? OR partner2_email LIKE ? OR phone LIKE ? OR partner2_phone LIKE ? OR wedding_date LIKE ? OR EXISTS (SELECT 1 FROM bookings b WHERE b.couple_id = couples.id AND (b.event_date LIKE ? OR b.end_date LIKE ?)))');
+    params.push(...Array(9).fill(`%${search}%`));
   }
 
   if (conditions.length > 0) {

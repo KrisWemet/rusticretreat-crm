@@ -70,6 +70,7 @@ export default function EventOperations({
     [template, setTemplate] = useState({
       title: "",
       offset_days: -7,
+      reference_date: "ceremony",
       owner: "",
     });
   const dirty =
@@ -712,8 +713,9 @@ export default function EventOperations({
         size="lg"
       >
         <p className="text-sm text-gray-500 mb-3">
-          Days relative to the ceremony: negative values before, positive values
-          after. Changes affect new tasks; edit existing tasks separately.
+          Choose ceremony or check-out as the reference date. Negative offsets
+          are before; positive offsets are after. Changes affect new tasks; edit
+          existing tasks separately.
         </p>
         <div className="space-y-4">
           {templates.map((t) => (
@@ -730,7 +732,7 @@ export default function EventOperations({
                 }
               />
               <Input
-                label="Days from ceremony"
+                label="Days from reference date"
                 type="number"
                 value={t.offset_days}
                 onChange={(e) =>
@@ -741,6 +743,22 @@ export default function EventOperations({
                   )
                 }
               />
+              <Select
+                label="Reference date"
+                value={t.reference_date || "ceremony"}
+                onChange={(e) =>
+                  setTemplates((ts) =>
+                    ts.map((x) =>
+                      x.id === t.id
+                        ? { ...x, reference_date: e.target.value }
+                        : x,
+                    ),
+                  )
+                }
+              >
+                <option value="ceremony">Ceremony</option>
+                <option value="checkout">Check-out</option>
+              </Select>
               <Input
                 label="Task owner"
                 value={t.owner || ""}
@@ -795,6 +813,16 @@ export default function EventOperations({
               setTemplate((t) => ({ ...t, offset_days: e.target.value }))
             }
           />
+          <Select
+            label="New task reference date"
+            value={template.reference_date || "ceremony"}
+            onChange={(e) =>
+              setTemplate((t) => ({ ...t, reference_date: e.target.value }))
+            }
+          >
+            <option value="ceremony">Ceremony</option>
+            <option value="checkout">Check-out</option>
+          </Select>
           <Input
             label="New task owner"
             value={template.owner}

@@ -4,9 +4,11 @@ Running handoff document. **Update it when you change something structural, hit
 a trap worth recording, or change the deployment.** It exists so a new session
 does not rediscover the same landmines.
 
-Last updated: 2026-09-27 · branch `claude/wedding-crm-esign-integration-coau0z`.
-The owner-facing handoff (business rules, what was built when, open items) is
-`HANDOFF.md` in `KrisWemet/rustic-retreat-crm`; this file is the technical one.
+Last updated: 2026-09-27 · completion branch `codex/crm-completion`.
+
+**Current review candidate:** the CRM completion changes are implemented locally, including immutable receipts, separate ceremony/stay dates, frozen agreement packets, reviewed forms, expiring holds, event operations and restricted event staff access. The latest repository help update was incorporated from `claude/wedding-crm-esign-integration-coau0z` at `9dd149d` after the initial local baseline `34e0953`.
+
+See `CRM_COMPLETION.md` for the current validation and release checklist. This task has not deployed, merged to the release branch, changed the business database or sent live notifications. The deployment observations below are historical handoff notes and were not reverified here. `HANDOFF.md` now lives in this repository.
 
 ---
 
