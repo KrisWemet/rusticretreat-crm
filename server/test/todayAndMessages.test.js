@@ -10,7 +10,7 @@ const http = require('http');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-today-'));
 process.env.DB_PATH = path.join(tmp, 'test.db');
 process.env.JWT_SECRET = 'test-secret-today';
-process.env.NODE_ENV = 'test';
+process.env.NODE_ENV = 'production';
 process.env.RESEND_API_KEY = 're_test';
 process.env.ADMIN_EMAIL = 'venue@test.invalid';
 process.env.BASE_URL = 'https://crm.example.test';
@@ -39,7 +39,7 @@ test.before(async () => {
   app.use('/api/messages', require('../routes/messages'));
   await new Promise(r => { server = app.listen(0, () => { base = `http://127.0.0.1:${server.address().port}`; r(); }); });
 });
-test.after(() => { server.close(); stub.close(); db.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
+test.after(() => { server?.close(); stub.close(); db.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
 
 const call = async (method, url, body) => {
   const res = await fetch(base + url, { method, body: body ? JSON.stringify(body) : undefined,

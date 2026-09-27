@@ -9,7 +9,7 @@ router.get('/dashboard', authenticateCouple, (req, res) => {
   const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.couple.coupleId);
   if (!couple) return res.status(404).json({ error: 'Couple not found' });
 
-  const booking = db.prepare('SELECT * FROM bookings WHERE couple_id = ? LIMIT 1').get(req.couple.coupleId);
+  const booking = require('../services/ledger').bookingView(db.prepare('SELECT * FROM bookings WHERE couple_id = ? LIMIT 1').get(req.couple.coupleId));
 
   const guestStats = db.prepare(`
     SELECT
@@ -120,7 +120,7 @@ router.get('/invoices', authenticateCouple, (req, res) => {
   const rows = db.prepare(`
     SELECT * FROM invoices WHERE couple_id = ? ORDER BY due_date ASC, created_at DESC
   `).all(req.couple.coupleId);
-  res.json(rows);
+  res.json(rows.map(require('../services/ledger').invoiceView));
 });
 
 // Couple: get their contracts
@@ -166,22 +166,8 @@ router.post('/forms/:assignmentId', authenticateCouple, (req, res) => {
     .get(req.params.assignmentId, req.couple.coupleId);
   if (!assignment) return res.status(404).json({ error: 'Form not found' });
 
-  const answers = req.body.answers || {}; // { field_id: value }
-  const validFieldIds = new Set(
-    db.prepare('SELECT id FROM form_fields WHERE form_id = ?').all(assignment.form_id).map(f => f.id)
-  );
-
-  const tx = db.transaction(() => {
-    db.prepare('DELETE FROM form_responses WHERE assignment_id = ?').run(assignment.id);
-    const insert = db.prepare('INSERT INTO form_responses (assignment_id, field_id, value) VALUES (?, ?, ?)');
-    for (const [fieldId, value] of Object.entries(answers)) {
-      if (!validFieldIds.has(Number(fieldId))) continue;
-      insert.run(assignment.id, Number(fieldId), value == null ? null : String(value));
-    }
-    db.prepare(`UPDATE form_assignments SET status = 'completed', submitted_at = datetime('now'),
-                filled_by = COALESCE(filled_by, 'couple'), updated_by = 'couple', updated_at = datetime('now') WHERE id = ?`).run(assignment.id);
-  });
-  tx();
+  const result = require('../services/forms').saveAnswers(assignment, req.body.answers, { by: 'couple', complete: req.body.complete !== false, revision: req.body.revision });
+  if (!result.ok) return res.status(result.status || 400).json({error:result.error});
   res.json({ success: true });
 });
 

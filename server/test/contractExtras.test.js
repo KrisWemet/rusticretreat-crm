@@ -51,7 +51,7 @@ test('a contract signed elsewhere is recorded as signed and locked, with its fil
   assert.equal(c.total_price, 6825);
 
   const files = await call('GET', `/api/contracts/${c.id}/files`);
-  assert.deepEqual(files.body.map(f => [f.filename, f.mime_type, f.size, f.uploaded_by]), [['signed.pdf', 'application/pdf', PDF.length, 'Kris']]);
+  assert.deepEqual(files.body.map(f => [f.filename, f.mime_type, f.size, f.uploaded_by]), [['signed.pdf', 'application/pdf', PDF.length, db.prepare('SELECT name FROM users WHERE id=1').get().name]]);
   const dl = await call('GET', `/api/contracts/${c.id}/files/${files.body[0].id}`);
   assert.equal(dl.status, 200);
   assert.equal(dl.type, 'application/pdf');

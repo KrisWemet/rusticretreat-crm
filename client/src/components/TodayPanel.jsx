@@ -48,6 +48,8 @@ export default function TodayPanel({ data }) {
   const s = data
   const client = (id) => (id ? `/clients/${id}` : undefined)
   const sections = []
+  if(s.failed_emails?.length) sections.push(<Section key="emails" title="Emails need attention" count={s.failed_emails.length} to="/messages" tone="red">{s.failed_emails.slice(0,MAX).map(e=><Row key={e.id} to={e.couple_id?client(e.couple_id):'/messages'} main={`${e.couple_names||'Venue'} — ${e.kind||'email'}`} side={e.status==='failed'?'Not sent':'Outcome unknown'} alert />)}</Section>)
+  if (s.next_actions?.length) sections.push(<Section key="next" title="Next actions due" count={s.next_actions.length} to="/clients" tone="amber">{s.next_actions.slice(0, MAX).map(a => <Row key={a.couple_id} to={client(a.couple_id)} main={`${a.next_action} — ${a.couple_names}`} side={`${day(a.next_action_due)}${a.next_action_owner ? ` · ${a.next_action_owner}` : ''}`} alert={a.next_action_due < s.today} />)}{more(s.next_actions, '/clients')}</Section>)
 
   if (s.weddings_week.length) sections.push(
     <Section key="w" title="Weddings this week" count={s.weddings_week.length} to="/calendar" tone="emerald">

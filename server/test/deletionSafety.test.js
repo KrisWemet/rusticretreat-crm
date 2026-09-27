@@ -51,7 +51,7 @@ test('delete archives: hidden from lists, records kept, restorable, and logged',
 
   const log = await call('GET', `/api/couples/${id}/activity`);
   assert.equal(log.body[0].action, 'couple.archived');
-  assert.equal(log.body[0].user_name, 'Sam');
+  assert.equal(log.body[0].user_name, db.prepare('SELECT name FROM users WHERE id=2').get().name);
 
   assert.equal((await call('PATCH', `/api/couples/${id}/restore`, staff)).status, 200);
   assert.equal(db.prepare('SELECT archived_at FROM couples WHERE id = ?').get(id).archived_at, null);
@@ -65,7 +65,7 @@ test('permanent delete is admin-only, needs archiving first, and keeps couples w
   db.prepare("INSERT INTO invoices (couple_id, description, amount, paid) VALUES (?, 'Deposit', 100, 1)").run(id);
   const refused = await call('DELETE', `/api/couples/${id}?permanent=1`);
   assert.equal(refused.status, 409);
-  assert.match(refused.body.error, /1 paid invoice/);
+  assert.match(refused.body.error, /payment history/);
 
   const clean = couple();
   await call('DELETE', `/api/couples/${clean}`);
@@ -82,7 +82,7 @@ test('a paid invoice cannot be deleted; an unpaid one can, and is logged', async
   const paid = db.prepare("INSERT INTO invoices (couple_id, description, amount, paid) VALUES (?, 'Deposit', 100, 1)").run(id).lastInsertRowid;
   const r = await call('DELETE', `/api/invoices/${paid}`, staff);
   assert.equal(r.status, 409);
-  assert.match(r.body.error, /Mark it unpaid first/);
+  assert.match(r.body.error, /payment history/);
   const unpaid = db.prepare("INSERT INTO invoices (couple_id, description, amount) VALUES (?, 'Balance', 300)").run(id).lastInsertRowid;
   assert.equal((await call('DELETE', `/api/invoices/${unpaid}`, staff)).status, 200);
   assert.ok(db.prepare("SELECT 1 FROM activity_log WHERE action = 'invoice.deleted' AND entity_id = ?").get(unpaid));
@@ -93,19 +93,19 @@ test('marking an invoice paid is logged with who did it', async () => {
   const inv = db.prepare("INSERT INTO invoices (couple_id, description, amount) VALUES (?, 'Deposit', 250)").run(id).lastInsertRowid;
   assert.equal((await call('PATCH', `/api/invoices/${inv}/paid`, staff, { paid: true })).status, 200);
   const e = db.prepare("SELECT * FROM activity_log WHERE action = 'invoice.paid' AND entity_id = ?").get(inv);
-  assert.equal(e.user_name, 'Sam');
+  assert.equal(e.user_name, db.prepare('SELECT name FROM users WHERE id=2').get().name);
   assert.equal(e.couple_id, id);
 });
 
-test('a signed contract can only be deleted by an admin who confirms it', async () => {
+test('signed contracts are retained even when an admin confirms deletion', async () => {
   const id = couple();
   const c = db.prepare("INSERT INTO contracts (couple_id, title, content, status) VALUES (?, 'Agreement', 'x', 'signed')").run(id).lastInsertRowid;
-  assert.equal((await call('DELETE', `/api/contracts/${c}`, staff)).status, 403);
+  assert.equal((await call('DELETE', `/api/contracts/${c}`, staff)).status, 409);
   const ask = await call('DELETE', `/api/contracts/${c}`);
   assert.equal(ask.status, 409);
-  assert.equal(ask.body.needs_confirm, true);
-  assert.equal((await call('DELETE', `/api/contracts/${c}?confirm=signed`)).status, 200);
-  assert.ok(db.prepare("SELECT 1 FROM activity_log WHERE action = 'contract.deleted' AND entity_id = ?").get(c));
+  assert.match(ask.body.error, /retained/);
+  assert.equal((await call('DELETE', `/api/contracts/${c}?confirm=signed`)).status, 409);
+  assert.ok(db.prepare('SELECT 1 FROM contracts WHERE id = ?').get(c));
 
   const draft = db.prepare("INSERT INTO contracts (couple_id, title, content, status) VALUES (?, 'Draft', 'x', 'draft')").run(id).lastInsertRowid;
   assert.equal((await call('DELETE', `/api/contracts/${draft}`, staff)).status, 200, 'drafts delete as before');

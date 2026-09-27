@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useNavigate, Navigate, Link } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { HeartIcon, CalendarDaysIcon, UsersIcon, SparklesIcon } from '@heroicons/react/24/outline'
+import { HeartIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
 export default function Login() {
@@ -57,20 +57,7 @@ export default function Login() {
             </p>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 mb-10">
-            {[
-              { icon: CalendarDaysIcon, value: '150+', label: 'Events/year' },
-              { icon: UsersIcon, value: '500+', label: 'Happy couples' },
-              { icon: SparklesIcon, value: '12+', label: 'Years of magic' },
-            ].map(({ icon: Icon, value, label }) => (
-              <div key={label} className="text-center bg-white/5 rounded-xl p-3 border border-white/10">
-                <Icon className="w-5 h-5 text-rose-400 mx-auto mb-1" />
-                <div className="text-xl font-bold text-white">{value}</div>
-                <div className="text-xs text-slate-400">{label}</div>
-              </div>
-            ))}
-          </div>
+
         </div>
       </div>
 
@@ -125,18 +112,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-5 p-4 bg-amber-50 rounded-xl border border-amber-100">
-            <p className="text-xs font-semibold text-amber-700 mb-1.5">Demo credentials</p>
-            <p className="text-xs text-amber-700 font-mono">admin@rusticretreat.com</p>
-            <p className="text-xs text-amber-700 font-mono">admin123</p>
-          </div>
 
-          <p className="mt-6 text-center text-sm text-slate-400">
-            Are you a couple?{' '}
-            <Link to="/portal/login" className="text-rose-600 hover:text-rose-700 font-medium">
-              Open wedding portal →
-            </Link>
-          </p>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
 import Input, { Select } from '../../components/ui/Input'
@@ -29,7 +29,8 @@ export default function Clients() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [showAdd, setShowAdd] = useState(false)
+  const [searchParams] = useSearchParams()
+  const [showAdd, setShowAdd] = useState(searchParams.get('new') === '1')
   const [form, setForm] = useState(emptyForm)
   const [packages, setPackages] = useState([])
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
@@ -163,7 +164,7 @@ export default function Clients() {
                         </span>
                       </div>
                       <span className="font-medium text-slate-800 group-hover:text-rose-600 transition-colors">
-                        {c.partner1_name} & {c.partner2_name}
+                        {[c.partner1_name, c.partner2_name].filter(Boolean).join(' & ')}
                       </span>
                     </Link>
                   </td>
@@ -196,21 +197,20 @@ export default function Clients() {
         <form onSubmit={handleAdd} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Partner 1 Name" value={form.partner1_name} onChange={f('partner1_name')} required />
-            <Input label="Partner 2 Name" value={form.partner2_name} onChange={f('partner2_name')} required />
+            <Input label="Partner 2 Name" value={form.partner2_name} onChange={f('partner2_name')} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label="Partner 1 Email" type="email" value={form.email} onChange={f('email')} required />
+            <Input label="Partner 1 Email" type="email" value={form.email} onChange={f('email')} />
             <Input
               label="Partner 2 Email"
               type="email"
               value={form.partner2_email}
               onChange={f('partner2_email')}
-              required
             />
           </div>
           <p className="-mt-2 text-xs text-slate-400">
             Each partner signs the contract separately from their own address, so their signatures
-            are independently attributable. Both addresses are required and must be different.
+            are independently attributable. Add both addresses before preparing a signing link; use one email or phone number for an initial lead.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Phone" value={form.phone} onChange={f('phone')} />
@@ -228,7 +228,7 @@ export default function Clients() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Status" value={form.status} onChange={f('status')}>
-              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+              {STATUS_OPTIONS.filter(s => !['booked','completed'].includes(s)).map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
             </Select>
             <Input label="Budget" type="number" value={form.budget_total} onChange={f('budget_total')} placeholder="0" />
           </div>

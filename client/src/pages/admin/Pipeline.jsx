@@ -40,12 +40,13 @@ export default function Pipeline() {
   async function moveTo(coupleId, stage) {
     const couple = couples.find(c => c.id === coupleId)
     if (!couple || stageOf(couple) === stage) return
+    if(couple.status==='completed') return toast.error('Completed weddings stay in their archive and event record')
     // Optimistic update
     setCouples(cs => cs.map(c => c.id === coupleId ? { ...c, pipeline_stage: stage } : c))
     try {
       await api.patch(`/api/couples/${coupleId}/stage`, { pipeline_stage: stage })
-    } catch {
-      toast.error('Could not move card')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not move card')
       load()
     }
   }

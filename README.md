@@ -1,99 +1,48 @@
 # Rustic Retreat CRM
 
-A wedding-venue CRM with **contract e-signing built in**. One app, one deploy,
-no third-party signing service and no per-envelope fees.
+Staff CRM for an Alberta wedding venue, with proposals, private forms and three-party agreement signing. The public website’s enquiry and booking-request forms can create CRM records without retyping. The couple portal remains disabled unless explicitly enabled.
 
-It is a private tool: a staff-facing CRM plus a couple-facing planning portal.
-It is deliberately **not** connected to the public wedding website.
+The working release branch for the completion changes is `codex/crm-completion`. It incorporates the newer local baseline and the repository’s subsequent help-and-guides update. See [CRM_COMPLETION.md](CRM_COMPLETION.md) for scope, verification and remaining live acceptance checks. This branch has not been deployed by this task.
 
-## What's in it
+## Daily workflow
 
-**Staff side** — pipeline, couples, bookings, venue calendar, proposals,
-contracts, invoices and payments, tours, tasks, forms, messages, analytics.
+Start with Dashboard’s Today list, search for a couple by name, email or phone, and work from their record. A first enquiry needs one name and one contact method. Collect both partners’ names and email addresses before issuing an agreement.
 
-**Couple portal** — their own dashboard, documents, checklist, budget, guest
-list, timeline, vendor list, forms, messages, and online payment.
+The couple workspace contains booking dates, balances, agreement progress, tasks, forms, email outcomes, history and a next action with owner and due date. Event operations adds camping, preparation, inspection photos, separate damage deposits, optional date holds and staff assignment. Built-in Help & Guides explains the pages and workflows.
 
-**E-signing** — see below.
+## Records and money
 
-## E-signing, in house
+- Receipts are immutable entries with amount, actual date, method and reference. Partial payments, overpayments, refunds and allocation corrections retain their history. Balances come from receipts, across booking cards, invoices, statements and analytics.
+- Schedule regeneration preserves invoices carrying payment history and creates only the remaining obligations. Damage deposits are separate from venue-fee invoices and revenue.
+- Archive couples to retain their records. Signed or locked agreements and financial history cannot be permanently erased through the CRM.
+- Ceremony, check-in and check-out are separate dates. Reservations and unexpired optional holds protect the stay and reset day. Proposal acceptance, manual booking and completed agreement signing check availability; a sales-board label alone cannot reserve inventory.
+- New standard agreements use the seasonal rental packet and Schedule A. The issued packet is stored with the record. Signed originals remain immutable; custom text is an explicit exception.
+- Forms prefill mapped information, retain answer history and reject conflicting revisions. Staff review selected answers before applying them to booking details.
 
-Signing lives in this app (`server/routes/contracts.js`,
-`client/src/pages/SignContract.jsx`). Nothing leaves for an external provider.
+## Access and notifications
 
-The flow:
+Admins manage staff, backups, refunds, damage deposits and reconciliation. Full staff use the daily CRM. Event-only logins see assigned preparation, tasks and inspections, without access to contracts or financial records. Changing passwords or access revokes old sessions.
 
-1. Staff write a contract, or generate one pre-filled from an accepted proposal
-   (`POST /api/contracts/from-proposal/:id`) — it builds a full venue services
-   agreement from the proposal's line items, pricing and dates.
-2. **Send** issues a single-use signing link and emails it to the couple.
-   Re-sending reissues the token, so an older link stops working and the couple
-   always signs the copy you last sent.
-3. The couple opens the link — no login, no account — reads the terms, types
-   their legal name, draws a signature, and ticks an explicit consent statement.
-4. On signing, the app records the signature image, the exact consent wording
-   shown, the signer's name and email, the timestamp, when the contract was
-   first opened, the IP address, and the browser user agent.
-5. Signing also drives the CRM forward: the couple flips to `booked`, the
-   booking is created or updated from the contract's event details, and portal
-   credentials are generated and shown once.
-6. Both sides keep a copy. Staff print or save a PDF from the contract screen;
-   the couple gets the same executed copy, audit trail included, from their own
-   signing link.
+Resend or SMTP sends email. Provider acceptance is recorded separately from failure or an unknown outcome; it does not establish inbox delivery. Ordinary failed messages can be retried after review. Private links are reissued from their original record so stale signing or form links are not resent blindly. SMS and optional Stripe require their own provider configuration.
 
-Signing links expire after 45 days by default (`SIGNING_LINK_DAYS`). Expiry
-gates *signing* only — a couple can always get back to a contract they have
-already signed.
+## Run locally
 
-Electronic signatures are enforceable in Alberta under the Electronic
-Transactions Act, SA 2001, c E-5.5, which the generated agreement cites. The
-audit trail above exists because if a signature is ever questioned, what matters
-is showing what the signer was presented with and that they affirmatively
-accepted it. This is a solid in-house implementation, not a regulated
-certificate-based signing service — if you ever need a notarised or
-certificate-backed signature for a specific document, use a dedicated provider
-for that one.
+Use Node 22.23.0 or a later compatible Node 22 release (Vite 8 requires at least Node 22.12).
 
-## Running locally
-
-```bash
+```sh
 npm run install:all
 cp server/.env.example server/.env
 npm run dev
 ```
 
-Client on `http://localhost:5173`, API on `http://localhost:3001`.
-Sign in with `admin@rusticretreat.com` / `admin123`.
+Client: `http://localhost:5173`; API: `http://localhost:3001`. Set `ADMIN_EMAIL_LOGIN` and a unique `ADMIN_BOOTSTRAP_PASSWORD` of at least 12 characters to establish an admin login. Remove the bootstrap variable after it has been applied. The login screen does not advertise seed credentials.
 
-## Deploying
-
-See **[DEPLOY.md](DEPLOY.md)**. Two things there matter more than the rest:
-
-- **Attach a persistent volume and set `DB_PATH` to it.** Hosted platforms
-  replace the app directory on every deploy; a database written there is wiped
-  on the next push. The server refuses to boot in production if this is wrong.
-- **Rotate the seeded passwords.** `admin123` is in this repo's git history.
-  Set `ADMIN_BOOTSTRAP_PASSWORD` on first boot, then unset it.
-
-## Clearing the demo data
-
-The app ships seeded with sample couples and bookings so the screens have
-something in them. Before you start keeping real books:
-
-```bash
-npm run reset-data --prefix server -- --yes
+```sh
+npm test --prefix server
+npm run build --prefix client
+npm audit --prefix server
+npm audit --prefix client
+npm run verify-backup --prefix server -- /absolute/path/to/saved-copy.db
 ```
 
-Keeps your staff logins and venue setup (packages, add-ons, forms); clears
-couples, bookings, invoices, contracts and messages. `--everything` clears the
-venue setup too. Refuses to run without `--yes`.
-
-## Layout
-
-```
-client/    React + Vite + Tailwind SPA (admin + couple portal + signing page)
-server/    Express API, SQLite via better-sqlite3
-  routes/    one module per resource; contracts.js holds the e-sign flow
-  services/  email, payment reminders, lead nurture
-  db.js      schema, migrations, seed data
-```
+Use disposable databases and synthetic contacts for rehearsals. Production requires a persistent volume, explicit access configuration and configured providers. [DEPLOY.md](DEPLOY.md) describes release, recovery and rollback. Never use the destructive demo reset against business data.

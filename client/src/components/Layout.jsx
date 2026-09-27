@@ -15,7 +15,7 @@ export default function Layout() {
   // Sidebar badges: unread couple messages, and tasks due today or overdue.
   // Refreshed on navigation and every two minutes.
   useEffect(() => {
-    if (!user) return
+    if (!user || user.access_scope==='operations') return
     let cancelled = false
     const load = async () => {
       try {
@@ -42,6 +42,8 @@ export default function Layout() {
   }
 
   if (!user) return <Navigate to="/login" replace />
+
+  if(user.access_scope==='operations' && !['/operations','/settings','/help'].includes(location.pathname))return <Navigate to="/operations" replace />
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -70,7 +72,7 @@ export default function Layout() {
           </button>
           <span className="lg:hidden font-semibold text-slate-800 text-sm hidden sm:inline">Rustic Retreat</span>
           <div className="flex-1 flex justify-end">
-            <CoupleSearch />
+            {user.access_scope!=='operations'&&<CoupleSearch />}
           </div>
           <HelpPanel />
         </header>

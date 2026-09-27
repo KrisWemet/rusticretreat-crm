@@ -39,7 +39,7 @@ router.post('/login', loginLimiter, (req, res) => {
   }
 
   const token = jwt.sign(
-    { userId: user.id, email: user.email, name: user.name, role: user.role },
+    { userId: user.id, email: user.email, name: user.name, role: user.role, access_scope:user.access_scope, session_version: user.session_version },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -50,7 +50,7 @@ router.post('/login', loginLimiter, (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role, access_scope:user.access_scope, session_version: user.session_version
     }
   });
 });
@@ -110,14 +110,14 @@ router.get('/staff', authenticateToken, (req, res) => {
 
 // Get current user info
 router.get('/me', authenticateToken, (req, res) => {
-  const user = db.prepare('SELECT id, name, email, role, created_at FROM users WHERE id = ?').get(req.user.userId);
+  const user = db.prepare('SELECT id, name, email, role, access_scope, created_at FROM users WHERE id = ?').get(req.user.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(user);
 });
 
 // ── Staff accounts ───────────────────────────────────────────────────────────
 const MIN_PASSWORD = 10;
-const publicUser = u => ({ id: u.id, name: u.name, email: u.email, role: u.role, created_at: u.created_at, disabled: !u.password_hash });
+const publicUser = u => ({ id: u.id, name: u.name, email: u.email, role: u.role, access_scope:u.access_scope, created_at: u.created_at, disabled: !u.password_hash });
 
 // Change your own password (any staff login).
 router.post('/change-password', authenticateToken, (req, res) => {
@@ -129,7 +129,7 @@ router.post('/change-password', authenticateToken, (req, res) => {
   if (String(new_password || '').length < MIN_PASSWORD) {
     return res.status(400).json({ error: `Use at least ${MIN_PASSWORD} characters for the new password.` });
   }
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(String(new_password), 10), user.id);
+  db.prepare('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?').run(bcrypt.hashSync(String(new_password), 10), user.id);
   logActivity(req, { action: 'user.password_changed', entity: 'user', entityId: user.id, summary: `${user.name} changed their password` });
   res.json({ success: true });
 });
@@ -151,10 +151,17 @@ router.post('/users', authenticateToken, requireAdmin, (req, res) => {
   if (db.prepare('SELECT 1 FROM users WHERE LOWER(email) = ?').get(cleanEmail)) {
     return res.status(409).json({ error: 'Someone already logs in with that email.' });
   }
-  const id = db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
-    .run(String(name).trim(), cleanEmail, bcrypt.hashSync(String(password), 10), role === 'admin' ? 'admin' : 'staff').lastInsertRowid;
+  const id = db.prepare('INSERT INTO users (name, email, password_hash, role, access_scope) VALUES (?, ?, ?, ?, ?)')
+    .run(String(name).trim(), cleanEmail, bcrypt.hashSync(String(password), 10), role === 'admin' ? 'admin' : 'staff', role==='admin'?'full':req.body.access_scope==='operations'?'operations':'full').lastInsertRowid;
   logActivity(req, { action: 'user.created', entity: 'user', entityId: id, summary: `Added ${role === 'admin' ? 'admin' : 'staff'} login for ${String(name).trim()} (${cleanEmail})` });
   res.status(201).json(publicUser(db.prepare('SELECT * FROM users WHERE id = ?').get(id)));
+});
+
+router.patch('/users/:id/scope',authenticateToken,requireAdmin,(req,res)=>{
+ const u=db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);if(!u)return res.status(404).json({error:'User not found'});
+ if(u.role==='admin'||!['full','operations'].includes(req.body.access_scope))return res.status(400).json({error:'Choose full staff or assigned event operations; admins retain full access'});
+ db.prepare('UPDATE users SET access_scope=?,session_version=session_version+1 WHERE id=?').run(req.body.access_scope,u.id);
+ logActivity(req,{action:'user.scope-updated',entity:'user',entityId:u.id,summary:`Changed ${u.name} access to ${req.body.access_scope}`});res.json({success:true});
 });
 
 router.patch('/users/:id/password', authenticateToken, requireAdmin, (req, res) => {
@@ -163,7 +170,7 @@ router.patch('/users/:id/password', authenticateToken, requireAdmin, (req, res) 
   if (String(req.body?.password || '').length < MIN_PASSWORD) {
     return res.status(400).json({ error: `Use at least ${MIN_PASSWORD} characters.` });
   }
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync(String(req.body.password), 10), user.id);
+  db.prepare('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?').run(bcrypt.hashSync(String(req.body.password), 10), user.id);
   logActivity(req, { action: 'user.password_reset', entity: 'user', entityId: user.id, summary: `Reset the password for ${user.name}` });
   res.json({ success: true });
 });

@@ -985,6 +985,8 @@ const SEEDED_COUPLE_EMAILS = [
   'amanda.cole@example.com',
 ];
 
+try { db.exec('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0'); } catch (err) { if (!err.message.includes('duplicate column')) throw err; }
+
 function applyCredentialBootstrap() {
   const pw = process.env.ADMIN_BOOTSTRAP_PASSWORD;
   if (!pw) return;
@@ -1005,7 +1007,7 @@ function applyCredentialBootstrap() {
   }
   db.prepare("INSERT INTO app_settings (key, value) VALUES ('bootstrap_applied', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(fingerprint);
   const hash = bcrypt.hashSync(pw, 10);
-  const result = db.prepare('UPDATE users SET password_hash = ? WHERE email = ?')
+  const result = db.prepare('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE email = ?')
     .run(hash, email);
   if (result.changes > 0) {
     console.log(`[bootstrap] Reset password for ${email}. Unset ADMIN_BOOTSTRAP_PASSWORD now.`);
@@ -1021,7 +1023,7 @@ function applyCredentialBootstrap() {
     // the wrong person's login is worse than changing nothing and saying so.
     const admins = db.prepare("SELECT id, email FROM users WHERE role = 'admin'").all();
     if (admins.length === 1) {
-      db.prepare('UPDATE users SET email = ?, password_hash = ? WHERE id = ?')
+      db.prepare('UPDATE users SET email = ?, password_hash = ?, session_version = session_version + 1 WHERE id = ?')
         .run(email, hash, admins[0].id);
       console.log(`[bootstrap] Renamed admin ${admins[0].email} to ${email} and reset its password. Unset ADMIN_BOOTSTRAP_PASSWORD now.`);
     } else {
@@ -1035,7 +1037,7 @@ function applyCredentialBootstrap() {
   // couples.password_hash is nullable and auth.js already rejects a null there.
   const unusable = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
   const staff = db.prepare(
-    `UPDATE users SET password_hash = ? WHERE email = 'sarah@rusticretreat.com' AND email != ?`
+    `UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE email = 'sarah@rusticretreat.com' AND email != ?`
   ).run(unusable, email);
   if (staff.changes > 0) console.log('[bootstrap] Disabled seeded staff login sarah@rusticretreat.com.');
 
@@ -1191,9 +1193,127 @@ if (process.env.NODE_ENV === 'production') {
     for (const id of ids) tasks += db.prepare('DELETE FROM tasks WHERE couple_id = ?').run(id).changes;
     tasks += db.prepare(`DELETE FROM tasks WHERE couple_id IS NULL AND title = 'Update 2027 pricing guide'
       AND description = 'Create updated one-pager with 2027 package prices and inclusions to send to inquiries.'`).run().changes;
-    for (const id of ids) db.prepare('DELETE FROM couples WHERE id = ?').run(id);
+    const ledgerExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'payment_entries'").get();
+    for (const id of ids) {
+      const protectedPayment = ledgerExists && db.prepare('SELECT 1 FROM payment_entries pe JOIN invoices i ON i.id = pe.invoice_id WHERE i.couple_id = ?').get(id);
+      if (protectedPayment) db.prepare("UPDATE couples SET archived_at = datetime('now') WHERE id = ?").run(id);
+      else db.prepare('DELETE FROM couples WHERE id = ?').run(id);
+    }
     console.log(`[migrate] Removed ${ids.length} demo couple(s) and ${tasks} demo task(s).`);
   });
 }
 
+// Completion migrations are additive; existing signed documents and receipts survive.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS payment_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
+    amount_cents INTEGER NOT NULL CHECK(amount_cents != 0),
+    kind TEXT NOT NULL CHECK(kind IN ('receipt','refund','reversal','legacy')),
+    received_at TEXT,
+    method TEXT,
+    reference TEXT,
+    reason TEXT,
+    user_id INTEGER,
+    reverses_id INTEGER REFERENCES payment_entries(id),
+    idempotency_key TEXT UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS payment_invoice ON payment_entries(invoice_id);
+  CREATE TRIGGER IF NOT EXISTS payment_entries_no_update BEFORE UPDATE ON payment_entries
+    BEGIN SELECT RAISE(ABORT, 'Payment history is immutable; record a reversal'); END;
+  CREATE TRIGGER IF NOT EXISTS payment_entries_no_delete BEFORE DELETE ON payment_entries
+    BEGIN SELECT RAISE(ABORT, 'Payment history cannot be deleted'); END;
+  CREATE TABLE IF NOT EXISTS form_answer_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignment_id INTEGER NOT NULL REFERENCES form_assignments(id) ON DELETE CASCADE,
+    answers TEXT NOT NULL,
+    completed INTEGER NOT NULL,
+    actor TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+for (const statement of [
+  'ALTER TABLE tasks ADD COLUMN workflow_key TEXT',
+  'ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE couples ADD COLUMN next_action TEXT',
+  'ALTER TABLE couples ADD COLUMN next_action_due TEXT',
+  'ALTER TABLE couples ADD COLUMN next_action_owner TEXT',
+  'ALTER TABLE form_assignments ADD COLUMN revision INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE form_fields ADD COLUMN record_field TEXT',
+  'ALTER TABLE contracts ADD COLUMN check_in DATE',
+  'ALTER TABLE contracts ADD COLUMN check_out DATE',
+  'ALTER TABLE contracts ADD COLUMN packet_snapshot TEXT',
+]) {
+  try { db.exec(statement); } catch (err) { if (!err.message.includes('duplicate column')) throw err; }
+}
+runOnce('payment-history-completion-v1', () => {
+  db.exec(`INSERT INTO payment_entries (invoice_id, amount_cents, kind, received_at, method, reference, reason, idempotency_key)
+    SELECT id, CAST(ROUND(amount * 100) AS INTEGER), 'legacy', paid_at, payment_method, payment_reference,
+           'Imported existing paid invoice; no new payment date inferred', 'legacy:' || id
+    FROM invoices WHERE paid = 1 AND amount > 0`);
+});
+
+runOnce('contract-access-dates-completion-v1', () => {
+  db.exec(`UPDATE contracts SET check_in = (SELECT NULLIF(value,'') FROM contract_field_values WHERE contract_id=contracts.id AND field_key='setup_date'), check_out = (SELECT NULLIF(value,'') FROM contract_field_values WHERE contract_id=contracts.id AND field_key='teardown_date') WHERE template_key IS NOT NULL AND check_in IS NULL`);
+});
+
+db.exec(`
+ CREATE TABLE IF NOT EXISTS date_holds (
+  id INTEGER PRIMARY KEY, couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+  event_date TEXT NOT NULL, end_date TEXT NOT NULL, package_name TEXT, expires_at TEXT NOT NULL,
+  released_at TEXT, reason TEXT NOT NULL, user_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+ );
+ CREATE TABLE IF NOT EXISTS event_operations (
+  couple_id INTEGER PRIMARY KEY REFERENCES couples(id) ON DELETE CASCADE,
+  details TEXT NOT NULL DEFAULT '{}', revision INTEGER NOT NULL DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+ );
+ CREATE TABLE IF NOT EXISTS event_inspections (
+  id INTEGER PRIMARY KEY, couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE RESTRICT,
+  stage TEXT NOT NULL CHECK(stage IN ('arrival','departure')), notes TEXT NOT NULL,
+  filename TEXT, mime_type TEXT, photo BLOB, user_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+ );
+ CREATE TABLE IF NOT EXISTS damage_deposit_entries (
+  id INTEGER PRIMARY KEY, couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE RESTRICT,
+  kind TEXT NOT NULL CHECK(kind IN ('received','returned','retained')),
+  amount_cents INTEGER NOT NULL CHECK(amount_cents > 0), reason TEXT NOT NULL, reference TEXT,
+  received_at TEXT NOT NULL, user_id INTEGER, idempotency_key TEXT UNIQUE, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+ );
+ CREATE TRIGGER IF NOT EXISTS damage_no_update BEFORE UPDATE ON damage_deposit_entries
+  BEGIN SELECT RAISE(ABORT,'Damage deposit history is immutable'); END;
+ CREATE TRIGGER IF NOT EXISTS damage_no_delete BEFORE DELETE ON damage_deposit_entries
+  BEGIN SELECT RAISE(ABORT,'Damage deposit history cannot be deleted'); END;
+ CREATE TABLE IF NOT EXISTS workflow_templates (
+  id INTEGER PRIMARY KEY, title TEXT NOT NULL, offset_days INTEGER NOT NULL, owner TEXT, active INTEGER NOT NULL DEFAULT 1
+ );
+ CREATE TABLE IF NOT EXISTS website_submissions (
+  fingerprint TEXT PRIMARY KEY, couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, notified INTEGER NOT NULL DEFAULT 0
+ );
+ CREATE TABLE IF NOT EXISTS checkout_sessions (
+  id TEXT PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
+  amount_cents INTEGER NOT NULL, invoice_amount_cents INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+  error TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+ );
+`);
+runOnce('workflow-templates-v1', () => {
+ const insert = db.prepare('INSERT INTO workflow_templates(title,offset_days) VALUES (?,?)');
+ for (const [title,offset] of [['Review event plans and outstanding forms',-60],['Confirm vendors, insurance and alcohol arrangements',-30],['Check final balance and payment arrangements',-14],['Confirm arrival, departure and weekend handover',-7],['Complete departure inspection and deposit review',1]]) insert.run(title,offset);
+});
+db.exec(`CREATE TABLE IF NOT EXISTS email_jobs (
+ id INTEGER PRIMARY KEY, job_key TEXT NOT NULL UNIQUE, couple_id INTEGER REFERENCES couples(id) ON DELETE CASCADE,
+ kind TEXT, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
+ provider_id TEXT, error TEXT, accepted_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);`);
+try{db.exec("ALTER TABLE users ADD COLUMN access_scope TEXT NOT NULL DEFAULT 'full'")}catch(e){if(!e.message.includes('duplicate column'))throw e}
+db.exec(`CREATE TABLE IF NOT EXISTS event_staff (
+ couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, PRIMARY KEY(couple_id,user_id)
+);`);
+db.exec(`CREATE TABLE IF NOT EXISTS unmatched_card_receipts (
+ id TEXT PRIMARY KEY, amount_cents INTEGER NOT NULL, currency TEXT NOT NULL,
+ invoice_hint TEXT, reason TEXT NOT NULL, resolved_at TEXT, resolution TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);`);
+try{db.exec("ALTER TABLE workflow_templates ADD COLUMN reference_date TEXT NOT NULL DEFAULT 'ceremony'")}catch(e){if(!e.message.includes('duplicate column'))throw e}
+runOnce('workflow-closeout-reference-v1',()=>db.prepare("UPDATE workflow_templates SET reference_date='checkout' WHERE id=5").run());
 module.exports = db;

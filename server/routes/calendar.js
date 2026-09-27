@@ -15,22 +15,15 @@ router.get('/', authenticateToken, (req, res) => {
     SELECT b.id, b.event_date, b.end_date, b.package_name, b.guest_count, b.start_time, b.end_time,
            c.partner1_name, c.partner2_name, c.id AS couple_id
     FROM bookings b JOIN couples c ON b.couple_id = c.id
-    WHERE b.event_date IS NOT NULL AND c.status != 'cancelled' AND c.archived_at IS NULL
+    WHERE b.event_date IS NOT NULL AND c.status != 'cancelled'
     ORDER BY b.event_date ASC
   `).all().map(withEnd);
 
-  const bookedCouples = new Set(booked.map(b => b.couple_id));
-  const proposalHolds = db.prepare(`
-    SELECT p.id, p.event_date, p.end_date, p.package_name, p.title, c.id AS couple_id, c.partner1_name, c.partner2_name
-    FROM proposals p JOIN couples c ON c.id = p.couple_id
-    WHERE p.status = 'sent' AND p.event_date IS NOT NULL AND c.archived_at IS NULL AND c.status != 'cancelled'
-  `).all().map(r => ({ ...withEnd(r), kind: 'proposal' }));
-  const contractHolds = db.prepare(`
-    SELECT ct.id, ct.wedding_date AS event_date, NULL AS end_date, ct.package_name, ct.title, c.id AS couple_id, c.partner1_name, c.partner2_name
-    FROM contracts ct JOIN couples c ON c.id = ct.couple_id
-    WHERE ct.status = 'sent' AND ct.wedding_date IS NOT NULL AND c.archived_at IS NULL AND c.status != 'cancelled'
-  `).all().map(r => ({ ...withEnd(r), kind: 'contract' }));
-  const holds = [...contractHolds, ...proposalHolds].filter(h => !bookedCouples.has(h.couple_id));
+  const holds=db.prepare(`SELECT h.id,h.event_date,h.end_date,h.package_name,h.reason AS title,h.expires_at,
+    h.couple_id,c.partner1_name,c.partner2_name FROM date_holds h JOIN couples c ON c.id=h.couple_id
+    WHERE h.released_at IS NULL AND datetime(h.expires_at)>datetime('now') AND c.archived_at IS NULL
+    AND c.status!='cancelled' AND NOT EXISTS(SELECT 1 FROM bookings b WHERE b.couple_id=h.couple_id)`)
+    .all().map(h=>({...h,kind:'hold'}));
 
   const blocked = db.prepare(`
     SELECT * FROM blocked_dates ORDER BY date ASC

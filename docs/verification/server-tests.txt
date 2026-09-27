@@ -1,0 +1,906 @@
+
+> rusticretreat-server@1.0.0 test
+> node --test test/*.test.js
+
+TAP version 13
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-41Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# Subtest: creates a valid 3-Day Weekend booking
+ok 1 - creates a valid 3-Day Weekend booking
+  ---
+  duration_ms: 38.174958
+  type: 'test'
+  ...
+# Subtest: refuses an overlapping booking and names the couple for staff
+ok 2 - refuses an overlapping booking and names the couple for staff
+  ---
+  duration_ms: 36.873917
+  type: 'test'
+  ...
+# Subtest: refuses a booking on the reset day after a wedding
+ok 3 - refuses a booking on the reset day after a wedding
+  ---
+  duration_ms: 8.278333
+  type: 'test'
+  ...
+# Subtest: allows the day after the reset day
+ok 4 - allows the day after the reset day
+  ---
+  duration_ms: 6.064584
+  type: 'test'
+  ...
+# Subtest: refuses a booking whose own reset day lands on another wedding
+ok 5 - refuses a booking whose own reset day lands on another wedding
+  ---
+  duration_ms: 16.8315
+  type: 'test'
+  ...
+# Subtest: ignores bookings of cancelled couples
+ok 6 - ignores bookings of cancelled couples
+  ---
+  duration_ms: 3.014791
+  type: 'test'
+  ...
+# Subtest: refuses owner-blocked dates
+ok 7 - refuses owner-blocked dates
+  ---
+  duration_ms: 3.903292
+  type: 'test'
+  ...
+# Subtest: enforces the 3-Day Weekend window
+ok 8 - enforces the 3-Day Weekend window
+  ---
+  duration_ms: 6.591709
+  type: 'test'
+  ...
+# Subtest: accepts every allowed 5-Day window and refuses others
+ok 9 - accepts every allowed 5-Day window and refuses others
+  ---
+  duration_ms: 16.559917
+  type: 'test'
+  ...
+# Subtest: refuses the retired 2-Day package and more than 100 guests
+ok 10 - refuses the retired 2-Day package and more than 100 guests
+  ---
+  duration_ms: 4.666333
+  type: 'test'
+  ...
+# Subtest: lets a legacy booking be edited when the edit does not touch its dates or package
+ok 11 - lets a legacy booking be edited when the edit does not touch its dates or package
+  ---
+  duration_ms: 7.18575
+  type: 'test'
+  ...
+# Subtest: moving a booking onto its own dates is not a clash with itself
+ok 12 - moving a booking onto its own dates is not a clash with itself
+  ---
+  duration_ms: 5.104958
+  type: 'test'
+  ...
+# [proposals] Accept refused for proposal 3: Those dates are not available: Test19 & Partner19 are booked Friday June 7, 2030 to Sunday June 9, 2030, and the day after every wedding is kept free to reset the property.
+# Subtest: two couples accepting proposals for the same weekend: only the first is booked
+ok 13 - two couples accepting proposals for the same weekend: only the first is booked
+  ---
+  duration_ms: 8.976583
+  type: 'test'
+  ...
+# Subtest: declined, draft and out-of-date proposals cannot be accepted
+ok 14 - declined, draft and out-of-date proposals cannot be accepted
+  ---
+  duration_ms: 9.1665
+  type: 'test'
+  ...
+# Subtest: staff cannot send a proposal for dates that are already taken
+ok 15 - staff cannot send a proposal for dates that are already taken
+  ---
+  duration_ms: 3.463583
+  type: 'test'
+  ...
+# Subtest: a couple's own existing booking does not block their proposal
+ok 16 - a couple's own existing booking does not block their proposal
+  ---
+  duration_ms: 7.4565
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-41Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# Subtest: the calendar shows stays with their end date, holds, and leaves out cancelled couples
+ok 17 - the calendar shows stays with their end date, holds, and leaves out cancelled couples
+  ---
+  duration_ms: 30.663292
+  type: 'test'
+  ...
+# Subtest: a range of dates can be blocked at once, within reason
+ok 18 - a range of dates can be blocked at once, within reason
+  ---
+  duration_ms: 41.02875
+  type: 'test'
+  ...
+# Subtest: changing a couple's status moves their pipeline card to match
+ok 19 - changing a couple's status moves their pipeline card to match
+  ---
+  duration_ms: 14.840208
+  type: 'test'
+  ...
+# Subtest: staff can change their own password; the admin manages logins
+ok 20 - staff can change their own password; the admin manages logins
+  ---
+  duration_ms: 480.216125
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-41Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# [migrate] Removed 4 demo couple(s) and 6 demo task(s).
+# [EMAIL] No RESEND_API_KEY and no SMTP settings — outbound email is DISABLED. Contract signing links will not reach couples; staff will have to send them by hand.
+# Subtest: phone leads save with one name and never expose an invented email
+ok 21 - phone leads save with one name and never expose an invented email
+  ---
+  duration_ms: 52.1545
+  type: 'test'
+  ...
+# Subtest: partial payments agree across invoice, booking, overview, analytics and printed statement
+ok 22 - partial payments agree across invoice, booking, overview, analytics and printed statement
+  ---
+  duration_ms: 44.411917
+  type: 'test'
+  ...
+# Subtest: payment retries are idempotent and conflicting retries fail
+ok 23 - payment retries are idempotent and conflicting retries fail
+  ---
+  duration_ms: 18.659917
+  type: 'test'
+  ...
+# Subtest: refunds need an admin and reason, cannot exceed receipts, and never erase history
+ok 24 - refunds need an admin and reason, cannot exceed receipts, and never erase history
+  ---
+  duration_ms: 45.334875
+  type: 'test'
+  ...
+# Subtest: schedule regeneration retains partial obligations and never adds an extra deposit
+ok 25 - schedule regeneration retains partial obligations and never adds an extra deposit
+  ---
+  duration_ms: 12.267541
+  type: 'test'
+  ...
+# Subtest: legacy settlements preserve unknown payment dates
+ok 26 - legacy settlements preserve unknown payment dates
+  ---
+  duration_ms: 0.474292
+  type: 'test'
+  ...
+# Subtest: mapped forms prefill, public saves stay separate, and staff must review changes
+ok 27 - mapped forms prefill, public saves stay separate, and staff must review changes
+  ---
+  duration_ms: 17.620666
+  type: 'test'
+  ...
+# Subtest: draft corrections become pending, preserve previous answers and reject stale writes
+ok 28 - draft corrections become pending, preserve previous answers and reject stale writes
+  ---
+  duration_ms: 24.21125
+  type: 'test'
+  ...
+# Subtest: booking milestones reschedule open work, retain completed work and require deliberate cancellation
+ok 29 - booking milestones reschedule open work, retain completed work and require deliberate cancellation
+  ---
+  duration_ms: 18.895292
+  type: 'test'
+  ...
+# Subtest: next actions remain due after contact, and printed handovers escape supplied text
+ok 30 - next actions remain due after contact, and printed handovers escape supplied text
+  ---
+  duration_ms: 14.014958
+  type: 'test'
+  ...
+# Subtest: proposal agreements use a frozen rental packet, Schedule A, and quoted totals
+ok 31 - proposal agreements use a frozen rental packet, Schedule A, and quoted totals
+  ---
+  duration_ms: 6.35475
+  type: 'test'
+  ...
+# Subtest: removed staff and password-reset sessions cannot use old tokens
+ok 32 - removed staff and password-reset sessions cannot use old tokens
+  ---
+  duration_ms: 90.384625
+  type: 'test'
+  ...
+# Subtest: a read-only recovered backup retains receipts, answers and signed attachment bytes
+ok 33 - a read-only recovered backup retains receipts, answers and signed attachment bytes
+  ---
+  duration_ms: 6.921208
+  type: 'test'
+  ...
+# Subtest: a structured signing journey without cookies reserves access dates and creates one payment schedule
+ok 34 - a structured signing journey without cookies reserves access dates and creates one payment schedule
+  ---
+  duration_ms: 51.428292
+  type: 'test'
+  ...
+# Subtest: public signing displays the stored agreement packet and locked records survive archive deletion
+ok 35 - public signing displays the stored agreement packet and locked records survive archive deletion
+  ---
+  duration_ms: 13.380625
+  type: 'test'
+  ...
+# Subtest: proposal preparation reuses a known ceremony date separately from access dates
+ok 36 - proposal preparation reuses a known ceremony date separately from access dates
+  ---
+  duration_ms: 10.009083
+  type: 'test'
+  ...
+# Subtest: couple search finds ceremony and stay dates without showing archived records
+ok 37 - couple search finds ceremony and stay dates without showing archived records
+  ---
+  duration_ms: 28.355917
+  type: 'test'
+  ...
+# Subtest: a staff-created seasonal agreement prefills the same known dates and price as a proposal
+ok 38 - a staff-created seasonal agreement prefills the same known dates and price as a proposal
+  ---
+  duration_ms: 5.07525
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-41Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# Subtest: a contract signed elsewhere is recorded as signed and locked, with its file
+ok 39 - a contract signed elsewhere is recorded as signed and locked, with its file
+  ---
+  duration_ms: 95.781042
+  type: 'test'
+  ...
+# Subtest: uploads refuse missing details and unsupported files
+ok 40 - uploads refuse missing details and unsupported files
+  ---
+  duration_ms: 11.500125
+  type: 'test'
+  ...
+# Subtest: files can be attached to and removed from any contract
+ok 41 - files can be attached to and removed from any contract
+  ---
+  duration_ms: 14.317333
+  type: 'test'
+  ...
+# Subtest: a free-text draft can be edited until the venue signs; the standard agreement wording cannot
+ok 42 - a free-text draft can be edited until the venue signs; the standard agreement wording cannot
+  ---
+  duration_ms: 32.134875
+  type: 'test'
+  ...
+# Subtest: bootstrap keeps real couples logged in and disables only seeded demo logins
+ok 43 - bootstrap keeps real couples logged in and disables only seeded demo logins
+  ---
+  duration_ms: 547.227333
+  type: 'test'
+  ...
+# Subtest: a password changed in the CRM survives later boots while the bootstrap variable is still set
+ok 44 - a password changed in the CRM survives later boots while the bootstrap variable is still set
+  ---
+  duration_ms: 366.400541
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-41Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# Subtest: delete archives: hidden from lists, records kept, restorable, and logged
+ok 45 - delete archives: hidden from lists, records kept, restorable, and logged
+  ---
+  duration_ms: 75.419666
+  type: 'test'
+  ...
+# Subtest: permanent delete is admin-only, needs archiving first, and keeps couples with money or signatures
+ok 46 - permanent delete is admin-only, needs archiving first, and keeps couples with money or signatures
+  ---
+  duration_ms: 28.747792
+  type: 'test'
+  ...
+# Subtest: a paid invoice cannot be deleted; an unpaid one can, and is logged
+ok 47 - a paid invoice cannot be deleted; an unpaid one can, and is logged
+  ---
+  duration_ms: 12.958459
+  type: 'test'
+  ...
+# Subtest: marking an invoice paid is logged with who did it
+ok 48 - marking an invoice paid is logged with who did it
+  ---
+  duration_ms: 27.188667
+  type: 'test'
+  ...
+# Subtest: signed contracts are retained even when an admin confirms deletion
+ok 49 - signed contracts are retained even when an admin confirms deletion
+  ---
+  duration_ms: 12.864459
+  type: 'test'
+  ...
+# Subtest: archived couples get no payment reminders and leave the follow-up list
+ok 50 - archived couples get no payment reminders and leave the follow-up list
+  ---
+  duration_ms: 0.690333
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-41Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# [migrate] Removed 4 demo couple(s) and 6 demo task(s).
+# Subtest: the pipeline back-fill is recorded as a one-time migration
+ok 51 - the pipeline back-fill is recorded as a one-time migration
+  ---
+  duration_ms: 1.501917
+  type: 'test'
+  ...
+# Subtest: an enquiry needs a follow-up until it has a tour, proposal, booking or contacted mark
+ok 52 - an enquiry needs a follow-up until it has a tour, proposal, booking or contacted mark
+  ---
+  duration_ms: 66.166417
+  type: 'test'
+  ...
+# [FollowUp] 2 enquiries need a follow-up, sent 1 staff alerts
+# [FollowUp] 2 enquiries need a follow-up, sent 0 staff alerts
+# [EMAIL send error] Resend rejected the message (HTTP 500): down
+# [FollowUp] 3 enquiries need a follow-up, sent 0 staff alerts
+# [FollowUp] 3 enquiries need a follow-up, sent 1 staff alerts
+# Subtest: couples are never nudged; the venue is alerted once, after a week
+ok 53 - couples are never nudged; the venue is alerted once, after a week
+  ---
+  duration_ms: 17.591417
+  type: 'test'
+  ...
+# [EMAIL send error] Resend rejected the message (HTTP 500): down
+# [PaymentReminder] Checked 1 invoices, sent 0 reminders, 1 failed (will retry)
+# [PaymentReminder] Checked 1 invoices, sent 1 reminders
+# [PaymentReminder] Checked 1 invoices, sent 0 reminders
+# Subtest: payment reminders give e-Transfer details, reach both partners, and only count once delivered
+ok 54 - payment reminders give e-Transfer details, reach both partners, and only count once delivered
+  ---
+  duration_ms: 30.635458
+  type: 'test'
+  ...
+# Subtest: reminder wording covers a payment due today
+ok 55 - reminder wording covers a payment due today
+  ---
+  duration_ms: 0.166959
+  type: 'test'
+  ...
+# Subtest: a proposal emailed to nobody is not reported as delivered
+ok 56 - a proposal emailed to nobody is not reported as delivered
+  ---
+  duration_ms: 7.295
+  type: 'test'
+  ...
+# Subtest: an accepted proposal cannot be declined from its public link
+ok 57 - an accepted proposal cannot be declined from its public link
+  ---
+  duration_ms: 11.213542
+  type: 'test'
+  ...
+# Subtest: public availability matches the booking rules: stay plus reset day, cancelled couples ignored
+ok 58 - public availability matches the booking rules: stay plus reset day, cancelled couples ignored
+  ---
+  duration_ms: 4.512666
+  type: 'test'
+  ...
+# Subtest: resending a contract link starts a fresh signing window
+ok 59 - resending a contract link starts a fresh signing window
+  ---
+  duration_ms: 27.30275
+  type: 'test'
+  ...
+# Subtest: the last signature books the stay with its check-out date and the standard payment schedule
+ok 60 - the last signature books the stay with its check-out date and the standard payment schedule
+  ---
+  duration_ms: 22.870375
+  type: 'test'
+  ...
+# Subtest: if the date was taken meanwhile, the signatures stand and staff get a task instead of a double booking
+ok 61 - if the date was taken meanwhile, the signatures stand and staff get a task instead of a double booking
+  ---
+  duration_ms: 20.542042
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-41Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# Subtest: editing a form keeps the answers already given
+ok 62 - editing a form keeps the answers already given
+  ---
+  duration_ms: 92.511042
+  type: 'test'
+  ...
+# Subtest: staff can fill in and correct answers; required questions are checked only when complete
+ok 63 - staff can fill in and correct answers; required questions are checked only when complete
+  ---
+  duration_ms: 28.753541
+  type: 'test'
+  ...
+# Subtest: a couple can fill in a form from a private link, and a new link replaces the old one
+ok 64 - a couple can fill in a form from a private link, and a new link replaces the old one
+  ---
+  duration_ms: 44.115083
+  type: 'test'
+  ...
+# Subtest: website enquiries and booking requests are saved as editable form responses
+ok 65 - website enquiries and booking requests are saved as editable form responses
+  ---
+  duration_ms: 21.809667
+  type: 'test'
+  ...
+# Subtest: every sidebar page and the couple page has a guide
+ok 66 - every sidebar page and the couple page has a guide
+  ---
+  duration_ms: 5.492708
+  type: 'test'
+  ...
+# Subtest: slugs are unique and every link resolves
+ok 67 - slugs are unique and every link resolves
+  ---
+  duration_ms: 0.776125
+  type: 'test'
+  ...
+# Subtest: search finds the right material
+ok 68 - search finds the right material
+  ---
+  duration_ms: 1.767541
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-41Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# [jobs] test-broken failed: disk full
+# Subtest: Alberta day and hour are computed in America/Edmonton
+ok 69 - Alberta day and hour are computed in America/Edmonton
+  ---
+  duration_ms: 13.184208
+  type: 'test'
+  ...
+# Subtest: a job runs once per Alberta day after its hour, survives restarts, and catches up
+ok 70 - a job runs once per Alberta day after its hour, survives restarts, and catches up
+  ---
+  duration_ms: 0.884792
+  type: 'test'
+  ...
+# Subtest: a job with a cut-off hour does not catch up late in the day
+ok 71 - a job with a cut-off hour does not catch up late in the day
+  ---
+  duration_ms: 0.455084
+  type: 'test'
+  ...
+# Subtest: a failing job is recorded and reported to the failure handler
+ok 72 - a failing job is recorded and reported to the failure handler
+  ---
+  duration_ms: 0.4485
+  type: 'test'
+  ...
+# Subtest: backups: a snapshot is taken before data migrations
+ok 73 - backups: a snapshot is taken before data migrations
+  ---
+  duration_ms: 0.616709
+  type: 'test'
+  ...
+# [backup] Wrote rusticretreat-2026-09-27T18-57-41Z.db (328 KB), pruned 3 old, copied off-site (60 kept)
+# Subtest: backups are pruned per kind, and each daily copy goes off-site with bucket pruning
+ok 74 - backups are pruned per kind, and each daily copy goes off-site with bucket pruning
+  ---
+  duration_ms: 73.230792
+  type: 'test'
+  ...
+# Subtest: every email is logged, matched to its couple by address, delivered or not
+ok 75 - every email is logged, matched to its couple by address, delivered or not
+  ---
+  duration_ms: 27.060625
+  type: 'test'
+  ...
+# Subtest: past weddings are marked completed and old proposals expire, on Alberta dates
+ok 76 - past weddings are marked completed and old proposals expire, on Alberta dates
+  ---
+  duration_ms: 2.584375
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-42Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# [migrate] Removed 4 demo couple(s) and 6 demo task(s).
+# Subtest: holds reserve inventory and reset days, expire, and allow their own couple to book
+ok 77 - holds reserve inventory and reset days, expire, and allow their own couple to book
+  ---
+  duration_ms: 71.236375
+  type: 'test'
+  ...
+# Subtest: camping and readiness save with conflict detection and stay validation
+ok 78 - camping and readiness save with conflict detection and stay validation
+  ---
+  duration_ms: 19.66675
+  type: 'test'
+  ...
+# Subtest: damage deposits retain immutable dispositions and stay separate from venue revenue
+ok 79 - damage deposits retain immutable dispositions and stay separate from venue revenue
+  ---
+  duration_ms: 50.899208
+  type: 'test'
+  ...
+# Subtest: inspection photos and operating plans survive a fresh read-only backup
+ok 80 - inspection photos and operating plans survive a fresh read-only backup
+  ---
+  duration_ms: 25.866666
+  type: 'test'
+  ...
+# Subtest: reusable relative task templates add missing work without duplication
+ok 81 - reusable relative task templates add missing work without duplication
+  ---
+  duration_ms: 11.835833
+  type: 'test'
+  ...
+# Subtest: identical website requests create one task while changed answers are retained
+ok 82 - identical website requests create one task while changed answers are retained
+  ---
+  duration_ms: 2.866583
+  type: 'test'
+  ...
+# [EMAIL send error] Resend rejected the message (HTTP 500): {"error":"Synthetic outage"}
+# Subtest: email failures persist, retries use a stable key, and acceptance is distinct from confirmed delivery
+ok 83 - email failures persist, retries use a stable key, and acceptance is distinct from confirmed delivery
+  ---
+  duration_ms: 12.081625
+  type: 'test'
+  ...
+# [stripe] Received payment needs reconciliation cs_changed
+# Subtest: signed card retries cannot duplicate money and changed checkout invoices need reconciliation
+ok 84 - signed card retries cannot duplicate money and changed checkout invoices need reconciliation
+  ---
+  duration_ms: 13.04925
+  type: 'test'
+  ...
+# Subtest: allocation corrections preserve total money and require owner review
+ok 85 - allocation corrections preserve total money and require owner review
+  ---
+  duration_ms: 24.81275
+  type: 'test'
+  ...
+# Subtest: async request errors reach the response middleware
+ok 86 - async request errors reach the response middleware
+  ---
+  duration_ms: 1.390166
+  type: 'test'
+  ...
+# Subtest: event-only staff see assigned operations without money, contracts, other events or private photos
+ok 87 - event-only staff see assigned operations without money, contracts, other events or private photos
+  ---
+  duration_ms: 52.925209
+  type: 'test'
+  ...
+# Subtest: rescheduling offers an explicit review for standard unpaid dates, preserving paid and custom dates
+ok 88 - rescheduling offers an explicit review for standard unpaid dates, preserving paid and custom dates
+  ---
+  duration_ms: 21.463708
+  type: 'test'
+  ...
+# Subtest: legacy and unmatched signed card receipts remain visible for review
+ok 89 - legacy and unmatched signed card receipts remain visible for review
+  ---
+  duration_ms: 11.570125
+  type: 'test'
+  ...
+# Subtest: rescheduling adds a newly introduced unassigned template without losing existing work
+ok 90 - rescheduling adds a newly introduced unassigned template without losing existing work
+  ---
+  duration_ms: 7.378125
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-42Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# Subtest: recording a payment keeps its date, method and reference, and the receipt is optional
+ok 91 - recording a payment keeps its date, method and reference, and the receipt is optional
+  ---
+  duration_ms: 63.201209
+  type: 'test'
+  ...
+# Subtest: editing an invoice is logged with what changed
+ok 92 - editing an invoice is logged with what changed
+  ---
+  duration_ms: 3.967
+  type: 'test'
+  ...
+# Subtest: a reminder can be sent on demand, but not for a paid invoice
+ok 93 - a reminder can be sent on demand, but not for a paid invoice
+  ---
+  duration_ms: 13.457
+  type: 'test'
+  ...
+# Subtest: the printable statement lists payments and the balance, escaped
+ok 94 - the printable statement lists payments and the balance, escaped
+  ---
+  duration_ms: 5.111834
+  type: 'test'
+  ...
+# Subtest: scheduling a tour emails a confirmation only when asked
+ok 95 - scheduling a tour emails a confirmation only when asked
+  ---
+  duration_ms: 12.678542
+  type: 'test'
+  ...
+# Subtest: a booking's payment status follows its invoices
+ok 96 - a booking's payment status follows its invoices
+  ---
+  duration_ms: 4.786625
+  type: 'test'
+  ...
+# Subtest: the extra-guest add-on counts guests over 80, as the agreement does
+ok 97 - the extra-guest add-on counts guests over 80, as the agreement does
+  ---
+  duration_ms: 0.134333
+  type: 'test'
+  ...
+# Subtest: forms sent but not returned are listed, and archived couples are left out
+ok 98 - forms sent but not returned are listed, and archived couples are left out
+  ---
+  duration_ms: 4.192084
+  type: 'test'
+  ...
+# Subtest: a fresh instance restores login, wedding, receipts, private answers, signatures and inspection photos
+ok 99 - a fresh instance restores login, wedding, receipts, private answers, signatures and inspection photos
+  ---
+  duration_ms: 639.655666
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-42Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# Subtest: schedule is 25% now, 25% at 180 days, 50% at 90 days before check-in
+ok 100 - schedule is 25% now, 25% at 180 days, 50% at 90 days before check-in
+  ---
+  duration_ms: 0.988625
+  type: 'test'
+  ...
+# Subtest: amounts always add up to the total, even with odd cents
+ok 101 - amounts always add up to the total, even with odd cents
+  ---
+  duration_ms: 0.093417
+  type: 'test'
+  ...
+# Subtest: a late booking makes past milestones due with the deposit
+ok 102 - a late booking makes past milestones due with the deposit
+  ---
+  duration_ms: 0.076625
+  type: 'test'
+  ...
+# Subtest: season prices: 2028 price for a 2028 wedding, default otherwise
+ok 103 - season prices: 2028 price for a 2028 wedding, default otherwise
+  ---
+  duration_ms: 0.41325
+  type: 'test'
+  ...
+# Subtest: the seeded 3-Day and 5-Day packages carry the 2028 prices
+ok 104 - the seeded 3-Day and 5-Day packages carry the 2028 prices
+  ---
+  duration_ms: 38.192541
+  type: 'test'
+  ...
+# Subtest: staff can edit season prices and bad input is refused
+ok 105 - staff can edit season prices and bad input is refused
+  ---
+  duration_ms: 20.351875
+  type: 'test'
+  ...
+# Subtest: the 2028 agreement differs from 2027 only in its prices
+ok 106 - the 2028 agreement differs from 2027 only in its prices
+  ---
+  duration_ms: 0.83625
+  type: 'test'
+  ...
+# Subtest: a contract for a 2028 wedding must use the 2028 agreement
+ok 107 - a contract for a 2028 wedding must use the 2028 agreement
+  ---
+  duration_ms: 27.960584
+  type: 'test'
+  ...
+# Subtest: accepting a proposal creates the three agreement instalments
+ok 108 - accepting a proposal creates the three agreement instalments
+  ---
+  duration_ms: 7.659375
+  type: 'test'
+  ...
+# Subtest: a custom plan must add up to the total, and every row must be valid
+ok 109 - a custom plan must add up to the total, and every row must be valid
+  ---
+  duration_ms: 0.691916
+  type: 'test'
+  ...
+# Subtest: staff can save a split-deposit schedule; paid invoices stay and a bad plan changes nothing
+ok 110 - staff can save a split-deposit schedule; paid invoices stay and a bad plan changes nothing
+  ---
+  duration_ms: 16.73
+  type: 'test'
+  ...
+# Subtest: staff can record how a couple heard about us, and list staff for task assignment
+ok 111 - staff can record how a couple heard about us, and list staff for task assignment
+  ---
+  duration_ms: 13.328
+  type: 'test'
+  ...
+# Subtest: demo couples are removed once in production, real couples are kept, dev keeps its demo data
+ok 112 - demo couples are removed once in production, real couples are kept, dev keeps its demo data
+  ---
+  duration_ms: 393.394875
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-42Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# [migrate] Removed 4 demo couple(s) and 6 demo task(s).
+# [SMS] No telnyx credentials or SMS_FROM_NUMBER — outbound texting is DISABLED. Messages will still be recorded in the CRM, but nothing will reach a phone.
+# Subtest: the today list covers tours, tasks, payments, contracts, forms and weddings, on the right dates
+ok 113 - the today list covers tours, tasks, payments, contracts, forms and weddings, on the right dates
+  ---
+  duration_ms: 4.366167
+  type: 'test'
+  ...
+# Subtest: the morning summary lists each section with links, and flags what is overdue
+ok 114 - the morning summary lists each section with links, and flags what is overdue
+  ---
+  duration_ms: 52.422834
+  type: 'test'
+  ...
+# Subtest: the couple overview gathers their records, balance and history
+ok 115 - the couple overview gathers their records, balance and history
+  ---
+  duration_ms: 11.814292
+  type: 'test'
+  ...
+# Subtest: staff can email a couple from Messages: both partners, reply to the venue, saved in the thread
+ok 116 - staff can email a couple from Messages: both partners, reply to the venue, saved in the thread
+  ---
+  duration_ms: 36.737833
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-42Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# Subtest: wedding dates are read only when they are unambiguous
+ok 117 - wedding dates are read only when they are unambiguous
+  ---
+  duration_ms: 0.809916
+  type: 'test'
+  ...
+# Subtest: a website enquiry becomes an inquiry client with a follow-up task and a tour request
+ok 118 - a website enquiry becomes an inquiry client with a follow-up task and a tour request
+  ---
+  duration_ms: 44.511958
+  type: 'test'
+  ...
+# Subtest: a repeat enquiry adds to the same client instead of making a duplicate
+ok 119 - a repeat enquiry adds to the same client instead of making a duplicate
+  ---
+  duration_ms: 8.516083
+  type: 'test'
+  ...
+# Subtest: an enquiry without tour dates is still a requested tour
+ok 120 - an enquiry without tour dates is still a requested tour
+  ---
+  duration_ms: 5.612125
+  type: 'test'
+  ...
+# Subtest: once the tour is done, a new enquiry opens a new tour request
+ok 121 - once the tour is done, a new enquiry opens a new tour request
+  ---
+  duration_ms: 7.591875
+  type: 'test'
+  ...
+# Subtest: bots that fill the hidden field are ignored, and bad input is refused
+ok 122 - bots that fill the hidden field are ignored, and bad input is refused
+  ---
+  duration_ms: 9.566708
+  type: 'test'
+  ...
+# Subtest: booking-form dates are read day first
+ok 123 - booking-form dates are read day first
+  ---
+  duration_ms: 0.293625
+  type: 'test'
+  ...
+# Subtest: a booking request becomes an inquiry with its answers, package and a proposal task
+ok 124 - a booking request becomes an inquiry with its answers, package and a proposal task
+  ---
+  duration_ms: 8.058292
+  type: 'test'
+  ...
+# Subtest: a lead who sends a booking request becomes an inquiry without losing their record
+ok 125 - a lead who sends a booking request becomes an inquiry without losing their record
+  ---
+  duration_ms: 12.134917
+  type: 'test'
+  ...
+# Subtest: booking-request bots and bad input are handled like the contact form
+ok 126 - booking-request bots and bad input are handled like the contact form
+  ---
+  duration_ms: 9.83175
+  type: 'test'
+  ...
+# Seeding database...
+# Database seeded successfully!
+# [migrate] Created signer records for 2 previously signed contract(s).
+# [migrate] Snapshot before "pipeline-backfill-v1": pre-migration-2026-09-27T18-57-42Z-pipeline-backfill-v1.db
+# [migrate] Set 2028 prices on 2 package(s).
+# [migrate] Deactivated 1 2-Day package(s).
+# Subtest: with _notify the CRM emails the venue every answer and says so
+ok 127 - with _notify the CRM emails the venue every answer and says so
+  ---
+  duration_ms: 47.958333
+  type: 'test'
+  ...
+# Subtest: without _notify (older site versions) no email is sent
+ok 128 - without _notify (older site versions) no email is sent
+  ---
+  duration_ms: 3.983625
+  type: 'test'
+  ...
+# [EMAIL send error] Resend rejected the message (HTTP 500): down
+# [website booking-request] saved couple 7 but the notification email failed: Resend rejected the message (HTTP 500): down
+# Subtest: if the email fails the couple is still saved and the site is told to fall back
+ok 129 - if the email fails the couple is still saved and the site is told to fall back
+  ---
+  duration_ms: 15.318
+  type: 'test'
+  ...
+# Subtest: a bot tripping the honeypot is not emailed about and needs no fallback
+ok 130 - a bot tripping the honeypot is not emailed about and needs no fallback
+  ---
+  duration_ms: 1.651166
+  type: 'test'
+  ...
+# Subtest: only the website may read replies from the two form endpoints
+ok 131 - only the website may read replies from the two form endpoints
+  ---
+  duration_ms: 0.828959
+  type: 'test'
+  ...
+1..131
+# tests 131
+# suites 0
+# pass 131
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1633.605125

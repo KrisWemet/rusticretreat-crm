@@ -37,11 +37,11 @@ function todaySummary(today) {
   `).all(today);
 
   const payments = db.prepare(`
-    SELECT i.id, i.description, i.amount, i.due_date, i.couple_id, c.partner1_name, c.partner2_name
+    SELECT i.*, c.partner1_name, c.partner2_name
     FROM invoices i JOIN couples c ON c.id = i.couple_id
     WHERE i.paid = 0 AND i.due_date IS NOT NULL AND i.due_date <= ? AND ${live}
     ORDER BY i.due_date
-  `).all(addDays(today, 7));
+  `).all(addDays(today, 7)).map(require('./ledger').invoiceView).map(i => ({ ...i, amount: i.balance }));
 
   const contracts = db.prepare(`
     SELECT ct.id, ct.title, ct.couple_id, ct.sent_at, ct.signing_expires_at, c.partner1_name, c.partner2_name,
@@ -68,6 +68,8 @@ function todaySummary(today) {
 
   return {
     today, week_end: weekEnd,
+    failed_emails:db.prepare("SELECT j.id,j.couple_id,j.kind,j.status,j.error,c.partner1_name,c.partner2_name FROM email_jobs j LEFT JOIN couples c ON c.id=j.couple_id WHERE j.status IN ('failed','unknown','sending') AND (c.id IS NULL OR (c.archived_at IS NULL AND c.status!='cancelled')) ORDER BY j.id DESC").all().map(e=>({...e,couple_names:names(e)})),
+    next_actions: db.prepare(`SELECT id AS couple_id, partner1_name, partner2_name, next_action, next_action_due, next_action_owner FROM couples WHERE next_action IS NOT NULL AND next_action_due <= ? AND archived_at IS NULL AND status != 'cancelled' ORDER BY next_action_due`).all(today).map(c => ({ ...c, couple_names: names(c) })),
     tours_today: tours.filter(t => t.scheduled_at.slice(0, 10) === today),
     tours_week: tours.filter(t => t.scheduled_at.slice(0, 10) !== today),
     tour_requests: tourRequests,
@@ -82,7 +84,7 @@ function todaySummary(today) {
 
 // How many things are in the summary (weddings and tours count as news too).
 function itemCount(s) {
-  return s.tours_today.length + s.tours_week.length + s.tasks_due.length + s.payments_due.length +
+  return (s.next_actions?.length || 0) + s.tours_today.length + s.tours_week.length + s.tasks_due.length + s.payments_due.length +
     s.follow_ups.length + s.contracts_waiting.length + s.forms_waiting.length + s.weddings_week.length;
 }
 

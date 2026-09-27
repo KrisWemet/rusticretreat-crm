@@ -126,7 +126,7 @@ export default function VenueCalendar() {
           )}
           {it.type === 'hold' && (
             <>
-              <p className="text-xs font-semibold text-violet-700">HELD — {it.data.kind === 'contract' ? 'contract out for signature' : 'proposal sent'}</p>
+              <p className="text-xs font-semibold text-violet-700">HELD — {it.data.kind === 'hold' ? `expires ${new Date(it.data.expires_at).toLocaleString()}` : it.data.kind === 'contract' ? 'contract out for signature' : 'proposal sent'}</p>
               <Link to={`/clients/${it.data.couple_id}`} className="font-medium text-violet-700 hover:underline">{it.data.partner1_name} & {it.data.partner2_name}</Link>
               <p className="text-xs text-slate-500">{it.data.title}</p>
             </>

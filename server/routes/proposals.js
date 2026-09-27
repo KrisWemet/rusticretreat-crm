@@ -347,6 +347,7 @@ router.post('/public/:token/accept', publicActionLimit, (req, res) => {
     db.prepare(`UPDATE proposals SET status = 'accepted', accepted_at = datetime('now'), accepted_name = ? WHERE id = ?`)
       .run(accepted_name, proposal.id);
 
+    if (db.prepare('SELECT 1 FROM bookings WHERE couple_id = ?').get(proposal.couple_id)) throw new BookingRuleError('This couple already has a reservation. Contact the venue to amend it.', 409);
     // Move couple to booked in both status + pipeline
     db.prepare(`UPDATE couples SET status = 'booked', pipeline_stage = 'booked', venue_package = ? WHERE id = ?`)
       .run(proposal.package_name, proposal.couple_id);
@@ -362,6 +363,8 @@ router.post('/public/:token/accept', publicActionLimit, (req, res) => {
     `).run(proposal.couple_id, proposal.event_date, proposal.end_date, proposal.package_name,
       proposal.guest_count, proposal.total, addOnLabels || null);
 
+      db.prepare("UPDATE date_holds SET released_at=datetime('now') WHERE couple_id=? AND released_at IS NULL").run(proposal.couple_id);
+    require('../services/operations').ensureTasks(proposal.couple_id, db.prepare('SELECT wedding_date FROM couples WHERE id = ?').get(proposal.couple_id).wedding_date || proposal.event_date);
     // Deposit, 2nd payment and balance, on the dates the signed agreement uses.
     const insertInvoice = db.prepare(`
       INSERT INTO invoices (couple_id, booking_id, description, amount, due_date) VALUES (?, ?, ?, ?, ?)

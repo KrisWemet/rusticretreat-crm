@@ -239,6 +239,7 @@ export default function SignContract() {
               </div>
             )}
 
+            {result.booking_conflict && <div role="alert" className="my-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900"><h2 className="font-semibold">Dates need confirmation</h2><p className="text-sm mt-2">Your signatures are saved, but these dates could not be reserved. Rustic Retreat will contact you to resolve the dates.</p></div>}
             {result.portal_enabled && result.is_new_account && (
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 text-left mb-6">
                 <div className="flex items-center gap-2 mb-3">

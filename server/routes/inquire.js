@@ -11,8 +11,8 @@ const SEASON_MONTHS = [6, 7, 8, 9];
 
 // Add a YYYY-MM-DD date string to a set, offset by N days.
 function shiftDate(dateStr, days) {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + days);
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -37,6 +37,10 @@ function buildUnavailableDates() {
       guard++;
     }
     unavailable.add(shiftDate(end, 1)); // reset day
+  }
+
+  for (const h of db.prepare(`SELECT h.event_date,h.end_date FROM date_holds h JOIN couples c ON c.id=h.couple_id WHERE h.released_at IS NULL AND datetime(h.expires_at)>datetime('now') AND c.archived_at IS NULL AND c.status!='cancelled'`).all()) {
+    for(let d=h.event_date, n=0; d<=shiftDate(h.end_date,1)&&n<60; d=shiftDate(d,1),n++) unavailable.add(d);
   }
 
   for (const row of db.prepare('SELECT date FROM blocked_dates').all()) {
@@ -137,8 +141,10 @@ router.post('/', rateLimit({ windowMs: 3600000, max: 5 }), (req, res) => {
 // Formspree so the venue is always told.
 async function respondToWebsite(req, res, kind, result) {
   if (!result.ok) return res.status(result.status).json({ error: result.error });
+  if(result.duplicate) return res.status(200).json({success:true,notified:result.notified,duplicate:true});
   if (result.ignored || req.body._notify !== '1') return res.status(201).json({ success: true, notified: !!result.ignored });
   const mail = await email.sendWebsiteSubmissionAdmin({ kind, coupleId: result.coupleId, ...result.notice });
+  if(result.fingerprint&&mail.delivered)db.prepare('UPDATE website_submissions SET notified=1 WHERE fingerprint=?').run(result.fingerprint);
   if (!mail.delivered) console.error(`[website ${kind}] saved couple ${result.coupleId} but the notification email failed: ${mail.error}`);
   res.status(201).json({ success: true, notified: !!mail.delivered });
 }

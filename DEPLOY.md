@@ -1,11 +1,51 @@
+# Completion release and recovery
+
+The current candidate is `codex/crm-completion`; its review base is `claude/wedding-crm-esign-integration-coau0z` at `9dd149d`. This task has not changed the live deployment. Confirm the hosting service’s source branch and actual deployed SHA before releasing. Older notes below describe prior setups, not newly verified production state.
+
+## Release checks
+
+1. Use Node 22.23.0 or a compatible Node 22 version at least 22.12. Install both lockfiles, run the server tests and build the client.
+2. Record the running commit and take a SQLite online backup from Backups. Download an additional copy and verify that the configured off-site bucket has a recent readable copy.
+3. Keep `DB_PATH` on the persistent volume and retain the existing `JWT_SECRET` or volume `.jwt-secret`. Check `BASE_URL`, allowed website origins, admin notification address, sending identity and access gate. Public signing/form/proposal endpoints must remain accessible without a staff gate cookie.
+4. The completion schema is additive. Existing paid rows become legacy receipt entries, retaining unknown dates as unknown. Existing signatures and attachments are preserved. New packet snapshots apply to new or newly locked agreements; historical template definitions cannot be reconstructed if they had changed before this release.
+5. Rehearse against a restored copy with synthetic contacts and disabled or sandbox providers before production. Confirm both signer identities, separate ceremony/stay dates, the approved price/GST breakdown, one schedule, a partial receipt/refund, mapped-form review and cancellation/rebooking.
+6. After the controlled production release, verify the actual SHA, health, a designated test contact, daily job status, last local/off-site backup and restricted staff permissions. Record those results in the handoff.
+
+## Read-only backup verification
+
+Run against a saved copy, not the working database:
+
+```sh
+npm run verify-backup --prefix server -- /absolute/path/to/downloaded-copy.db
+```
+
+The tool checks SQLite integrity, foreign keys, key table counts and SHA-256 without booting the app, running migrations or sending notifications. The database includes contract attachments and inspection photo bytes. Preserve provider settings and signing/gate configuration separately; they are not all inside the SQLite file.
+
+## Recovery rehearsal
+
+Restore a downloaded off-site snapshot into a **separate directory and instance**. Preserve the original snapshot and environment settings. First run the read-only verification above. Boot the separate instance using a distinct `DB_PATH`, port and URL, no real email/SMS/Stripe credentials and a designated test admin account. Opening a migrated copy can create pre-migration snapshots; allocate enough space.
+
+Open a known wedding, receipt history, saved form answers, a signed agreement and its attached document. Open an inspection photo and confirm camping/readiness notes and damage-deposit history. Check pending signatures/forms and the assigned-event login. Compare record counts and amounts with the original snapshot. Record elapsed recovery time and any missing external configuration. Automated tests demonstrate synthetic snapshot recovery; a real bucket download and host restoration remain to be demonstrated.
+
+## Production rollback
+
+Stop writes and stop the app before replacing a database. Retain the current database **and its WAL/SHM sidecars** together as a rollback set; never copy only the live `.db` while writes continue. Restore a verified snapshot into the stopped instance, use the matching application revision and retain the required secrets and environment configuration. Restart, verify integrity and the representative records, then reopen writes.
+
+Do not blindly run an old application against a new receipt ledger: an old app could calculate money from obsolete paid flags or offer destructive actions. If returning to an old release, use a matching pre-upgrade database and reconcile any transactions recorded after that snapshot. Never delete real data with the demo reset command.
+
+---
+
+# Historical hosting notes
+
 # Deploying the Rustic Retreat CRM
 
 The CRM and the contract e-signing are one application — there is no separate
 e-sign service to run or connect. Deploying this repo deploys both.
 
-This app is **not** connected to the public wedding website. It is a private
-staff tool plus a couple-facing portal, and nothing here reads or writes the
-marketing site.
+The app provides website enquiry, booking-request and public availability endpoints.
+The marketing site must be configured to call them with an allowed origin. The
+couple portal remains disabled by default; public signing, proposals and private
+form links operate separately from staff login.
 
 ---
 
@@ -192,7 +232,7 @@ npm run dev
 ```
 
 Client on `http://localhost:5173`, API on `http://localhost:3001`.
-Log in with `admin@rusticretreat.com` / `admin123`.
+Set `ADMIN_EMAIL_LOGIN` and a unique `ADMIN_BOOTSTRAP_PASSWORD` (at least 12 characters), then remove the bootstrap variable after use.
 
 The persistence guard only applies when `NODE_ENV=production`, so local
 development uses `server/rusticretreat.db` as before.

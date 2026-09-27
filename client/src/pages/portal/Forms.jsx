@@ -36,10 +36,10 @@ export default function Forms() {
     if (missing.length) return toast.error(`Please answer: ${missing[0].label}`)
     setSubmitting(true)
     try {
-      await getCoupleAxios().post(`/api/portal/forms/${active.assignment.id}`, { answers })
+      await getCoupleAxios().post(`/api/portal/forms/${active.assignment.id}`, { answers, revision: active.assignment.revision })
       toast.success('Thank you — your answers were saved!')
       setActive(null); load()
-    } catch { toast.error('Could not submit') }
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not submit') }
     finally { setSubmitting(false) }
   }
 

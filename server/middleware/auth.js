@@ -67,7 +67,10 @@ function authenticateToken(req, res, next) {
     if (!user.userId) {
       return res.status(403).json({ error: 'Staff access required' });
     }
-    req.user = user;
+    const account = require('../db').prepare('SELECT role, session_version, access_scope, name, email FROM users WHERE id = ?').get(user.userId);
+    if (!account || (user.session_version || 0) !== account.session_version) return res.status(401).json({ error: 'Please sign in again', session_expired: true });
+    if(account.access_scope==='operations' && !/^\/api\/(operations(?:\/|$)|auth\/(me|staff|change-password)(?:\?|$))/.test(req.originalUrl))return res.status(403).json({error:'This login has access to assigned event operations only'});
+    req.user = { ...user, role: account.role, access_scope:account.access_scope, name:account.name, email:account.email };
     next();
   } catch (err) {
     // 401, not 403: the token is unusable, so the caller is not authenticated at
@@ -117,6 +120,12 @@ function authenticateAny(req, res, next) {
     const decoded = jwt.verify(token, JWT_SECRET);
     if (!decoded.userId && !decoded.coupleId) {
       return res.status(403).json({ error: 'Invalid token' });
+    }
+    if (decoded.userId) {
+      const account = require('../db').prepare('SELECT role, session_version, access_scope, name, email FROM users WHERE id = ?').get(decoded.userId);
+      if (!account || (decoded.session_version || 0) !== account.session_version) return res.status(401).json({ error: 'Please sign in again', session_expired: true });
+      if(account.access_scope==='operations')return res.status(403).json({error:'This login has access to assigned event operations only'});
+      decoded.role = account.role;
     }
     req.auth = decoded;
     next();

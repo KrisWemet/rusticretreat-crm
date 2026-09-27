@@ -10,7 +10,7 @@ const http = require('http');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-fu-'));
 process.env.DB_PATH = path.join(tmp, 'test.db');
 process.env.JWT_SECRET = 'test-secret-followup';
-process.env.NODE_ENV = 'test';
+process.env.NODE_ENV = 'production';
 process.env.RESEND_API_KEY = 're_test';
 process.env.ADMIN_EMAIL = 'venue@test.invalid';
 process.env.BASE_URL = 'https://crm.example.test';
@@ -43,7 +43,7 @@ test.before(async () => {
   app.use('/api/inquire', require('../routes/inquire'));
   await new Promise(r => { server = app.listen(0, () => { base = `http://127.0.0.1:${server.address().port}`; r(); }); });
 });
-test.after(() => { server.close(); stub.close(); db.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
+test.after(async () => { await require('../services/email').waitForIdle(); server?.close(); stub.close(); db.close(); fs.rmSync(tmp, { recursive: true, force: true }); });
 
 const call = async (method, url, body, auth = staff) => {
   const res = await fetch(base + url, {
@@ -231,6 +231,8 @@ test('if the date was taken meanwhile, the signatures stand and staff get a task
   db.prepare("INSERT INTO bookings (couple_id, event_date, package_name) VALUES (?, '2033-07-01', '3-Day Weekend')").run(rival);
   const r = await signAs(cid, 3, 'Ben');
   assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.booking_conflict,true);assert.equal(r.body.reservation_confirmed,false);
+  assert.notEqual(db.prepare('SELECT status FROM couples WHERE id=?').get(id).status,'booked');
   assert.equal(db.prepare('SELECT status FROM contracts WHERE id = ?').get(cid).status, 'signed');
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM bookings WHERE couple_id = ?').get(id).n, 0);
   assert.ok(db.prepare("SELECT 1 FROM tasks WHERE couple_id = ? AND title = 'Date clash on a signed contract'").get(id));

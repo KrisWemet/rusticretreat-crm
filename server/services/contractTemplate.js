@@ -45,6 +45,11 @@ function getPacket(key) {
   return { ...p, documents: p.documents.map(k => TEMPLATES[k]) };
 }
 
+function packetFor(contract) {
+  if (contract.packet_snapshot) return JSON.parse(contract.packet_snapshot);
+  return getPacket(contract.template_key);
+}
+
 function listPackets() {
   return Object.values(PACKETS).map(p => ({
     key: p.key,
@@ -287,6 +292,7 @@ function packageLabel(packet, values) {
 }
 
 module.exports = {
+  packetFor,
   TEMPLATES, PACKETS, DEFAULT_PACKET,
   getPacket, listPackets,
   collectFields, initialsBlocks, defaultValues,

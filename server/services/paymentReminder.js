@@ -17,7 +17,7 @@ async function checkAndSendReminders() {
       AND c.email IS NOT NULL
       AND c.status != 'cancelled'
       AND c.archived_at IS NULL
-  `).all();
+  `).all().map(require('./ledger').invoiceView);
 
   let sent = 0;
   let failed = 0;
@@ -37,7 +37,7 @@ async function checkAndSendReminders() {
       coupleId: invoice.couple_id,
       coupleNames: `${invoice.partner1_name} & ${invoice.partner2_name}`,
       description: invoice.description,
-      amount: invoice.amount,
+      amount: invoice.balance,
       dueDate: dueDate.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }),
       daysUntilDue,
     });

@@ -4,6 +4,14 @@ Last updated: 27 September 2026. Written so a new chat can pick up where the las
 
 This file lives in the live CRM repo, `KrisWemet/rusticretreat-crm`, since 27 Sep 2026. It used to live in the old repo `KrisWemet/rustic-retreat-crm` (with a hyphen), which now only points here. Keep it up to date in this repo.
 
+## Completion candidate prepared for review
+
+Branch `codex/crm-completion` contains the additional records, payments and operating-workflow improvements described in `CRM_COMPLETION.md`. It incorporates the latest help-and-guides update. It has not been deployed by this task; the deployment descriptions later in this document remain historical.
+
+Partial receipts now use an immutable ledger; use a refund or allocation correction to fix received money. Damage deposits are separate. Optional holds expire, and creating a reservation consumes its hold. Ceremony and stay dates stay separate. Event operations covers preparation, nightly camping, inspection photos, reusable tasks, reviewed due-date changes and event staff assignment. Password/access changes revoke old sessions. Standard agreements retain their issued packet; signed or locked records cannot be erased.
+
+The core flows were tested with synthetic data and provider stubs. Live email, SMS, Stripe, S3 recovery and the owner’s timed usability rehearsal remain release acceptance work. Keep the couple portal disabled until the owner approves it.
+
 ## The business
 
 - **Venue:** Rustic Retreat, an off-grid wedding venue at Lac La Nonne, Alberta.

@@ -55,7 +55,7 @@ function consentStatement(signerName, contractTitle, docTitles) {
 // its own single title when it is one of the older free-text contracts.
 function docTitlesFor(contract) {
   if (!contract.template_key) return [contract.title];
-  const packet = tpl.getPacket(contract.template_key);
+  const packet = tpl.packetFor(contract);
   return packet ? packet.documents.map(d => d.title) : [contract.title];
 }
 
@@ -254,6 +254,7 @@ router.post('/', authenticateToken, (req, res) => {
       guest_count || null, ceremony_location || null, reception_location || null,
       package_name || null, total_price || null,
     );
+    db.prepare('UPDATE contracts SET packet_snapshot = ?, check_in = ?, check_out = ? WHERE id = ?').run(packet ? JSON.stringify(packet) : null, req.body.check_in || null, req.body.check_out || null, result.lastInsertRowid);
     // Seed the client-detail fields the venue fills in. The CRM already holds
     // these from the enquiry, and retyping a couple's own email into their
     // contract is both wasted work and a chance to get the signing address
@@ -268,9 +269,16 @@ router.post('/', authenticateToken, (req, res) => {
           ...tpl.defaultValues(packet, 'venue'),
           client1_name:  couple.partner1_name,
           client2_name:  couple.partner2_name,
-          client1_email: couple.email,
+          client1_email: couple.email?.startsWith('phone:') ? null : couple.email,
           client2_email: couple.partner2_email,
           client1_phone: couple.phone,
+          event_date: wedding_date || couple.wedding_date,
+          setup_date: req.body.check_in,
+          teardown_date: req.body.check_out,
+          event_type: 'Wedding',
+          package: /5[ -]?day/i.test(package_name || '') ? '5-day' : /3[ -]?day/i.test(package_name || '') ? '3-day' : null,
+          total_package_fee: total_price == null ? null : String(total_price),
+          agreement_date: require('../services/schedule').albertaToday(),
         };
         tpl.saveValues(
           result.lastInsertRowid,
@@ -423,6 +431,8 @@ router.get('/:id/files/:fileId', authenticateToken, (req, res) => {
 });
 
 router.delete('/:id/files/:fileId', authenticateToken, (req, res) => {
+  const contract = db.prepare('SELECT status, locked_at FROM contracts WHERE id = ?').get(req.params.id);
+  if (contract && (contract.status === 'signed' || contract.locked_at)) return res.status(409).json({ error: 'Files on signed agreements are retained.' });
   db.prepare('DELETE FROM contract_files WHERE id = ? AND contract_id = ?').run(req.params.fileId, req.params.id);
   res.json({ success: true });
 });
@@ -434,14 +444,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
   try {
     const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
     if (!contract) return res.status(404).json({ error: 'Not found' });
-    if (contract.status === 'signed') {
-      if (req.user?.role !== 'admin') {
-        return res.status(403).json({ error: 'A signed contract can only be deleted by an admin.' });
-      }
-      if (req.query.confirm !== 'signed') {
-        return res.status(409).json({ error: 'This contract is signed. Confirm to delete it permanently.', needs_confirm: true });
-      }
-    }
+    if (contract.status === 'signed' || contract.locked_at) return res.status(409).json({ error: 'Signed agreements are retained. Archive the couple record instead.' });
     const { content, signature_data, ...snapshot } = contract;
     db.prepare('DELETE FROM contracts WHERE id = ?').run(contract.id);
     logActivity(req, { action: 'contract.deleted', entity: 'contract', entityId: contract.id, coupleId: contract.couple_id,
@@ -463,7 +466,7 @@ router.get('/:id/template', authenticateToken, (req, res) => {
     if (!contract.template_key) {
       return res.status(400).json({ error: 'This is a free-text contract, not a template', not_template: true });
     }
-    const packet = tpl.getPacket(contract.template_key);
+    const packet = tpl.packetFor(contract);
     if (!packet) return res.status(500).json({ error: `Template "${contract.template_key}" is no longer available` });
 
     const { values, meta } = tpl.getValues(contract.id);
@@ -511,7 +514,7 @@ router.put('/:id/fields', authenticateToken, (req, res) => {
         locked: true,
       });
     }
-    const packet = tpl.getPacket(contract.template_key);
+    const packet = tpl.packetFor(contract);
     if (!packet) return res.status(500).json({ error: 'Template no longer available' });
 
     const { written, ignored } = tpl.saveValues(contract.id, req.body?.fields, 'venue', packet);
@@ -552,10 +555,11 @@ router.put('/:id/fields', authenticateToken, (req, res) => {
     // learning how to walk a template.
     const label = tpl.packageLabel(packet, values);
     const total = parseFloat(String(values.total_package_fee || '').replace(/[^0-9.]/g, ''));
-    db.prepare('UPDATE contracts SET wedding_date = ?, package_name = ?, total_price = ? WHERE id = ?')
+    db.prepare('UPDATE contracts SET wedding_date = ?, package_name = ?, total_price = ?, check_in = ?, check_out = ? WHERE id = ?')
       .run(values.event_date || contract.wedding_date || null,
            label || contract.package_name || null,
            Number.isFinite(total) ? total : contract.total_price,
+           values.setup_date || contract.check_in || null, values.teardown_date || contract.check_out || null,
            contract.id);
 
     res.json({
@@ -684,7 +688,7 @@ function renderContractHtml(c) {
 // every already-signed agreement still prints exactly as it did.
 function renderAnyContract(c) {
   if (!c.template_key) return renderContractHtml(c);
-  const packet = tpl.getPacket(c.template_key);
+  const packet = tpl.packetFor(c);
   if (!packet) return renderContractHtml(c);
   const { values } = tpl.getValues(c.id);
   return renderPacketHtml({
@@ -762,11 +766,12 @@ router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(contract.couple_id);
     if (!couple) return res.status(404).json({ error: 'Couple not found' });
 
+    if (!couple.partner1_name || !couple.partner2_name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(couple.email || '')) return res.status(400).json({ error: 'Add both signer names and a valid primary email before signing.' });
     // Both partners sign from their own address so the two signatures are
     // independently attributable — that is the point of collecting them
     // separately. Refuse before locking rather than after: once locked the
     // contract cannot be edited, so discovering the gap later means reissuing it.
-    if (!couple.partner2_email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(couple.partner2_email || '')) {
       return res.status(400).json({
         error: `${couple.partner2_name} has no email address on file. ` +
                'Add one to the couple before signing — each partner signs from their own address.',
@@ -781,6 +786,10 @@ router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
       });
     }
 
+    if (contract.check_in) {
+      try { require('../services/bookingRules').assertCeremonyDate(contract.wedding_date, { event_date: contract.check_in, end_date: contract.check_out, package_name: contract.package_name }); }
+      catch (err) { return res.status(err.status || 400).json({ error: err.message }); }
+    }
     // Countersigning locks the terms and starts the couple's signing chain, and
     // the final signature books the date. Refuse now if another couple already
     // holds it, rather than after two people have signed. The couple's own
@@ -788,7 +797,8 @@ router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
     if (contract.wedding_date) {
       try {
         assertBookable(db, {
-          event_date: contract.wedding_date,
+          event_date: contract.check_in || contract.wedding_date,
+          end_date: contract.check_out,
           package_name: contract.package_name,
           guest_count: contract.guest_count,
         }, { excludeCoupleId: contract.couple_id, checkPackage: false });
@@ -802,7 +812,7 @@ router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
     // forever on a document the couple is about to be legally bound by, and the
     // lock is one-way — so this is checked before it happens, not after.
     if (contract.template_key) {
-      const packet = tpl.getPacket(contract.template_key);
+      const packet = tpl.packetFor(contract);
       if (!packet) return res.status(500).json({ error: 'Template no longer available' });
       const { values } = tpl.getValues(contract.id);
       const missing = tpl.missingRequired(packet, values, 'venue');
@@ -842,6 +852,7 @@ router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
       `).run(signature_data, ip, ua,
              consentStatement(venueName, contract.title, docTitlesFor(contract)), contract.id);
 
+      if (contract.template_key && !contract.packet_snapshot) db.prepare('UPDATE contracts SET packet_snapshot = ? WHERE id = ?').run(JSON.stringify(tpl.packetFor(contract)), contract.id);
       // locked_at is what the edit endpoint checks. Once the venue has committed
       // to these terms the couple must be signing the same document we did.
       db.prepare(`
@@ -921,7 +932,7 @@ router.get('/sign/:token', signLimiter, (req, res) => {
     const contract = db.prepare(`
       SELECT c.id, c.title, c.content, c.status, c.signer_name, c.signed_at,
              c.signing_expires_at, c.viewed_at, c.locked_at,
-             c.template_key, c.template_version, c.client_fields_locked_at,
+             c.template_key, c.template_version, c.packet_snapshot, c.client_fields_locked_at,
              CASE WHEN c.signing_expires_at IS NOT NULL
                        AND datetime('now') > c.signing_expires_at
                   THEN 1 ELSE 0 END AS is_expired,
@@ -982,7 +993,7 @@ router.get('/sign/:token', signLimiter, (req, res) => {
     // work this particular signer still owes.
     let templatePayload = null;
     if (contract.template_key) {
-      const packet = tpl.getPacket(contract.template_key);
+      const packet = tpl.packetFor(contract);
       if (packet) {
         const { values } = tpl.getValues(contract.id);
         // Client 1 fills the couple's details in; Client 2 reads what Client 1
@@ -1097,7 +1108,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
     // submission: it looks executed and is not.
     let packet = null;
     if (contract.template_key && signer) {
-      packet = tpl.getPacket(contract.template_key);
+      packet = tpl.packetFor(contract);
       if (!packet) return res.status(500).json({ error: 'Template no longer available' });
 
       const canEditFields = signer.role === 'partner1' && !contract.client_fields_locked_at;
@@ -1166,16 +1177,6 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       `).run(signer_name, contract.email, signature_data, signer_ip,
              user_agent, consent_text, contract.id);
 
-      // Update couple: status → booked, and sync event details from contract
-      db.prepare(`
-        UPDATE couples SET
-          status = CASE WHEN status IN ('lead','inquiry') THEN 'booked' ELSE status END,
-          pipeline_stage = CASE WHEN status IN ('lead','inquiry','booked') THEN 'booked' ELSE pipeline_stage END,
-          wedding_date   = COALESCE(?, wedding_date),
-          venue_package  = COALESCE(?, venue_package)
-        WHERE id = ?
-      `).run(contract.wedding_date || null, contract.package_name || null, contract.couple_id);
-
       if (!contract.wedding_date) return;
 
       // The date was checked when the venue signed, but weeks can pass before
@@ -1183,7 +1184,8 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       // still stand; the booking is left for staff to sort out, with a task.
       try {
         assertBookable(db, {
-          event_date: contract.wedding_date,
+          event_date: contract.check_in || contract.wedding_date,
+          end_date: contract.check_out,
           package_name: contract.package_name,
           guest_count: contract.guest_count,
         }, { excludeCoupleId: contract.couple_id, checkPackage: false });
@@ -1197,8 +1199,19 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
         return;
       }
 
+      // Update couple: status → booked, and sync event details from contract
+      db.prepare(`
+        UPDATE couples SET
+          status = CASE WHEN status IN ('lead','inquiry') THEN 'booked' ELSE status END,
+          pipeline_stage = CASE WHEN status IN ('lead','inquiry','booked') THEN 'booked' ELSE pipeline_stage END,
+          wedding_date   = COALESCE(?, wedding_date),
+          venue_package  = COALESCE(?, venue_package)
+        WHERE id = ?
+      `).run(contract.wedding_date || null, contract.package_name || null, contract.couple_id);
+
       // Upsert booking with event details from the signed contract
-      const endDate = defaultEndDate(contract.wedding_date, contract.package_name);
+      const checkIn = contract.check_in || contract.wedding_date;
+      const endDate = contract.check_out || defaultEndDate(checkIn, contract.package_name);
       const existing = db.prepare(
         'SELECT id FROM bookings WHERE couple_id = ? ORDER BY id LIMIT 1'
       ).get(contract.couple_id);
@@ -1208,7 +1221,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
         db.prepare(`
           UPDATE bookings SET
             event_date          = COALESCE(?, event_date),
-            end_date            = COALESCE(end_date, ?),
+            end_date            = COALESCE(?, end_date),
             start_time          = COALESCE(?, start_time),
             end_time            = COALESCE(?, end_time),
             guest_count         = COALESCE(?, guest_count),
@@ -1218,7 +1231,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
             total_price         = COALESCE(?, total_price)
           WHERE id = ?
         `).run(
-          contract.wedding_date, endDate, contract.start_time, contract.end_time,
+          checkIn, endDate, contract.start_time, contract.end_time,
           contract.guest_count, contract.ceremony_location, contract.reception_location,
           contract.package_name, contract.total_price, existing.id,
         );
@@ -1229,7 +1242,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
              ceremony_location, reception_location, package_name, total_price)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-          contract.couple_id, contract.wedding_date, endDate,
+          contract.couple_id, checkIn, endDate,
           contract.start_time || null, contract.end_time || null,
           contract.guest_count || null, contract.ceremony_location || null,
           contract.reception_location || null, contract.package_name || null,
@@ -1237,6 +1250,8 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
         ).lastInsertRowid;
       }
 
+      db.prepare("UPDATE date_holds SET released_at=datetime('now') WHERE couple_id=? AND released_at IS NULL").run(contract.couple_id);
+      require('../services/operations').ensureTasks(contract.couple_id, contract.wedding_date);
       // A couple booked by contract alone (no accepted proposal) would have no
       // payment schedule. Give them the standard one — deposit due now, 25% at
       // 180 days before check-in, the balance at 90 — which staff can edit.
@@ -1244,7 +1259,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       if (!hasInvoices && Number(contract.total_price) > 0) {
         const insertInvoice = db.prepare(
           'INSERT INTO invoices (couple_id, booking_id, description, amount, due_date) VALUES (?, ?, ?, ?, ?)');
-        for (const p of buildPaymentSchedule({ total: Number(contract.total_price), checkIn: contract.wedding_date })) {
+        for (const p of buildPaymentSchedule({ total: Number(contract.total_price), checkIn: contract.check_in || contract.wedding_date })) {
           insertInvoice.run(contract.couple_id, bookingId, p.label, p.amount, p.due_date);
         }
         scheduleCreated = true;
@@ -1317,7 +1332,9 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
     res.json({
       success: true,
       fully_signed: true,
-      message: 'Contract signed successfully!',
+      reservation_confirmed: !dateClash && !!contract.wedding_date,
+      booking_conflict: !!dateClash,
+      message: dateClash ? 'Your signatures are saved, but the requested dates could not be reserved. Rustic Retreat will contact you to resolve the dates.' : 'Contract signed successfully!',
       couple_name: coupleNames,
       portal_enabled: PORTAL_ENABLED,
       portal_email: PORTAL_ENABLED ? contract.email : null,
@@ -1358,177 +1375,29 @@ router.get('/sign/:token/print', signLimiter, (req, res) => {
 
 // ── Admin: generate contract pre-filled from an accepted proposal ─────────────
 router.post('/from-proposal/:proposalId', authenticateToken, (req, res) => {
-  try {
-    const proposal = db.prepare(`
-      SELECT p.*, c.partner1_name, c.partner2_name, c.email AS couple_email
-      FROM proposals p JOIN couples c ON c.id = p.couple_id WHERE p.id = ?
-    `).get(req.params.proposalId);
-    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
-
-    const items = db.prepare(
-      'SELECT * FROM proposal_items WHERE proposal_id = ? ORDER BY order_index, id'
-    ).all(proposal.id);
-
-    const fmtCAD = (n) => `$${Number(n || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD`;
-    const fmtDate = (d) => d
-      ? new Date(d + 'T00:00:00').toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-      : 'TBD';
-
-    const longDate = (iso) => new Date(iso + 'T00:00:00')
-      .toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
-    // Same instalments as the invoices created on acceptance.
-    const scheduleLines = buildPaymentSchedule({
-      total: proposal.total,
-      checkIn: proposal.event_date,
-      depositDue: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
-      depositPct: proposal.deposit_pct,
-    }).map(p => `   ${p.label}:  ${fmtCAD(p.amount)} — due by ${p.due_date ? longDate(p.due_date) : 'TBD (set once the date is confirmed)'}`).join('\n');
-
-    // Build itemized section
-    const byKind = { package: [], addon: [], custom: [], discount: [] };
-    for (const it of items) byKind[it.kind]?.push(it);
-
-    let itemLines = '';
-    if (byKind.package.length) {
-      itemLines += '\n   PACKAGE';
-      for (const it of byKind.package) {
-        itemLines += `\n   ${it.label}${it.description ? ' — ' + it.description : ''}: ${fmtCAD(it.amount)}`;
-      }
-    }
-    if (byKind.addon.length) {
-      itemLines += '\n\n   ADD-ONS';
-      for (const it of byKind.addon) {
-        itemLines += `\n   ${it.label}${it.quantity > 1 ? ' × ' + it.quantity : ''}: ${fmtCAD(it.amount)}`;
-      }
-    }
-    if (byKind.custom.length) {
-      itemLines += '\n\n   OTHER';
-      for (const it of byKind.custom) {
-        itemLines += `\n   ${it.label}: ${fmtCAD(it.amount)}`;
-      }
-    }
-    if (byKind.discount.length) {
-      itemLines += '\n\n   DISCOUNTS';
-      for (const it of byKind.discount) {
-        itemLines += `\n   ${it.label}: -${fmtCAD(Math.abs(it.amount))}`;
-      }
-    }
-
-    const endDateLine = proposal.end_date && proposal.end_date !== proposal.event_date
-      ? `\n   Check-Out:     ${fmtDate(proposal.end_date)}` : '';
-
-    const contractContent = `VENUE SERVICES AGREEMENT
-Rustic Retreat Weddings & Events
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PARTIES
-
-Venue Provider: Rustic Retreat Weddings & Events ("the Venue")
-  Location: Alberta, Canada
-
-Clients: ${proposal.partner1_name} and ${proposal.partner2_name} ("the Clients")
-  Email: ${proposal.couple_email || ''}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. EVENT DETAILS
-
-   Check-In:      ${fmtDate(proposal.event_date)}${endDateLine}
-   Package:       ${proposal.package_name || 'As quoted'}
-   Guest Count:   ${proposal.guest_count ? proposal.guest_count + ' guests (maximum 80 permitted)' : 'TBD (maximum 80 permitted)'}
-   Venue:         Rustic Retreat — 65-acre off-grid solar property, Alberta
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-2. SERVICES AND PRICING
-${itemLines}
-
-   ─────────────────────────────────────────
-   Subtotal:      ${fmtCAD(proposal.subtotal)}
-   GST (5%):      ${fmtCAD(proposal.tax)}
-   ─────────────────────────────────────────
-   TOTAL:         ${fmtCAD(proposal.total)}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-3. PAYMENT SCHEDULE
-
-${scheduleLines}
-
-   Payments accepted by Interac e-Transfer to ${ETRANSFER_EMAIL}${PORTAL_ENABLED ? ' or online through the client portal' : ''}.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-4. CANCELLATION POLICY
-
-   a) More than 180 days before event: deposit is forfeited, no further charges.
-   b) 91–180 days before event: 50% of the total contract value is forfeited.
-   c) 90 days or fewer before event: 100% of the total contract value is forfeited.
-   d) Venue Cancellation: All payments refunded in full within 14 business days.
-   e) Force Majeure: If the event cannot proceed due to wildfire evacuation orders, extreme weather making the venue inaccessible, or provincial emergency orders, the Venue will reschedule to a mutually agreeable date at no additional fee.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-5. VENUE POLICIES
-
-   a) Guest Limit — Maximum 80 guests including the wedding party. Any increase requires written approval and may incur additional fees.
-
-   b) Exclusive Use — The full 65-acre property is reserved exclusively for the Clients during the booked package period. No other events will be hosted.
-
-   c) Noise & Quiet Hours — Amplified music must end by midnight on the wedding night. All other nights: 11 PM cutoff. Acoustic music may continue at a reasonable outdoor volume.
-
-   d) Off-Grid Solar Power — Rustic Retreat operates entirely on solar power. Clients must disclose all electrical requirements in advance. Generator rentals are available as an add-on and must be arranged before the event.
-
-   e) Alcohol (AGLC) — Clients are responsible for obtaining an Alberta Gaming, Liquor & Cannabis (AGLC) Special Event Licence where required. All bar service must comply with Alberta liquor laws.
-
-   f) Fireworks & Open Flame — Fireworks, fire pits, and similar open flames are permitted only with written approval and must comply with current Alberta fire restrictions. Fireworks must be coordinated through the Venue.
-
-   g) Pets — Well-behaved dogs are welcome with advance written notice and the Pet Cabin add-on. No other animals without written approval. Pets are not permitted in the Bridal Suite.
-
-   h) Vendors — Clients may bring licensed and insured vendors. All vendors must comply with Venue policies and carry their own liability insurance. There is no commercial kitchen on-site.
-
-   i) Décor — Nothing may be nailed, screwed, or stapled to any structure. Loose glitter and confetti are prohibited. All items must be cleared from the property by checkout.
-
-   j) Damage — The Clients are responsible for damage caused by Clients, guests, or vendors beyond normal wear and tear. A pre-event walk-through will be completed to document existing conditions.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-6. GENERAL TERMS
-
-   a) Governing Law — This Agreement is governed by the laws of the Province of Alberta, Canada, and the parties attorn to the exclusive jurisdiction of the Alberta courts.
-
-   b) Amendments — Any changes to this Agreement must be in writing and agreed to by both parties.
-
-   c) Entire Agreement — This Agreement, together with the accepted Proposal #${proposal.id} (${proposal.title}), constitutes the entire agreement between the parties and supersedes all prior discussions.
-
-   d) Electronic Signature — An electronic signature applied through the Venue's online portal is legally binding under Alberta's Electronic Transactions Act, SA 2001, c E-5.5.
-
-   e) Severability — If any provision is found unenforceable, it will be severed and the remaining provisions will continue in full effect.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-By signing below, the Clients agree to the full terms of this Agreement.`;
-
-    const title = `Event Services Agreement — ${proposal.partner1_name} & ${proposal.partner2_name}${proposal.event_date ? ' · ' + proposal.event_date : ''}`;
-
-    const result = db.prepare(`
-      INSERT INTO contracts (couple_id, title, content, wedding_date, package_name, guest_count, total_price)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      proposal.couple_id, title, contractContent,
-      proposal.event_date || null, proposal.package_name || null,
-      proposal.guest_count || null, proposal.total || null,
-    );
-
-    const contract = db.prepare(`
-      SELECT c.*, co.partner1_name, co.partner2_name, co.email AS couple_email
-      FROM contracts c JOIN couples co ON co.id = c.couple_id WHERE c.id = ?
-    `).get(result.lastInsertRowid);
-    res.status(201).json(contract);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  const p = db.prepare('SELECT * FROM proposals WHERE id = ?').get(req.params.proposalId);
+  if (!p) return res.status(404).json({ error: 'Proposal not found' });
+  const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(p.couple_id);
+  const ceremonyDate = couple.wedding_date || p.event_date;
+  try { require('../services/bookingRules').assertCeremonyDate(ceremonyDate,{event_date:p.event_date,end_date:p.end_date,package_name:p.package_name}); } catch(e) {return res.status(e.status||400).json({error:e.message})}
+  const year = Number((p.event_date || '').slice(0,4));
+  const definition = Object.values(tpl.PACKETS).find(x => x.season === year);
+  if (!definition) return res.status(400).json({ error: `Select a date in a supported contract season before preparing the agreement (${Object.values(tpl.PACKETS).map(x => x.season).join(', ')}).` });
+  const packet = tpl.getPacket(definition.key);
+  const title = `Venue Rental Agreement — ${[couple.partner1_name, couple.partner2_name].filter(Boolean).join(' & ')}`;
+  const result = db.transaction(() => {
+    const id = db.prepare(`INSERT INTO contracts (couple_id, title, content, template_key, template_version, packet_snapshot, wedding_date, check_in, check_out, package_name, guest_count, total_price)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(p.couple_id, title, packet.title, packet.key, packet.documents[0].version, JSON.stringify(packet), ceremonyDate, p.event_date, p.end_date, p.package_name, p.guest_count, p.total).lastInsertRowid;
+    const packageValue = /5[ -]?day/i.test(p.package_name || '') ? '5-day' : /3[ -]?day/i.test(p.package_name || '') ? '3-day' : null;
+    const values = { ...tpl.defaultValues(packet,'venue'), client1_name: couple.partner1_name, client2_name: couple.partner2_name,
+      client1_email: couple.email?.startsWith('phone:') ? null : couple.email, client2_email: couple.partner2_email, client1_phone: couple.phone,
+      agreement_date: require('../services/schedule').albertaToday(), event_date: ceremonyDate, setup_date: p.event_date, teardown_date: p.end_date,
+      event_type: 'Wedding', package: packageValue, total_package_fee: String(p.total || '') };
+    tpl.saveValues(id, Object.fromEntries(Object.entries(values).filter(([,v]) => v)), 'venue', packet);
+    logActivity(req, { action: 'contract.created', entity: 'contract', entityId: id, coupleId: p.couple_id, summary: 'Prepared rental agreement and Schedule A from proposal; review access dates and pricing before signing' });
+    return db.prepare('SELECT * FROM contracts WHERE id = ?').get(id);
+  })();
+  res.status(201).json(result);
 });
 
 module.exports = router;

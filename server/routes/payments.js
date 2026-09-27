@@ -1,17 +1,17 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const db = require('../db');
-const { authenticateCouple } = require('../middleware/auth');
-const invoices = require('./invoices');
-const { ETRANSFER_EMAIL } = require('../venue');
+const db = require("../db");
+const { authenticateCouple } = require("../middleware/auth");
+const invoices = require("./invoices");
+const { ETRANSFER_EMAIL } = require("../venue");
 
 const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
-const stripe = STRIPE_SECRET ? require('stripe')(STRIPE_SECRET) : null;
+const BASE_URL = process.env.BASE_URL || "http://localhost:5173";
+const stripe = STRIPE_SECRET ? require("stripe")(STRIPE_SECRET) : null;
 
 // Is card payment available? The portal uses this to show/hide the Pay button.
-router.get('/config', (req, res) => {
+router.get("/config", (req, res) => {
   res.json({
     enabled: !!stripe,
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
@@ -22,36 +22,61 @@ router.get('/config', (req, res) => {
 });
 
 // ── Couple: start a Stripe Checkout session for one of their invoices ─────────
-router.post('/checkout/:invoiceId', authenticateCouple, async (req, res) => {
+router.post("/checkout/:invoiceId", authenticateCouple, async (req, res) => {
   if (!stripe) {
-    return res.status(503).json({ error: 'Online card payment is not enabled. Please use Interac e-Transfer.' });
+    return res
+      .status(503)
+      .json({
+        error:
+          "Online card payment is not enabled. Please use Interac e-Transfer.",
+      });
   }
-  const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.invoiceId);
-  if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
-  if (invoice.couple_id !== req.couple.coupleId) return res.status(403).json({ error: 'Not your invoice' });
-  if (invoice.paid) return res.status(400).json({ error: 'This invoice is already paid' });
+  const invoice = require("../services/ledger").invoiceView(
+    db.prepare("SELECT * FROM invoices WHERE id = ?").get(req.params.invoiceId),
+  );
+  if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+  if (invoice.couple_id !== req.couple.coupleId)
+    return res.status(403).json({ error: "Not your invoice" });
+  if (invoice.paid)
+    return res.status(400).json({ error: "This invoice is already paid" });
 
   try {
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card'],
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency: 'cad',
-          unit_amount: Math.round(invoice.amount * 100),
-          product_data: { name: `Rustic Retreat — ${invoice.description}` },
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "cad",
+            unit_amount: Math.round(invoice.balance * 100),
+            product_data: { name: `Rustic Retreat — ${invoice.description}` },
+          },
         },
-      }],
-      metadata: { invoice_id: String(invoice.id) },
+      ],
+      metadata: {
+        invoice_id: String(invoice.id),
+        invoice_amount_cents: String(Math.round(invoice.amount * 100)),
+      },
       success_url: `${BASE_URL}/portal/payments?paid=1`,
       cancel_url: `${BASE_URL}/portal/payments?cancelled=1`,
     });
-    db.prepare('UPDATE invoices SET stripe_session_id = ? WHERE id = ?').run(session.id, invoice.id);
+    db.prepare(
+      "INSERT INTO checkout_sessions(id,invoice_id,amount_cents,invoice_amount_cents) VALUES(?,?,?,?)",
+    ).run(
+      session.id,
+      invoice.id,
+      Math.round(invoice.balance * 100),
+      Math.round(invoice.amount * 100),
+    );
+    db.prepare("UPDATE invoices SET stripe_session_id = ? WHERE id = ?").run(
+      session.id,
+      invoice.id,
+    );
     res.json({ url: session.url });
   } catch (err) {
-    console.error('[stripe checkout error]', err.message);
-    res.status(500).json({ error: 'Could not start payment session' });
+    console.error("[stripe checkout error]", err.message);
+    res.status(500).json({ error: "Could not start payment session" });
   }
 });
 
@@ -65,23 +90,104 @@ function webhookHandler(req, res) {
   // Without a signing secret anyone could POST a forged checkout.session.completed
   // and zero out a real invoice, so fail closed instead of best-effort parsing.
   if (!STRIPE_WEBHOOK_SECRET) {
-    console.error('[stripe webhook] rejected: STRIPE_WEBHOOK_SECRET is not set');
+    console.error(
+      "[stripe webhook] rejected: STRIPE_WEBHOOK_SECRET is not set",
+    );
     return res.status(503).end();
   }
 
   let event;
-  const sig = req.headers['stripe-signature'];
+  const sig = req.headers["stripe-signature"];
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      STRIPE_WEBHOOK_SECRET,
+    );
   } catch (err) {
-    console.error('[stripe webhook signature]', err.message);
+    console.error("[stripe webhook signature]", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  if (event.type === 'checkout.session.completed') {
+  if (event.type === "checkout.session.completed") {
     const session = event.data.object;
     const invoiceId = session.metadata && session.metadata.invoice_id;
-    if (invoiceId) invoices.markInvoicePaid(invoiceId, true, 'Credit Card');
+    if (
+      session.payment_status === "paid" &&
+      (!invoiceId ||
+        session.currency !== "cad" ||
+        !db.prepare("SELECT 1 FROM invoices WHERE id=?").get(Number(invoiceId)))
+    ) {
+      db.prepare(
+        "INSERT OR IGNORE INTO unmatched_card_receipts(id,amount_cents,currency,invoice_hint,reason) VALUES(?,?,?,?,?)",
+      ).run(
+        session.id,
+        session.amount_total,
+        session.currency || "unknown",
+        invoiceId || null,
+        "Cannot allocate automatically: missing invoice or unsupported currency. Reconcile against the provider record.",
+      );
+      return res.json({ received: true, needs_review: true });
+    }
+    if (
+      invoiceId &&
+      session.payment_status === "paid" &&
+      session.currency === "cad"
+    ) {
+      const ledger = require("../services/ledger");
+      let expected = db
+        .prepare("SELECT * FROM checkout_sessions WHERE id=? AND invoice_id=?")
+        .get(session.id, Number(invoiceId));
+      const current = ledger.invoiceView(
+        db.prepare("SELECT * FROM invoices WHERE id=?").get(Number(invoiceId)),
+      );
+      if (!expected && current) {
+        db.prepare(
+          "INSERT INTO checkout_sessions(id,invoice_id,amount_cents,invoice_amount_cents,status,error) VALUES(?,?,?,?,'review','Legacy checkout without a stored invoice snapshot; review before allocating')",
+        ).run(
+          session.id,
+          Number(invoiceId),
+          session.amount_total,
+          ledger.cents(current.amount),
+        );
+        return res.json({ received: true, needs_review: true });
+      }
+      const already = db
+        .prepare("SELECT 1 FROM payment_entries WHERE idempotency_key=?")
+        .get(`stripe:${session.id}`);
+      if (already) return res.json({ received: true, duplicate: true });
+      if (
+        !expected ||
+        !current ||
+        expected.amount_cents !== session.amount_total ||
+        expected.invoice_amount_cents !== ledger.cents(current.amount) ||
+        ledger.cents(current.balance) !== expected.amount_cents
+      ) {
+        if (expected)
+          db.prepare(
+            "UPDATE checkout_sessions SET status='review',amount_cents=?,error='Invoice or balance changed after checkout; reconcile the actual payment before allocating it' WHERE id=?",
+          ).run(session.amount_total, session.id);
+        console.error(
+          "[stripe] Received payment needs reconciliation",
+          session.id,
+        );
+        return res.json({ received: true, needs_review: true });
+      }
+      try {
+        ledger.record(Number(invoiceId), {
+          amount: session.amount_total / 100,
+          method: "Credit Card",
+          reference: session.id,
+          idempotency_key: `stripe:${session.id}`,
+        });
+        db.prepare(
+          "UPDATE checkout_sessions SET status='recorded',error=NULL WHERE id=?",
+        ).run(session.id);
+      } catch (err) {
+        console.error("[stripe payment record]", err.message);
+        return res.status(500).json({ error: "Could not record payment" });
+      }
+    }
   }
   res.json({ received: true });
 }

@@ -21,6 +21,7 @@ router.get('/public/:token', publicLimiter, (req, res) => {
     form: { title: full.form.title, description: full.form.description },
     couple: `${full.assignment.partner1_name} & ${full.assignment.partner2_name}`,
     status: full.assignment.status,
+    revision: full.assignment.revision,
     fields: full.fields.map(({ field_key, ...f }) => f),
   });
 });
@@ -28,15 +29,15 @@ router.get('/public/:token', publicLimiter, (req, res) => {
 router.post('/public/:token', publicLimiter, (req, res) => {
   const a = forms.assignmentForToken(req.params.token);
   if (!a) return res.status(404).json({ error: 'This link has expired or is no longer valid. Please ask Rustic Retreat for a new one.' });
-  const result = forms.saveAnswers(a, req.body.answers, { by: 'couple', complete: true });
-  if (!result.ok) return res.status(400).json({ error: result.error });
+  const result = forms.saveAnswers(a, req.body.answers, { by: 'couple', complete: req.body.complete !== false, revision: req.body.revision });
+  if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
   const full = forms.fullAssignment(a.id);
   // Tell staff a form came back; a mail failure never fails the couple's save.
-  Promise.resolve(email.sendFormCompletedAdmin({
+  if (req.body.complete !== false) Promise.resolve(email.sendFormCompletedAdmin({
     coupleNames: `${full.assignment.partner1_name} & ${full.assignment.partner2_name}`,
     formTitle: full.form.title,
   })).catch(() => {});
-  res.json({ success: true });
+  res.json({ success: true, revision: full.assignment.revision });
 });
 
 function getFullForm(id) {
@@ -162,9 +163,36 @@ router.get('/assignments/:assignmentId', authenticateToken, (req, res) => {
 router.put('/assignments/:assignmentId/responses', authenticateToken, (req, res) => {
   const a = db.prepare('SELECT * FROM form_assignments WHERE id = ?').get(req.params.assignmentId);
   if (!a) return res.status(404).json({ error: 'Assignment not found' });
-  const result = forms.saveAnswers(a, req.body.answers, { by: staffName(req), complete: req.body.complete !== false });
-  if (!result.ok) return res.status(400).json({ error: result.error });
+  const result = forms.saveAnswers(a, req.body.answers, { by: staffName(req), complete: req.body.complete !== false, revision: req.body.revision });
+  if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
   res.json(forms.fullAssignment(a.id));
+});
+
+// Staff explicitly review which answers update the operational record.
+router.post('/assignments/:assignmentId/apply', authenticateToken, (req, res) => {
+  const full = forms.fullAssignment(req.params.assignmentId);
+  if (!full) return res.status(404).json({ error: 'Assignment not found' });
+  if (Number(req.body.revision) !== full.assignment.revision) return res.status(409).json({ error: 'Answers have changed; reopen and review them again.' });
+  const selected = new Set((req.body.field_ids || []).map(Number));
+  const updates = full.fields.filter(f => selected.has(f.id) && forms.RECORD_FIELDS.includes(f.record_field) && f.value != null);
+  const booking = db.prepare('SELECT * FROM bookings WHERE couple_id = ? ORDER BY id DESC LIMIT 1').get(full.assignment.couple_id);
+  if (updates.some(f => f.record_field !== 'phone') && !booking) return res.status(409).json({ error: 'Create the booking before applying event details.' });
+  const guests = updates.find(f => f.record_field === 'guest_count');
+  try {
+    if (guests) require('../services/bookingRules').assertBookable(db, { ...booking, guest_count: Number(guests.value) }, { excludeBookingId: booking.id, checkPackage: false });
+    db.transaction(() => {
+      for (const f of updates) {
+        const table = f.record_field === 'phone' ? 'couples' : 'bookings';
+        const id = table === 'couples' ? full.assignment.couple_id : booking.id;
+        db.prepare(`UPDATE ${table} SET ${f.record_field} = ? WHERE id = ?`).run(f.value, id);
+      }
+      require('../services/activity').logActivity(req, { action: 'form.applied', entity: 'form', entityId: full.assignment.id, coupleId: full.assignment.couple_id, summary: 'Applied reviewed form answers to the event record', detail: updates.map(f => ({ field: f.record_field, value: f.value })) });
+    })();
+    res.json({ applied: updates.length });
+  } catch (err) { res.status(err.status || 400).json({ error: err.message }); }
+});
+router.get('/assignments/:assignmentId/history', authenticateToken, (req, res) => {
+  res.json(db.prepare('SELECT * FROM form_answer_versions WHERE assignment_id = ? ORDER BY id DESC').all(req.params.assignmentId));
 });
 
 // ── Admin: send (or re-send) the couple a private link to fill the form in ───
