@@ -176,6 +176,7 @@ export const pageGuides = [
     ],
     tips: [
       'Prices include 5% GST, and the total shown to the couple is what they pay.',
+      'Quoting a couple who wants other days (say Saturday to Monday)? Tick Custom dates under the check-in and check-out, and they can still accept online.',
       'A sent proposal past its Valid Until date turns "expired" automatically overnight. Duplicate it to send a fresh one.',
       'Once a couple accepts, move on to the contract — accepting a proposal is not a signed booking.',
     ],
@@ -216,6 +217,7 @@ export const pageGuides = [
     whatYouCanDo: [
       'Create or edit a booking: check-in and check-out dates, package, guest count, ceremony and reception locations, add-ons, food and beverage notes, special requests.',
       'Set the Total Package Price (CAD, incl. GST).',
+      'Pick the check-in and the check-out fills itself in (a 3-Day Weekend runs Friday to Sunday); tick Custom dates for a couple using other days.',
       'Search bookings and switch between upcoming and past.',
     ],
     howTo: [
@@ -230,6 +232,7 @@ export const pageGuides = [
     ],
     tips: [
       'Payment status comes from the invoices on the Payments page, so you don\'t type it in here.',
+      'Custom dates turns off only the usual-days rule. Another wedding, its reset day, or a blocked date still stops the booking.',
       'Signing a contract creates the booking details for you in most cases; use this page to adjust them.',
     ],
     related: ['payments', 'before-after-wedding', 'calendar'],
@@ -609,6 +612,10 @@ export const recipes = [
 ]
 
 export const faq = [
+  {
+    q: 'A couple wants a 3-Day Weekend that isn\'t Friday to Sunday.',
+    a: 'On the booking or proposal, tick Custom dates under the check-in and check-out, then choose their days (a different length is fine too). The CRM still refuses dates that clash with another wedding, its reset day, or a blocked date.',
+  },
   {
     q: 'Why didn\'t the couple get an automatic follow-up email?',
     a: 'On purpose. The CRM reminds you (dashboard and morning email) instead of emailing couples, so every enquiry gets a personal reply. Payment reminders are the only automatic emails couples get.',

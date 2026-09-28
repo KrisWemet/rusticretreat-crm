@@ -491,6 +491,9 @@ for (const col of [
   'ALTER TABLE invoices ADD COLUMN payment_reference TEXT',
   // Archived couples are hidden from lists but keep all their records
   'ALTER TABLE couples ADD COLUMN archived_at DATETIME',
+  // Staff chose dates outside the package's usual days (e.g. a 3-Day Weekend
+  // that isn't Friday–Sunday); the weekday rule is skipped, clashes are not
+  'ALTER TABLE bookings ADD COLUMN custom_dates INTEGER DEFAULT 0',
 ]) { try { db.exec(col); } catch (_) {} }
 
 // Site tours — requested from the public inquiry form, scheduled by staff
@@ -559,6 +562,8 @@ db.exec(`
     order_index INTEGER DEFAULT 0
   );
 `);
+// See bookings.custom_dates: the proposal's dates are off the package's usual days.
+try { db.exec('ALTER TABLE proposals ADD COLUMN custom_dates INTEGER DEFAULT 0'); } catch (_) {}
 
 // ── Custom forms / questionnaires ─────────────────────────────────────────────
 db.exec(`
