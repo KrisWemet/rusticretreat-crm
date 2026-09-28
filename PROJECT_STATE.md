@@ -4,7 +4,7 @@ Running handoff document. **Update it when you change something structural, hit
 a trap worth recording, or change the deployment.** It exists so a new session
 does not rediscover the same landmines.
 
-Last updated: 2026-09-27 · branch `claude/wedding-crm-esign-integration-coau0z`.
+Last updated: 2026-09-28 · branch `main` (Railway deploys from it).
 The owner-facing handoff (business rules, what was built when, open items) is
 `HANDOFF.md` at the root of this repo; this file is the technical one.
 
