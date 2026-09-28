@@ -39,7 +39,7 @@ Both repos have their own PR numbers, and both have used the branch name `claude
 
 - **Web addresses:** https://crm.rusticretreatalberta.ca for the admin CRM, and https://sign.rusticretreatalberta.ca for e-signing.
 - **Stack:** Express, better-sqlite3 12.11.1 (pinned) and a React client.
-- **Hosting:** Railway project **"refreshing-analysis"**. Railway deploys from the branch **`claude/wedding-crm-esign-integration-coau0z`**. The repo's default branch is `claude/wedding-venue-crm-23ycf5`.
+- **Hosting:** Railway project **"refreshing-analysis"**. Railway deploys from **`main`** (since 28 Sep 2026). The older branches `claude/wedding-crm-esign-integration-coau0z` (the previous deploy branch) and `claude/wedding-venue-crm-23ycf5` (the old GitHub default) are kept for now and can be deleted later if the owner wants.
 - **Database:** a SQLite file on a Railway volume mounted at `/data`, with `DB_PATH` pointing to it. **It holds real couples.**
 - **Access:** `CRM_PUBLIC=1` means there is no extra access gate in front of the app. The owner chose to keep it that way, because the admin CRM already requires the admin login (email set by `ADMIN_EMAIL_LOGIN`, plus a password). The gate would only add a second shared key (`CRM_GATE_KEY`). Don't reopen this decision.
 - **Tests:** `npm test --prefix server` runs `node --test test/*.test.js`. All 95 tests passed as of `KrisWemet/rusticretreat-crm#17`. GitHub Actions workflow: `.github/workflows/server-tests.yml`.
@@ -287,6 +287,7 @@ The owner asked for a plan to finish the CRM. Decisions made along the way:
    - **Log results:** "Set 2028 prices on 2 package(s)" and "Removed 4 demo couple(s) and 6 demo task(s)". No migration errors.
    - **No "Deactivated 2-Day" line:** no *active* 2-Day package was found, so it was probably already switched off. Worth a glance on the Packages page.
 3. **Owner to-dos from the finishing plan:**
+   - **Make `main` the default branch** on GitHub: `KrisWemet/rusticretreat-crm` → Settings → General → Default branch → `main`.
    - **Check the first morning summary email** arrives at about 7 am Alberta time (it only sends when there is something to report).
    - **Delete the test enquiries** (they will now show under "Needs a follow-up" on the dashboard): Archive them, then Delete permanently.
    - **Send one live test enquiry** from the website to confirm the CRM emails the venue.
@@ -315,7 +316,7 @@ The owner asked for a plan to finish the CRM. Decisions made along the way:
 - **Client portal** stays on hold until the owner says otherwise.
 - **The CRM access gate** stays off (`CRM_PUBLIC=1`).
 - **Totals** entered in the CRM should include 5% GST.
-- **Git:** work on a `claude/...` branch and open a PR. Railway deploys from `claude/wedding-crm-esign-integration-coau0z`.
+- **Git:** work on a `claude/...` branch and open a PR against **`main`**. Railway deploys from `main`.
   - **Merging:** on 26 Sep 2026 the owner gave Claude permission to merge its own PRs once the checks pass. Nothing is merged while a check is red or still running.
   - **After merging:** check the Railway deploy (or, for the website, Vercel) and tell the owner when it's live.
   - **If the merge is refused** by the session's safety check, tell the owner and ask them to merge it.
