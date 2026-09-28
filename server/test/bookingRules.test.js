@@ -188,3 +188,58 @@ test("a couple's own existing booking does not block their proposal", async () =
   const r = await call('POST', `/api/proposals/${p.id}/send`);
   assert.equal(r.status, 200, JSON.stringify(r.body));
 });
+
+// ── Custom dates: staff can move a package off its usual days ────────────────
+// 2031-05-03, -10, -17 and 2031-06-14 are Saturdays; 2031-06-06 is a Friday.
+
+test('a Saturday–Monday 3-Day Weekend is refused unless custom dates are ticked', async () => {
+  const plain = await call('POST', '/api/bookings', { couple_id: couple(), event_date: '2031-05-03', end_date: '2031-05-05', package_name: '3-Day Weekend' });
+  assert.equal(plain.status, 400);
+  assert.match(plain.body.error, /Custom dates/);
+
+  const custom = await call('POST', '/api/bookings', { couple_id: couple(), event_date: '2031-05-03', end_date: '2031-05-05', package_name: '3-Day Weekend', custom_dates: 1 });
+  assert.equal(custom.status, 201);
+  assert.equal(custom.body.custom_dates, 1);
+});
+
+test('custom dates may change the length too, but still respect other weddings and blocked dates', async () => {
+  const four = await call('POST', '/api/bookings', { couple_id: couple(), event_date: '2031-05-10', end_date: '2031-05-13', package_name: '3-Day Weekend', custom_dates: 1 });
+  assert.equal(four.status, 201);
+
+  // Overlaps the Sat 10 – Tue 13 stay (and its reset day, Wed 14).
+  const clash = await call('POST', '/api/bookings', { couple_id: couple(), event_date: '2031-05-14', end_date: '2031-05-16', package_name: '3-Day Weekend', custom_dates: 1 });
+  assert.equal(clash.status, 409);
+
+  db.prepare('INSERT INTO blocked_dates (date, reason) VALUES (?, ?)').run('2031-05-18', 'Maintenance');
+  const blocked = await call('POST', '/api/bookings', { couple_id: couple(), event_date: '2031-05-17', end_date: '2031-05-19', package_name: '3-Day Weekend', custom_dates: 1 });
+  assert.equal(blocked.status, 409);
+  assert.match(blocked.body.error, /blocked/);
+});
+
+test('turning custom dates off re-checks the usual days', async () => {
+  const created = await call('POST', '/api/bookings', { couple_id: couple(), event_date: '2031-06-14', end_date: '2031-06-16', package_name: '3-Day Weekend', custom_dates: 1 });
+  assert.equal(created.status, 201);
+  const off = await call('PUT', `/api/bookings/${created.body.id}`, { custom_dates: 0 });
+  assert.equal(off.status, 400);
+  // Moving it to Friday–Sunday with custom off is fine.
+  const moved = await call('PUT', `/api/bookings/${created.body.id}`, { event_date: '2031-06-06', end_date: '2031-06-08', custom_dates: 0 });
+  assert.equal(moved.status, 200);
+});
+
+test('a proposal with custom dates can be sent and accepted, and the booking keeps the flag', async () => {
+  const c = couple();
+  const draft = await call('POST', '/api/proposals', {
+    couple_id: c, title: 'Sat–Mon weekend', package_name: '3-Day Weekend',
+    event_date: '2031-07-05', end_date: '2031-07-07', custom_dates: 1,
+    items: [{ label: '3-Day Weekend', quantity: 1, unit_price: 6500, amount: 6500, kind: 'package' }],
+  });
+  assert.equal(draft.status, 201);
+  assert.equal(draft.body.custom_dates, 1);
+  const sent = await call('POST', `/api/proposals/${draft.body.id}/send`);
+  assert.ok(sent.status < 300, JSON.stringify(sent.body));
+  const token = db.prepare('SELECT public_token FROM proposals WHERE id = ?').get(draft.body.id).public_token;
+  const accepted = await call('POST', `/api/proposals/public/${token}/accept`, { accepted_name: 'Couple' }, null);
+  assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+  const booking = db.prepare('SELECT event_date, end_date, custom_dates FROM bookings WHERE couple_id = ?').get(c);
+  assert.deepEqual({ ...booking }, { event_date: '2031-07-05', end_date: '2031-07-07', custom_dates: 1 });
+});
