@@ -46,8 +46,11 @@ function verifySignature({ rawBody, id, timestamp, signature, secret = process.e
   });
 }
 
+// Reading received mail needs a full-access Resend key; the sending key is
+// deliberately restricted to sending, so it gets its own variable.
 async function resendGet(path) {
-  const res = await fetch(`${RESEND_API}${path}`, { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } });
+  const key = process.env.RESEND_INBOUND_API_KEY || process.env.RESEND_API_KEY;
+  const res = await fetch(`${RESEND_API}${path}`, { headers: { Authorization: `Bearer ${key}` } });
   const raw = await res.text();
   if (!res.ok) throw new Error(`Resend ${path} answered HTTP ${res.status}: ${raw.slice(0, 300)}`);
   return JSON.parse(raw);

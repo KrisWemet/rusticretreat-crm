@@ -13,7 +13,8 @@ process.env.JWT_SECRET = 'test-secret-inbound';
 process.env.NODE_ENV = 'test';
 const SECRET = 'whsec_' + crypto.randomBytes(24).toString('base64');
 process.env.RESEND_WEBHOOK_SECRET = SECRET;
-process.env.RESEND_API_KEY = 're_test';
+process.env.RESEND_API_KEY = 're_send_only';
+process.env.RESEND_INBOUND_API_KEY = 're_full';
 process.env.REPLY_TO_EMAIL = 'venue@gmail.test';
 process.env.SMTP_FROM = 'Shannon at Rustic Retreat <hello@venue.test>';
 
@@ -29,6 +30,10 @@ const stub = http.createServer((req, res) => {
       if (failSends) { res.statusCode = 500; return res.end('{"message":"down"}'); }
       sent.push(JSON.parse(body));
       return res.end('{"id":"sent_1"}');
+    }
+    // The send-only key cannot read received mail, as on the real Resend.
+    if (req.url.startsWith('/emails/receiving/') && req.headers.authorization !== 'Bearer re_full') {
+      res.statusCode = 401; return res.end('{"name":"restricted_api_key"}');
     }
     if (req.url === '/emails/receiving/rcv_1') {
       return res.end(JSON.stringify({ id: 'rcv_1', from: 'Carley Fortier <carley@client.test>', to: ['hello@venue.test'],
