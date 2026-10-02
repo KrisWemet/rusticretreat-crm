@@ -256,6 +256,7 @@ The owner asked for a plan to finish the CRM. Decisions made along the way:
 - Extra-guest add-on now counts guests **over 80** (was "over 60"), matching the agreement.
 - Calendar shows every item per day, holds (proposal or contract out), date-range blocking, phone agenda; Contracts filters and link-expiry warnings; Pipeline "Move to" menu; Vendors edit.
 - **Settings:** change your password; the admin adds, resets and removes staff logins. `ADMIN_BOOTSTRAP_PASSWORD` now applies once per value, so it no longer undoes a password changed in the CRM.
+- **Sign-up invites (2 Oct 2026):** Settings → **Invite to sign up** gives someone (e.g. Shannon) a private link where they choose their own password. Works once, expires in 7 days, can be emailed or copied and texted. Pending invites are listed and can be cancelled.
 
 **`#17` Phase 5: consistency and phones**
 - 24 unstyled inputs fixed, one shared connection, visible load errors, Escape closes dialogs, forms stack on phones. Every admin page checked at phone and desktop width.

@@ -1069,6 +1069,26 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_email_log_couple ON email_log(couple_id, at);
 `);
 
+// ── Staff sign-up invites ────────────────────────────────────────────────────
+// The admin creates an invite; the person opens the private link and picks
+// their own password, so nobody has to pass a password around. Only a hash of
+// the token is stored, so a copy of the database (or a backup) cannot be used
+// to sign up. There is deliberately no open sign-up: the CRM is publicly
+// reachable, and anyone could otherwise give themselves a login.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'staff' CHECK(role IN ('admin', 'staff')),
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME
+  );
+`);
+
 // ── Activity log ─────────────────────────────────────────────────────────────
 // Who did what, and when, for the changes that matter afterwards: deletes,
 // archives, payments recorded, prices changed. detail holds a JSON snapshot of

@@ -6,6 +6,8 @@ const db = require('../db');
 const { JWT_SECRET, authenticateToken, requireAdmin } = require('../middleware/auth');
 const { logActivity } = require('../services/activity');
 const rateLimit = require('../middleware/rateLimit');
+const crypto = require('crypto');
+const email = require('../services/email');
 
 // Both login endpoints were unlimited while the public inquiry and contract
 // routes were limited — an omission, not a policy. bcrypt throttles throughput
@@ -178,6 +180,98 @@ router.delete('/users/:id', authenticateToken, requireAdmin, (req, res) => {
   db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
   logActivity(req, { action: 'user.removed', entity: 'user', entityId: user.id, summary: `Removed the login for ${user.name} (${user.email})` });
   res.json({ success: true });
+});
+
+// ── Sign-up invites ──────────────────────────────────────────────────────────
+// The admin invites someone by name and email; they open the private link and
+// choose their own password. There is no open sign-up — the CRM is publicly
+// reachable, so a sign-up page anyone could use would hand out logins.
+const INVITE_DAYS = 7;
+const inviteLimiter = rateLimit({ windowMs: 900000, max: 30, name: 'staff-invite' });
+const hashToken = t => crypto.createHash('sha256').update(String(t)).digest('hex');
+const inviteUrl = token => `${(process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '')}/signup/${token}`;
+const emailTaken = e => db.prepare('SELECT 1 FROM users WHERE LOWER(email) = ?').get(e);
+
+// An unused, unexpired invite for this token, or null.
+function openInvite(token) {
+  if (!/^[a-f0-9]{48}$/.test(String(token || ''))) return null;
+  return db.prepare("SELECT * FROM user_invites WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')")
+    .get(hashToken(token)) || null;
+}
+
+router.get('/invites', authenticateToken, requireAdmin, (req, res) => {
+  res.json(db.prepare(`SELECT id, name, email, role, created_at, expires_at FROM user_invites
+                       WHERE used_at IS NULL AND expires_at > datetime('now') ORDER BY created_at DESC`).all());
+});
+
+router.post('/invites', authenticateToken, requireAdmin, async (req, res) => {
+  const { name, email: rawEmail, role, send_email } = req.body || {};
+  const cleanName = String(name || '').trim();
+  const cleanEmail = String(rawEmail || '').trim().toLowerCase();
+  if (!cleanName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ error: 'A name and a valid email are required.' });
+  }
+  if (emailTaken(cleanEmail)) {
+    return res.status(409).json({ error: 'Someone already logs in with that email.' });
+  }
+  const cleanRole = role === 'admin' ? 'admin' : 'staff';
+  // A new invite replaces any earlier one for the same email, so only the
+  // latest link works.
+  db.prepare('DELETE FROM user_invites WHERE LOWER(email) = ? AND used_at IS NULL').run(cleanEmail);
+  const token = crypto.randomBytes(24).toString('hex');
+  const id = db.prepare(`INSERT INTO user_invites (token_hash, name, email, role, created_by, expires_at)
+                         VALUES (?, ?, ?, ?, ?, datetime('now', ?))`)
+    .run(hashToken(token), cleanName, cleanEmail, cleanRole, req.user.userId, `+${INVITE_DAYS} days`).lastInsertRowid;
+  const url = inviteUrl(token);
+  logActivity(req, { action: 'user.invited', entity: 'user_invite', entityId: id, summary: `Invited ${cleanName} (${cleanEmail}) to sign up as ${cleanRole}` });
+
+  let emailed = null;
+  if (send_email) {
+    emailed = await email.sendStaffInvite({ to: cleanEmail, name: cleanName, invitedBy: req.user.name || 'The Rustic Retreat admin', url, expiresDays: INVITE_DAYS });
+  }
+  res.status(201).json({ id, name: cleanName, email: cleanEmail, role: cleanRole, url, expires_days: INVITE_DAYS, emailed });
+});
+
+router.delete('/invites/:id', authenticateToken, requireAdmin, (req, res) => {
+  const r = db.prepare('DELETE FROM user_invites WHERE id = ? AND used_at IS NULL').run(req.params.id);
+  if (!r.changes) return res.status(404).json({ error: 'Invite not found' });
+  logActivity(req, { action: 'user.invite_cancelled', entity: 'user_invite', entityId: req.params.id, summary: 'Cancelled a sign-up invite' });
+  res.json({ success: true });
+});
+
+// Public: the sign-up page reads who the invite is for.
+router.get('/invite/:token', inviteLimiter, (req, res) => {
+  const inv = openInvite(req.params.token);
+  if (!inv) return res.status(404).json({ error: 'This sign-up link has expired or has already been used. Ask the admin for a new one.' });
+  res.json({ name: inv.name, email: inv.email, role: inv.role, expires_at: inv.expires_at });
+});
+
+// Public: choose a password, which creates the login and signs them in.
+router.post('/invite/:token', inviteLimiter, (req, res) => {
+  const inv = openInvite(req.params.token);
+  if (!inv) return res.status(404).json({ error: 'This sign-up link has expired or has already been used. Ask the admin for a new one.' });
+  const { name, password } = req.body || {};
+  if (String(password || '').length < MIN_PASSWORD) {
+    return res.status(400).json({ error: `Use at least ${MIN_PASSWORD} characters for your password.` });
+  }
+  if (emailTaken(inv.email.toLowerCase())) {
+    return res.status(409).json({ error: 'There is already a login for this email. Try signing in instead.' });
+  }
+  const cleanName = String(name || '').trim() || inv.name;
+  const create = db.transaction(() => {
+    // Marking it used inside the transaction means a double-click cannot
+    // create two logins from one link.
+    const used = db.prepare("UPDATE user_invites SET used_at = datetime('now') WHERE id = ? AND used_at IS NULL").run(inv.id);
+    if (!used.changes) return null;
+    return db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
+      .run(cleanName, inv.email.toLowerCase(), bcrypt.hashSync(String(password), 10), inv.role).lastInsertRowid;
+  });
+  const id = create();
+  if (!id) return res.status(404).json({ error: 'This sign-up link has already been used.' });
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  logActivity({ user: { userId: user.id, name: user.name } }, { action: 'user.signed_up', entity: 'user', entityId: user.id, summary: `${user.name} (${user.email}) set up their login from an invite` });
+  const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+  res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
 module.exports = router;
