@@ -86,4 +86,7 @@ test('a login added with capitals in the email can sign in however it is typed',
     assert.equal((await call('POST', '/api/auth/login', { email: typed, password: 'sams-password-1' })).status, 200, typed);
   }
   assert.equal((await call('POST', '/api/auth/login', { email: 'sam.owner@venue.test', password: 'wrong-password' })).status, 401);
+  // The password stays case-sensitive.
+  assert.equal((await call('POST', '/api/auth/login', { email: 'sam.owner@venue.test', password: 'SAMS-PASSWORD-1' })).status, 401);
+  assert.equal((await call('POST', '/api/auth/login', { email: 'sam.owner@venue.test', password: 'Sams-password-1' })).status, 401);
 });
