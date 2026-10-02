@@ -1088,6 +1088,9 @@ db.exec(`
     used_at DATETIME
   );
 `);
+// user_id set means the link is for an existing login to choose a new
+// password, rather than a new login.
+try { db.exec('ALTER TABLE user_invites ADD COLUMN user_id INTEGER'); } catch (_) {}
 
 // ── Activity log ─────────────────────────────────────────────────────────────
 // Who did what, and when, for the changes that matter afterwards: deletes,

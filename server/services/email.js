@@ -552,14 +552,18 @@ async function sendUnmatchedSmsAdmin({ fromNumber, text, receivedAt }) {
 // ── Staff sign-up invite ─────────────────────────────────────────────────────
 // Returned so the admin is told whether it went out; the link is also shown on
 // screen to copy, so a failed send is never a dead end.
-async function sendStaffInvite({ to, name, invitedBy, url, expiresDays }) {
+async function sendStaffInvite({ to, name, invitedBy, url, expiresDays, reset = false }) {
+  // reset: the person already has a login and is choosing a new password.
+  const intro = reset
+    ? `${invitedBy} sent you a link to choose a new password for your Rustic Retreat CRM login.`
+    : `${invitedBy} has set up a login for you on the Rustic Retreat CRM.`;
   return send({
-    kind: 'staff-invite',
+    kind: reset ? 'staff-password-link' : 'staff-invite',
     to,
-    subject: 'Set up your Rustic Retreat CRM login',
-    text: `Hi ${name},\n\n${invitedBy} has set up a login for you on the Rustic Retreat CRM.\n\nChoose your password here: ${url}\n\nThe link works once and expires in ${expiresDays} days.\n\nRustic Retreat`,
+    subject: reset ? 'Choose a new password for the Rustic Retreat CRM' : 'Set up your Rustic Retreat CRM login',
+    text: `Hi ${name},\n\n${intro}\n\nChoose your password here: ${url}\n\nThe link works once and expires in ${expiresDays} days.\n\nRustic Retreat`,
     html: `<p>Hi <strong>${esc(name)}</strong>,</p>
-<p>${esc(invitedBy)} has set up a login for you on the Rustic Retreat CRM.</p>
+<p>${esc(intro)}</p>
 <p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Choose your password</a></p>
 <p>Or copy this link: <a href="${esc(url)}">${esc(url)}</a></p>
 <p style="color:#64748b;font-size:14px">The link works once and expires in ${expiresDays} days.</p>

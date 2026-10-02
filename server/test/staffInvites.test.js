@@ -90,3 +90,34 @@ test('a login added with capitals in the email can sign in however it is typed',
   assert.equal((await call('POST', '/api/auth/login', { email: 'sam.owner@venue.test', password: 'SAMS-PASSWORD-1' })).status, 401);
   assert.equal((await call('POST', '/api/auth/login', { email: 'sam.owner@venue.test', password: 'Sams-password-1' })).status, 401);
 });
+
+test('an existing login can be sent a link to choose a new password', async () => {
+  const add = await call('POST', '/api/auth/users', { name: 'Robin', email: 'robin@venue.test', role: 'staff', password: 'robins-old-password' }, admin);
+  const staff = tok(add.body.id, 'staff', 'Robin');
+  assert.equal((await call('POST', `/api/auth/users/${add.body.id}/password-link`, {}, staff)).status, 403, 'admin only');
+
+  const link = await call('POST', `/api/auth/users/${add.body.id}/password-link`, {}, admin);
+  assert.equal(link.status, 201);
+  assert.equal(link.body.user_id, add.body.id);
+  const token = link.body.url.split('/').pop();
+  assert.equal((await call('GET', `/api/auth/invite/${token}`)).body.reset, true);
+  assert.ok((await call('GET', '/api/auth/invites', null, admin)).body.some(i => i.user_id === add.body.id));
+
+  // The old password keeps working until the link is used.
+  assert.equal((await call('POST', '/api/auth/login', { email: 'robin@venue.test', password: 'robins-old-password' })).status, 200);
+
+  const done = await call('POST', `/api/auth/invite/${token}`, { password: 'robins-new-password' });
+  assert.equal(done.status, 201);
+  assert.equal(done.body.user.id, add.body.id, 'same login, not a new one');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = 'robin@venue.test'").get().n, 1);
+  assert.equal((await call('POST', '/api/auth/login', { email: 'robin@venue.test', password: 'robins-old-password' })).status, 401);
+  assert.equal((await call('POST', '/api/auth/login', { email: 'Robin@venue.test', password: 'robins-new-password' })).status, 200);
+  assert.equal((await call('POST', `/api/auth/invite/${token}`, { password: 'another-password-x' })).status, 404, 'works once');
+
+  // A newer link replaces the older one, and a removed login's link is dead.
+  const a = (await call('POST', `/api/auth/users/${add.body.id}/password-link`, {}, admin)).body.url.split('/').pop();
+  const b = (await call('POST', `/api/auth/users/${add.body.id}/password-link`, {}, admin)).body.url.split('/').pop();
+  assert.equal((await call('GET', `/api/auth/invite/${a}`)).status, 404);
+  assert.equal((await call('DELETE', `/api/auth/users/${add.body.id}`, null, admin)).status, 200);
+  assert.equal((await call('POST', `/api/auth/invite/${b}`, { password: 'robins-third-password' })).status, 404);
+});
