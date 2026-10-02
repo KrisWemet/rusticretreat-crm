@@ -582,10 +582,13 @@ Since 2 Oct 2026 it also **receives**: the root MX record (in **Vercel DNS**,
 which hosts the domain's nameservers) points at Resend's
 `inbound-smtp.us-east-1.amazonaws.com`. Resend posts each message to
 `/api/email/inbound` (webhook `email.received`, signed; secret in
-`RESEND_WEBHOOK_SECRET`), and `routes/inboundEmail.js` forwards it to
+`RESEND_WEBHOOK_SECRET`). Reading the message needs a **full-access** key in
+`RESEND_INBOUND_API_KEY`; `RESEND_API_KEY` is send-only and gets a 401 there, and `routes/inboundEmail.js` forwards it to
 `INBOUND_FORWARD_TO` → `REPLY_TO_EMAIL` → `ADMIN_EMAIL` (the venue Gmail),
 Reply-To the original sender. Resend keeps every received message, so a
-failed forward is retried rather than lost. Sender is
+failed forward is retried rather than lost. Do not click "verify" on the
+Resend domain casually: while it re-checks, Resend refuses to send at all
+(this stopped outgoing mail for about three minutes on 2 Oct 2026). Sender is
 `SMTP_FROM=Shannon at Rustic Retreat <hello@rusticretreatalberta.ca>`; the
 domain has no other mailbox, so do not add another MX without moving this.
 
