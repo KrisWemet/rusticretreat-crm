@@ -258,6 +258,7 @@ The owner asked for a plan to finish the CRM. Decisions made along the way:
 - **Settings:** change your password; the admin adds, resets and removes staff logins. `ADMIN_BOOTSTRAP_PASSWORD` now applies once per value, so it no longer undoes a password changed in the CRM.
 - **Sign-up invites (2 Oct 2026):** Settings → **Invite to sign up** gives someone (e.g. Shannon) a private link where they choose their own password. Works once, expires in 7 days, can be emailed or copied and texted. Pending invites are listed and can be cancelled.
 - **Password links and sign-in fix (2 Oct 2026):** next to each login, **Send password link** emails a link to choose a new password, so the admin never has to pick or pass on someone's password. Sign-in no longer cares about capitals in the email; passwords still do. The leftover "Demo credentials" boxes are gone from both login pages.
+- **Email from your own domain (2 Oct 2026):** CRM emails now come from **Shannon at Rustic Retreat <hello@rusticretreatalberta.ca>** instead of noreply. Anything emailed to an address at rusticretreatalberta.ca is forwarded to the venue Gmail; hitting Reply in Gmail answers the original sender.
 
 **`#17` Phase 5: consistency and phones**
 - 24 unstyled inputs fixed, one shared connection, visible load errors, Escape closes dialogs, forms stack on phones. Every admin page checked at phone and desktop width.

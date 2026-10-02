@@ -577,9 +577,17 @@ way (the admin login protects the CRM). With a `CRM_GATE_KEY` instead,
 `https://<host>/?gate=<key>` would set a 30-day cookie and every non-public path
 would 404 without it.
 
-**Resend:** domain `rusticretreatalberta.ca` shows `partially_failed`, which is
-misleading — DKIM and SPF are **verified**; only the inbound MX record failed,
-and that is for receiving, not sending.
+**Resend:** domain `rusticretreatalberta.ca` sends with DKIM and SPF verified.
+Since 2 Oct 2026 it also **receives**: the root MX record (in **Vercel DNS**,
+which hosts the domain's nameservers) points at Resend's
+`inbound-smtp.us-east-1.amazonaws.com`. Resend posts each message to
+`/api/email/inbound` (webhook `email.received`, signed; secret in
+`RESEND_WEBHOOK_SECRET`), and `routes/inboundEmail.js` forwards it to
+`INBOUND_FORWARD_TO` → `REPLY_TO_EMAIL` → `ADMIN_EMAIL` (the venue Gmail),
+Reply-To the original sender. Resend keeps every received message, so a
+failed forward is retried rather than lost. Sender is
+`SMTP_FROM=Shannon at Rustic Retreat <hello@rusticretreatalberta.ca>`; the
+domain has no other mailbox, so do not add another MX without moving this.
 
 ### Known deployment wrinkle
 

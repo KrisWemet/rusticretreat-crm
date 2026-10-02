@@ -49,15 +49,16 @@ const transporter = smtpConfigured
     })
   : null;
 
-async function sendViaResend({ to, subject, html, text, replyTo }) {
+async function sendViaResend({ to, subject, html, text, replyTo, from, attachments }) {
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${RESEND_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: SMTP_FROM, to: Array.isArray(to) ? to : [to], subject, html, text,
-      ...(replyTo ? { reply_to: replyTo } : {}) }),
+    body: JSON.stringify({ from: from || SMTP_FROM, to: Array.isArray(to) ? to : [to], subject, html, text,
+      ...(replyTo ? { reply_to: replyTo } : {}),
+      ...(attachments?.length ? { attachments } : {}) }),
   });
   // Read the body exactly once. A response body is a single-use stream, so
   // parsing it as JSON and then falling back to text() on failure throws
@@ -81,7 +82,9 @@ async function sendViaResend({ to, subject, html, text, replyTo }) {
 // Incidental notifications just ignore the result and carry on, since a failed
 // courtesy email must not roll back a signature that is already recorded.
 // `to` may be one address or a list; replyTo, when given, is where a reply goes.
-async function send({ to, subject, html, text, replyTo, coupleId, kind }) {
+// from and attachments are Resend-only; they are used to forward mail received
+// at the venue's own domain (routes/inboundEmail.js), which needs Resend anyway.
+async function send({ to, subject, html, text, replyTo, coupleId, kind, from, attachments }) {
   if (Array.isArray(to)) to = to.filter(Boolean);
   let result;
   if (!to || to.length === 0) {
@@ -91,7 +94,7 @@ async function send({ to, subject, html, text, replyTo, coupleId, kind }) {
     result = { delivered: false, error: 'Email is not configured on this server' };
   } else {
     try {
-      if (RESEND_API_KEY) await sendViaResend({ to, subject, html, text, replyTo });
+      if (RESEND_API_KEY) await sendViaResend({ to, subject, html, text, replyTo, from, attachments });
       else await transporter.sendMail({ from: SMTP_FROM, to, subject, html, text, ...(replyTo ? { replyTo } : {}) });
       result = { delivered: true };
     } catch (err) {

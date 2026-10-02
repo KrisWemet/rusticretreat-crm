@@ -75,6 +75,7 @@ const PUBLIC_PATHS = [
   /^\/api\/health$/,                 // platform healthcheck — probers send no cookies
   /^\/api\/payments\/webhook$/,      // Stripe authenticates by signature instead
   /^\/api\/sms\/inbound$/,           // the SMS provider signs its webhooks too
+  /^\/api\/email\/inbound$/,         // Resend posts received mail, signed
   /^\/sign\//,                       // couple opening their contract signing link
   /^\/api\/contracts\/sign\//,       // …and the API that page calls, incl. /print
   /^\/proposal\//,                   // couple reviewing a proposal
@@ -119,6 +120,10 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), web
 // two supported providers disagree — Telnyx posts JSON, Twilio form-encoded.
 const { inboundHandler } = require('./routes/sms');
 app.post('/api/sms/inbound', express.raw({ type: '*/*' }), inboundHandler);
+// Mail received at the venue's domain, posted by Resend and signed the same
+// way, so it also needs the raw bytes. See routes/inboundEmail.js.
+const { inboundEmailHandler } = require('./routes/inboundEmail');
+app.post('/api/email/inbound', express.raw({ type: '*/*', limit: '1mb' }), inboundEmailHandler);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
