@@ -469,6 +469,20 @@ node-gyp, which needs Python that the build image lacks. Pinned to **12.11.1**.
 Do not blindly upgrade: **13.x also has no Node 22 binary** and reintroduces the
 identical build failure. Verify the release asset exists before bumping.
 
+### Alberta's clock comes from the tz database, and it changed in 2026
+
+tzdata **2026c** (bundled from Node 22.23) keeps `America/Edmonton` on UTC-6
+all year; older releases still switch to MST (UTC-7) in winter. The scheduler
+asks Intl for Alberta time, so it follows whatever the running Node ships.
+Never hard-code an Alberta offset, in code or in tests. A test that did broke CI
+on 2 Oct 2026.
+
+### Staff emails are case-insensitive, passwords are not
+
+Logins are stored lowercased; sign-in matches `LOWER(email)` after trimming.
+Before 2 Oct 2026 it matched exactly, so the owner's login was rejected for
+a capital letter.
+
 ### Every path that books a date goes through `services/bookingRules.js`
 
 Bookings are created in three places: staff saving a booking
