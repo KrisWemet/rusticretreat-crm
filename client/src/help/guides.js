@@ -470,7 +470,7 @@ export const pageGuides = [
     summary: 'Your password, and (for admins) who can log in.',
     whatYouCanDo: [
       'Change your password (at least 10 characters).',
-      'Admins: add a login for a staff member, choose their role, reset a password, or remove a login.',
+      'Admins: invite someone to sign up (they choose their own password), send a login a link to choose a new password, or remove a login.',
     ],
     howTo: [
       {
@@ -599,7 +599,9 @@ export const recipes = [
     summary: 'Looking after logins and making sure your data is safe.',
     steps: [
       'Change your own password on Settings (at least 10 characters).',
-      'Admins: under "Who can log in", click Add a login, enter the name, email, a temporary password and the role, then share the password in person.',
+      'Admins: under "Who can log in", click Invite to sign up, enter their name and email, pick the role and tick Email them the link. They open the link and choose their own password. The link works once and lasts 7 days; you can also copy it and text it.',
+      'Someone forgot their password? Click Send password link next to their name. They get an email to choose a new one.',
+      'Emails are not case-sensitive when signing in; passwords are.',
       'Staff logins can do the day-to-day work; Admin logins can also manage logins and backups, and permanently delete.',
       'Remove a login when someone leaves.',
       'Glance at Backups now and then to confirm last night\'s backup and off-site copy worked.',

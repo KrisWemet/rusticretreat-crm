@@ -58,22 +58,24 @@ export default function Signup() {
           <p className="text-sm text-slate-400">Loading…</p>
         ) : (
           <>
-            <h1 className="text-2xl font-bold text-slate-900 mb-1">Create your login</h1>
+            <h1 className="text-2xl font-bold text-slate-900 mb-1">{invite.reset ? 'Choose a new password' : 'Create your login'}</h1>
             <p className="text-slate-500 text-sm mb-8">
               You'll sign in with <strong className="text-slate-700">{invite.email}</strong>
               {invite.role === 'admin' ? ' as an admin.' : '.'}
             </p>
             {user && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3 mb-4">
-                This browser is signed in as {user.name}. Creating this login will switch it to the new one.
+                This browser is signed in as {user.name}. Continuing will switch it to {invite.email}.
               </p>
             )}
             <form onSubmit={submit} className="space-y-4">
-              <div>
-                <label htmlFor="signup-name" className="label">Your name</label>
-                <input id="signup-name" required autoComplete="name" value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="input-field" />
-              </div>
+              {!invite.reset && (
+                <div>
+                  <label htmlFor="signup-name" className="label">Your name</label>
+                  <input id="signup-name" required autoComplete="name" value={form.name}
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="input-field" />
+                </div>
+              )}
               <div>
                 <label htmlFor="signup-password" className="label">Choose a password</label>
                 <input id="signup-password" type="password" required minLength={10} autoComplete="new-password" value={form.password}
@@ -86,7 +88,7 @@ export default function Signup() {
               </div>
               <p className="text-xs text-slate-400">At least 10 characters.</p>
               <button type="submit" disabled={saving} className="w-full btn-primary justify-center py-2.5 text-sm font-semibold">
-                {saving ? 'Setting up…' : 'Create login'}
+                {saving ? 'Saving…' : invite.reset ? 'Save password and sign in' : 'Create login'}
               </button>
             </form>
           </>

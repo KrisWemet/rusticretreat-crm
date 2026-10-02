@@ -120,12 +120,6 @@ export default function PortalLogin() {
             </button>
           </form>
 
-          <div className="mt-5 p-4 bg-rose-50 rounded-xl border border-rose-100">
-            <p className="text-xs font-semibold text-rose-700 mb-1.5">Demo credentials</p>
-            <p className="text-xs text-rose-600 font-mono">emma.liam@example.com</p>
-            <p className="text-xs text-rose-600 font-mono">couple123</p>
-          </div>
-
           <p className="mt-6 text-center text-sm text-slate-400">
             Venue staff?{' '}
             <Link to="/login" className="text-rose-600 hover:text-rose-700 font-medium">

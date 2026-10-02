@@ -95,7 +95,7 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="admin@rusticretreat.com"
+                placeholder="you@example.com"
                 required
                 className="input-field"
               />
@@ -124,12 +124,6 @@ export default function Login() {
               ) : 'Sign In'}
             </button>
           </form>
-
-          <div className="mt-5 p-4 bg-amber-50 rounded-xl border border-amber-100">
-            <p className="text-xs font-semibold text-amber-700 mb-1.5">Demo credentials</p>
-            <p className="text-xs text-amber-700 font-mono">admin@rusticretreat.com</p>
-            <p className="text-xs text-amber-700 font-mono">admin123</p>
-          </div>
 
           <p className="mt-6 text-center text-sm text-slate-400">
             Are you a couple?{' '}

@@ -203,7 +203,7 @@ function openInvite(token) {
 }
 
 router.get('/invites', authenticateToken, requireAdmin, (req, res) => {
-  res.json(db.prepare(`SELECT id, name, email, role, created_at, expires_at FROM user_invites
+  res.json(db.prepare(`SELECT id, name, email, role, user_id, created_at, expires_at FROM user_invites
                        WHERE used_at IS NULL AND expires_at > datetime('now') ORDER BY created_at DESC`).all());
 });
 
@@ -235,6 +235,25 @@ router.post('/invites', authenticateToken, requireAdmin, async (req, res) => {
   res.status(201).json({ id, name: cleanName, email: cleanEmail, role: cleanRole, url, expires_days: INVITE_DAYS, emailed });
 });
 
+// A link for an existing login to choose a new password, so the admin never
+// has to pick or pass on someone else's password.
+router.post('/users/:id/password-link', authenticateToken, requireAdmin, async (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  db.prepare('DELETE FROM user_invites WHERE user_id = ? AND used_at IS NULL').run(user.id);
+  const token = crypto.randomBytes(24).toString('hex');
+  const id = db.prepare(`INSERT INTO user_invites (token_hash, name, email, role, user_id, created_by, expires_at)
+                         VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))`)
+    .run(hashToken(token), user.name, user.email, user.role, user.id, req.user.userId, `+${INVITE_DAYS} days`).lastInsertRowid;
+  const url = inviteUrl(token);
+  logActivity(req, { action: 'user.password_link', entity: 'user', entityId: user.id, summary: `Created a choose-a-new-password link for ${user.name}` });
+  let emailed = null;
+  if (req.body?.send_email) {
+    emailed = await email.sendStaffInvite({ to: user.email, name: user.name, invitedBy: req.user.name || 'The Rustic Retreat admin', url, expiresDays: INVITE_DAYS, reset: true });
+  }
+  res.status(201).json({ id, name: user.name, email: user.email, role: user.role, user_id: user.id, url, expires_days: INVITE_DAYS, emailed });
+});
+
 router.delete('/invites/:id', authenticateToken, requireAdmin, (req, res) => {
   const r = db.prepare('DELETE FROM user_invites WHERE id = ? AND used_at IS NULL').run(req.params.id);
   if (!r.changes) return res.status(404).json({ error: 'Invite not found' });
@@ -246,7 +265,7 @@ router.delete('/invites/:id', authenticateToken, requireAdmin, (req, res) => {
 router.get('/invite/:token', inviteLimiter, (req, res) => {
   const inv = openInvite(req.params.token);
   if (!inv) return res.status(404).json({ error: 'This sign-up link has expired or has already been used. Ask the admin for a new one.' });
-  res.json({ name: inv.name, email: inv.email, role: inv.role, expires_at: inv.expires_at });
+  res.json({ name: inv.name, email: inv.email, role: inv.role, reset: !!inv.user_id, expires_at: inv.expires_at });
 });
 
 // Public: choose a password, which creates the login and signs them in.
@@ -257,22 +276,32 @@ router.post('/invite/:token', inviteLimiter, (req, res) => {
   if (String(password || '').length < MIN_PASSWORD) {
     return res.status(400).json({ error: `Use at least ${MIN_PASSWORD} characters for your password.` });
   }
-  if (emailTaken(inv.email.toLowerCase())) {
+  if (inv.user_id && !db.prepare('SELECT 1 FROM users WHERE id = ?').get(inv.user_id)) {
+    return res.status(404).json({ error: 'This login has been removed. Ask the admin for help.' });
+  }
+  if (!inv.user_id && emailTaken(inv.email.toLowerCase())) {
     return res.status(409).json({ error: 'There is already a login for this email. Try signing in instead.' });
   }
   const cleanName = String(name || '').trim() || inv.name;
-  const create = db.transaction(() => {
+  const hash = bcrypt.hashSync(String(password), 10);
+  const apply = db.transaction(() => {
     // Marking it used inside the transaction means a double-click cannot
     // create two logins from one link.
     const used = db.prepare("UPDATE user_invites SET used_at = datetime('now') WHERE id = ? AND used_at IS NULL").run(inv.id);
     if (!used.changes) return null;
+    if (inv.user_id) {
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, inv.user_id);
+      return inv.user_id;
+    }
     return db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
-      .run(cleanName, inv.email.toLowerCase(), bcrypt.hashSync(String(password), 10), inv.role).lastInsertRowid;
+      .run(cleanName, inv.email.toLowerCase(), hash, inv.role).lastInsertRowid;
   });
-  const id = create();
+  const id = apply();
   if (!id) return res.status(404).json({ error: 'This sign-up link has already been used.' });
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-  logActivity({ user: { userId: user.id, name: user.name } }, { action: 'user.signed_up', entity: 'user', entityId: user.id, summary: `${user.name} (${user.email}) set up their login from an invite` });
+  logActivity({ user: { userId: user.id, name: user.name } }, inv.user_id
+    ? { action: 'user.password_changed', entity: 'user', entityId: user.id, summary: `${user.name} chose a new password from a link` }
+    : { action: 'user.signed_up', entity: 'user', entityId: user.id, summary: `${user.name} (${user.email}) set up their login from an invite` });
   const token = jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
   res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });

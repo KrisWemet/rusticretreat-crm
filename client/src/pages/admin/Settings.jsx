@@ -40,7 +40,7 @@ export default function Settings() {
   }
 
   const cancelInvite = async (inv) => {
-    if (!confirm(`Cancel the sign-up link for ${inv.name}? It will stop working.`)) return
+    if (!confirm(`Cancel the link for ${inv.name}? It will stop working.`)) return
     try {
       await getAdminAxios().delete(`/api/auth/invites/${inv.id}`)
       toast.success('Invite cancelled'); loadInvites()
@@ -65,6 +65,18 @@ export default function Settings() {
       toast.success(`${newUser.name} can now log in`)
       setNewUser({ name: '', email: '', role: 'staff', password: '' }); setAdding(false); loadUsers()
     } catch (err) { toast.error(err.response?.data?.error || 'Could not add the login') }
+  }
+
+  // Preferred over typing a password for them: they choose their own.
+  const sendPasswordLink = async (u) => {
+    if (!confirm(`Email ${u.name} a link to choose a new password? Their current password keeps working until they use it.`)) return
+    try {
+      const { data } = await getAdminAxios().post(`/api/auth/users/${u.id}/password-link`, { send_email: true })
+      setLastLink(data)
+      if (data.emailed?.delivered) toast.success(`Password link emailed to ${u.email}`)
+      else toast.error(`The email did not go out (${data.emailed?.error || 'unknown error'}). Copy the link below and send it yourself.`, { duration: 8000 })
+      loadInvites()
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not create the link') }
   }
 
   const resetPassword = async (u) => {
@@ -141,7 +153,7 @@ export default function Settings() {
           )}
           {lastLink && (
             <div className="border border-emerald-100 bg-emerald-50/60 rounded-xl p-4 space-y-2">
-              <p className="text-sm text-slate-700">Sign-up link for <strong>{lastLink.name}</strong>. You can also text it to them:</p>
+              <p className="text-sm text-slate-700">{lastLink.user_id ? 'New-password link' : 'Sign-up link'} for <strong>{lastLink.name}</strong>. You can also text it to them:</p>
               <div className="flex flex-wrap gap-2 items-center">
                 <input readOnly value={lastLink.url} aria-label="Sign-up link" onFocus={e => e.target.select()} className="input-field flex-1 min-w-[12rem] font-mono text-xs" />
                 <button type="button" onClick={() => copyLink(lastLink.url)} className="btn-secondary text-sm">Copy link</button>
@@ -150,15 +162,15 @@ export default function Settings() {
           )}
           {invites.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Waiting to sign up</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Links not used yet</p>
               <ul className="divide-y divide-slate-50">
                 {invites.map(inv => (
                   <li key={inv.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
                     <div className="flex-1 min-w-[12rem]">
                       <p className="font-medium text-slate-800">{inv.name}</p>
-                      <p className="text-xs text-slate-400">{inv.email} · {inv.role} · link expires {new Date(inv.expires_at.replace(' ', 'T') + 'Z').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}</p>
+                      <p className="text-xs text-slate-400">{inv.email} · {inv.user_id ? 'new password' : `new ${inv.role} login`} · link expires {new Date(inv.expires_at.replace(' ', 'T') + 'Z').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}</p>
                     </div>
-                    <button onClick={() => cancelInvite(inv)} className="text-xs text-red-500 hover:text-red-700">Cancel invite</button>
+                    <button onClick={() => cancelInvite(inv)} className="text-xs text-red-500 hover:text-red-700">Cancel link</button>
                   </li>
                 ))}
               </ul>
@@ -188,7 +200,8 @@ export default function Settings() {
                 </div>
                 {u.id !== user?.id && (
                   <>
-                    <button onClick={() => resetPassword(u)} className="text-xs text-slate-500 hover:text-slate-800">Reset password</button>
+                    <button onClick={() => sendPasswordLink(u)} className="text-xs text-rose-600 hover:text-rose-700">Send password link</button>
+                    <button onClick={() => resetPassword(u)} className="text-xs text-slate-500 hover:text-slate-800">Set password yourself</button>
                     <button onClick={() => removeUser(u)} className="text-xs text-red-500 hover:text-red-700">Remove</button>
                   </>
                 )}
