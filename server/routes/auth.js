@@ -23,7 +23,10 @@ router.post('/login', loginLimiter, (req, res) => {
     return res.status(400).json({ error: 'Email and password required' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  // Logins are saved lowercased (see POST /users), so the lookup must ignore
+  // case too. An exact match turned "Shannon@…" into "Invalid credentials" for
+  // a login that existed as "shannon@…".
+  const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(String(email).trim().toLowerCase());
 
   if (!user) {
     return res.status(401).json({ error: 'Invalid credentials' });

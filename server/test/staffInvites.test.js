@@ -78,3 +78,12 @@ test('only the admin can invite; cancelled, replaced and expired links stop work
   assert.equal((await call('POST', `/api/auth/invite/${third.url.split('/').pop()}`, { password: 'pats-password-1' })).status, 404);
   assert.equal((await call('GET', '/api/auth/invite/not-a-token')).status, 404);
 });
+
+test('a login added with capitals in the email can sign in however it is typed', async () => {
+  const add = await call('POST', '/api/auth/users', { name: 'Sam', email: 'Sam.Owner@Venue.test', role: 'admin', password: 'sams-password-1' }, admin);
+  assert.equal(add.status, 201);
+  for (const typed of ['Sam.Owner@Venue.test', 'sam.owner@venue.test', ' SAM.OWNER@VENUE.TEST ']) {
+    assert.equal((await call('POST', '/api/auth/login', { email: typed, password: 'sams-password-1' })).status, 200, typed);
+  }
+  assert.equal((await call('POST', '/api/auth/login', { email: 'sam.owner@venue.test', password: 'wrong-password' })).status, 401);
+});
