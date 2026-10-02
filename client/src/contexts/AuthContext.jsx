@@ -13,6 +13,7 @@ const PUBLIC_ROUTES = [
   /^\/proposal\//,   // proposal review links
   /^\/form\//,       // private form links sent to couples
   /^\/inquire\/?$/,  // public enquiry form
+  /^\/signup\//,     // staff choosing a password from their invite link
 ]
 
 export function AuthProvider({ children }) {
@@ -65,6 +66,17 @@ export function AuthProvider({ children }) {
 
   const loginAdmin = async (email, password) => {
     const response = await axios.post('/api/auth/login', { email, password })
+    const { token, user: userData } = response.data
+    localStorage.setItem('adminToken', token)
+    localStorage.setItem('adminUser', JSON.stringify(userData))
+    setUser(userData)
+    return userData
+  }
+
+  // Accepting a sign-up invite creates the login and returns a session, so the
+  // new person lands straight on the dashboard.
+  const signUpAdmin = async (inviteToken, body) => {
+    const response = await axios.post(`/api/auth/invite/${inviteToken}`, body)
     const { token, user: userData } = response.data
     localStorage.setItem('adminToken', token)
     localStorage.setItem('adminUser', JSON.stringify(userData))
@@ -177,7 +189,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, couple, loading,
-      loginAdmin, loginCouple,
+      loginAdmin, loginCouple, signUpAdmin,
       logoutAdmin, logoutCouple,
       getAdminAxios, getCoupleAxios
     }}>

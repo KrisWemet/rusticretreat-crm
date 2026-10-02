@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import Login from './pages/Login'
+import Signup from './pages/Signup'
 import PortalLogin from './pages/PortalLogin'
 import SignContract from './pages/SignContract'
 import Dashboard from './pages/admin/Dashboard'
@@ -74,6 +75,7 @@ function App() {
 
           {/* Admin/Staff routes */}
           <Route path="/login" element={<Login />} />
+          <Route path="/signup/:token" element={<Signup />} />
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />

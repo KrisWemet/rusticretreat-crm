@@ -92,6 +92,19 @@ already authenticated:
 **Test any couple-facing change in a browser with no cookie and no session.**
 Curling the API proves nothing; the API was correct throughout both bugs.
 
+The same applies to **staff sign-up links** (`/signup/:token`, API
+`/api/auth/invite/:token`): the person opening one has no login and no gate
+cookie yet, so both paths are on both lists.
+
+### Staff sign-up is invite-only, on purpose
+
+There is no open "create an account" page. The CRM is publicly reachable, so one
+would let anyone give themselves a login. Instead the admin uses **Settings →
+Invite to sign up**: it creates a one-time link (7 days, `user_invites` table,
+only a SHA-256 of the token stored) and optionally emails it. The person picks
+their own password and is signed straight in. The link is built from
+`BASE_URL`, like signing links.
+
 ### The CRM issues two different contracts, and they contradict each other
 
 **Unresolved — the owner is supplying the real contract text.** Until then, do

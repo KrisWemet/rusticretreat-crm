@@ -22,7 +22,14 @@ const at = (iso) => new Date(iso);
 test('Alberta day and hour are computed in America/Edmonton', () => {
   assert.deepEqual(schedule.albertaNow(at('2026-07-10T15:00:00Z')), { day: '2026-07-10', hour: 9 });
   assert.deepEqual(schedule.albertaNow(at('2026-07-11T03:30:00Z')), { day: '2026-07-10', hour: 21 }, 'still the 10th in Alberta');
-  assert.deepEqual(schedule.albertaNow(at('2026-12-01T06:59:00Z')), { day: '2026-11-30', hour: 23 }, 'MST in winter');
+  // Winter is checked against the time-zone database, not a fixed offset:
+  // tzdata 2026c keeps Alberta on UTC-6 all year, older releases switch to
+  // MST (UTC-7). Either way the answer must be Alberta's, not UTC's (06:59).
+  const winter = at('2026-12-01T06:59:00Z');
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Edmonton', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' })
+    .formatToParts(winter).map(p => [p.type, p.value]));
+  assert.deepEqual(schedule.albertaNow(winter), { day: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) }, 'Alberta time in winter');
+  assert.notEqual(schedule.albertaNow(winter).hour, 6, 'not UTC');
 });
 
 test('a job runs once per Alberta day after its hour, survives restarts, and catches up', async () => {

@@ -82,6 +82,8 @@ const PUBLIC_PATHS = [
   /^\/form\//,                       // couple filling in a form from their private link
   /^\/api\/forms\/public\//,          // …and the API that page calls (token + rate limit)
   /^\/inquire\/?$/,                  // public enquiry form
+  /^\/signup\//,                     // staff choosing a password from their invite link
+  /^\/api\/auth\/invite\//,           // …and the API that page calls (token + rate limit)
   /^\/api\/inquire/,
   /^\/assets\//,                     // JS/CSS the above pages need to render
   /^\/favicon\.(ico|svg|png)$/,
