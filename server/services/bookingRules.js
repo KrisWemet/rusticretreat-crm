@@ -90,10 +90,14 @@ function lastDay(start, end, kind) {
  * @param options.checkWindow        enforce the weekday pattern (default true).
  *                                   Off for contracts, whose single wedding date
  *                                   may be the ceremony day rather than arrival.
+ * @param options.checkBlocked       refuse owner-blocked dates (default true).
+ *                                   Off when entering a booking made before the
+ *                                   CRM, whose dates the owner may have blocked
+ *                                   by hand to hold them.
  * @throws BookingRuleError with a message staff and couples can act on
  */
 function assertBookable(db, booking, options = {}) {
-  const { excludeBookingId = null, excludeCoupleId = null, checkPackage = true, checkWindow = true } = options;
+  const { excludeBookingId = null, excludeCoupleId = null, checkPackage = true, checkWindow = true, checkBlocked = true } = options;
 
   const start = toDay(booking.event_date);
   if (start == null) throw new BookingRuleError('A valid start date (YYYY-MM-DD) is required.', 400);
@@ -156,6 +160,7 @@ function assertBookable(db, booking, options = {}) {
     }
   }
 
+  if (!checkBlocked) return;
   const blocked = db.prepare('SELECT date, reason FROM blocked_dates WHERE date BETWEEN ? AND ? ORDER BY date LIMIT 1')
     .get(fromDay(start), fromDay(end));
   if (blocked) {
