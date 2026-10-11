@@ -212,6 +212,19 @@ a valid session lacking permission. The client ends the session on 401 only.
 Conflating them either strands a signed-out user on a dashboard whose every
 request fails, or logs out a staff member who merely hit an admin-only route.
 
+### Bookings made before the CRM go in through one path
+
+**Add Existing Bookings** (Clients and Bookings pages) takes one couple by hand
+or many from a CSV. Both go through `services/existingBookings.js`; the preview
+runs the real import in a transaction and rolls it back, so it cannot disagree
+with the save. These couples must not look like new enquiries: status booked
+(completed if the stay has ended), `contacted_at` set, nothing emailed. Money
+already paid becomes a paid invoice without a receipt; any balance becomes an
+unpaid invoice with **no due date**, because `paymentReminder.js` emails couples
+about any unpaid invoice that has one. Retired packages and owner-blocked dates
+are allowed (`assertBookable(..., { checkPackage: false, checkBlocked: false })`);
+a clash with another booking is not.
+
 ### The UI must not trust data it fetched once
 
 Couples sign from their own phones. The contracts list fetched on mount and

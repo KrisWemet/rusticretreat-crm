@@ -125,7 +125,8 @@ app.post('/api/sms/inbound', express.raw({ type: '*/*' }), inboundHandler);
 const { inboundEmailHandler } = require('./routes/inboundEmail');
 app.post('/api/email/inbound', express.raw({ type: '*/*', limit: '1mb' }), inboundEmailHandler);
 
-app.use(express.json());
+// Large enough for a spreadsheet of existing bookings (routes/existingBookings.js).
+app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Static files for uploads
@@ -137,6 +138,7 @@ require('./db');
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/couples', require('./routes/couples'));
+app.use('/api/bookings/existing', require('./routes/existingBookings'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/checklist', require('./routes/checklist'));
