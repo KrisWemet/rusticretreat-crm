@@ -491,6 +491,9 @@ for (const col of [
   'ALTER TABLE invoices ADD COLUMN payment_reference TEXT',
   // Archived couples are hidden from lists but keep all their records
   'ALTER TABLE couples ADD COLUMN archived_at DATETIME',
+  // "Mark as done" for work handled outside the CRM (a phone call, the venue's
+  // own email): what was done
+  'ALTER TABLE tasks ADD COLUMN completion_note TEXT',
 ]) { try { db.exec(col); } catch (_) {} }
 
 // Site tours — requested from the public inquiry form, scheduled by staff
@@ -559,6 +562,9 @@ db.exec(`
     order_index INTEGER DEFAULT 0
   );
 `);
+// When staff last chased an unanswered proposal outside the CRM. Added here,
+// not in the column list above, because that list runs before this table exists.
+try { db.exec('ALTER TABLE proposals ADD COLUMN followed_up_at DATETIME'); } catch (_) {}
 
 // ── Custom forms / questionnaires ─────────────────────────────────────────────
 db.exec(`

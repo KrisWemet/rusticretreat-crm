@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const db = require('../db');
 const rateLimit = require('../middleware/rateLimit');
 const { authenticateToken } = require('../middleware/auth');
+const { logActivity } = require('../services/activity');
+const { readDone, describeDone } = require('../services/markDone');
 const email = require('../services/email');
 const { assertBookable, sendRuleError, BookingRuleError } = require('../services/bookingRules');
 const { buildPaymentSchedule } = require('../services/paymentSchedule');
@@ -105,6 +107,20 @@ router.put('/:id', authenticateToken, (req, res) => {
   if (items) saveItems(req.params.id, items);
   recomputeTotals(req.params.id);
   res.json(getFullProposal(req.params.id));
+});
+
+// ── Admin: record a follow-up done outside the CRM ──────────────────────────
+// Takes a sent proposal off the dashboard's "No response" list for another two
+// weeks, and notes it in the couple's history.
+router.patch('/:id/followed-up', authenticateToken, (req, res) => {
+  const p = db.prepare('SELECT id, couple_id, title FROM proposals WHERE id = ?').get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Proposal not found' });
+  const done = readDone(req.body);
+  if (done.error) return res.status(400).json({ error: done.error });
+  db.prepare('UPDATE proposals SET followed_up_at = ? WHERE id = ?').run(done.at, p.id);
+  logActivity(req, { action: 'proposal.followed_up', entity: 'proposal', entityId: p.id, coupleId: p.couple_id,
+    summary: `Followed up on proposal "${p.title}"${describeDone(done)}`, detail: { note: done.note, done_on: done.doneOn } });
+  res.json(getFullProposal(p.id));
 });
 
 // ── Admin: send proposal to couple (generates public link + email) ───────────

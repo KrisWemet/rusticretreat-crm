@@ -22,18 +22,24 @@ function Section({ title, count, to, children, tone = 'slate' }) {
   )
 }
 
-function Row({ to, main, side, alert }) {
+// `onDone` adds a tick button for marking the item done in place.
+function Row({ to, main, side, alert, onDone }) {
   const body = (
     <>
       <span className="truncate text-slate-700">{main}</span>
       {side && <span className={`flex-shrink-0 text-xs ${alert ? 'text-red-600 font-medium' : 'text-slate-400'}`}>{side}</span>}
     </>
   )
+  const row = to
+    ? <Link to={to} className="flex-1 min-w-0 flex items-center justify-between gap-3 text-sm rounded-md px-2 py-1 -mx-2 hover:bg-slate-50">{body}</Link>
+    : <div className="flex-1 min-w-0 flex items-center justify-between gap-3 text-sm px-2 py-1 -mx-2">{body}</div>
   return (
-    <li>
-      {to
-        ? <Link to={to} className="flex items-center justify-between gap-3 text-sm rounded-md px-2 py-1 -mx-2 hover:bg-slate-50">{body}</Link>
-        : <div className="flex items-center justify-between gap-3 text-sm px-2 py-1 -mx-2">{body}</div>}
+    <li className="flex items-center gap-1">
+      {onDone && (
+        <button type="button" onClick={onDone} aria-label="Mark done" title="Mark done"
+          className="flex-shrink-0 w-4 h-4 mr-1 rounded border border-slate-300 hover:border-emerald-500 hover:bg-emerald-50" />
+      )}
+      {row}
     </li>
   )
 }
@@ -43,7 +49,7 @@ const more = (list, to) => list.length > MAX && (
   <li><Link to={to} className="text-xs text-slate-400 hover:text-rose-600 px-2 -mx-2">+ {list.length - MAX} more</Link></li>
 )
 
-export default function TodayPanel({ data }) {
+export default function TodayPanel({ data, onTaskDone }) {
   if (!data) return null
   const s = data
   const client = (id) => (id ? `/clients/${id}` : undefined)
@@ -72,7 +78,8 @@ export default function TodayPanel({ data }) {
     <Section key="k" title="Tasks due" count={s.tasks_due.length} to="/tasks" tone={s.tasks_due.some(t => t.overdue) ? 'red' : 'slate'}>
       {s.tasks_due.slice(0, MAX).map(t => (
         <Row key={t.id} to={t.couple_id ? client(t.couple_id) : '/tasks'} main={`${t.title}${t.couple_names ? ` — ${t.couple_names}` : ''}`}
-          side={t.overdue ? `Overdue · ${day(t.due_date)}` : 'Today'} alert={t.overdue} />
+          side={t.overdue ? `Overdue · ${day(t.due_date)}` : 'Today'} alert={t.overdue}
+          onDone={onTaskDone ? () => onTaskDone(t) : undefined} />
       ))}
       {more(s.tasks_due, '/tasks')}
     </Section>)

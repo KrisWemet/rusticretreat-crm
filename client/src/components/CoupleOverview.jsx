@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
 import { CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import MarkDoneModal from './MarkDoneModal'
 
 // Everything about one couple, from /api/couples/:id/overview: their booking,
 // payments and balance, contracts and who still has to sign, tasks, tours, the
@@ -38,6 +39,7 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
   const [error, setError] = useState(null)
   const [newTask, setNewTask] = useState({ title: '', due_date: '' })
   const [showAllActivity, setShowAllActivity] = useState(false)
+  const [marking, setMarking] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -62,8 +64,14 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
     } catch (err) { toast.error(err.response?.data?.error || 'Could not add the task') }
   }
 
+  // Ticking asks what was done and when (it may have been handled outside the
+  // CRM); unticking undoes it straight away.
   const toggleTask = async (t) => {
-    try { await api.put(`/api/tasks/${t.id}`, { completed: !t.completed }); load() }
+    if (!t.completed) {
+      setMarking({ title: 'Mark task as done', subject: t.title, save: (body) => api.patch(`/api/tasks/${t.id}/done`, body) })
+      return
+    }
+    try { await api.patch(`/api/tasks/${t.id}/done`, { done: false }); load() }
     catch (err) { toast.error(err.response?.data?.error || 'Could not update the task') }
   }
 
@@ -179,6 +187,9 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
                   <button onClick={() => toggleTask(t)} aria-label={t.completed ? 'Mark not done' : 'Mark done'}
                     className={`w-4 h-4 flex-shrink-0 rounded border ${t.completed ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 hover:border-emerald-500'}`} />
                   <span className={`flex-1 min-w-0 truncate ${t.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>{t.title}</span>
+                  {t.completed && t.completion_note && (
+                    <span className="flex-shrink-0 max-w-[45%] truncate text-xs text-emerald-700" title={t.completion_note}>{t.completion_note}</span>
+                  )}
                   {t.due_date && !t.completed && (
                     <span className={`flex-shrink-0 text-xs ${t.due_date < data.today ? 'text-red-600 font-medium' : 'text-gray-400'}`}>{day(t.due_date)}</span>
                   )}
@@ -187,6 +198,8 @@ export default function CoupleOverview({ coupleId, api, refreshKey }) {
             </ul>
           )}
         </Card>
+
+        <MarkDoneModal target={marking} onClose={() => setMarking(null)} onDone={load} />
 
         {/* Bookings & tours */}
         <Card title="Bookings and tours" action={<Link to="/tours" className="text-sm text-rose-600 hover:underline">Open Site Tours</Link>}>

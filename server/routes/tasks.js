@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const { logActivity } = require('../services/activity');
+const { readDone, describeDone } = require('../services/markDone');
 
 // Get all tasks
 router.get('/', authenticateToken, (req, res) => {
@@ -97,6 +99,34 @@ router.put('/:id', authenticateToken, (req, res) => {
     WHERE t.id = ?
   `).get(req.params.id);
   res.json(updated);
+});
+
+// Mark a task done — including one handled outside the CRM, with an optional
+// note ("called them") and the day it was done — or undo that with
+// { done: false }. Recorded in the couple's history.
+router.patch('/:id/done', authenticateToken, (req, res) => {
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  if (req.body?.done === false) {
+    db.prepare('UPDATE tasks SET completed = 0, completed_at = NULL, completion_note = NULL WHERE id = ?').run(task.id);
+    logActivity(req, { action: 'task.reopened', entity: 'task', entityId: task.id, coupleId: task.couple_id,
+      summary: `Marked task "${task.title}" not done` });
+  } else {
+    const done = readDone(req.body);
+    if (done.error) return res.status(400).json({ error: done.error });
+    db.prepare('UPDATE tasks SET completed = 1, completed_at = ?, completion_note = ? WHERE id = ?')
+      .run(done.at, done.note, task.id);
+    logActivity(req, { action: 'task.done', entity: 'task', entityId: task.id, coupleId: task.couple_id,
+      summary: `Marked task "${task.title}" done${describeDone(done)}`, detail: { note: done.note, done_on: done.doneOn } });
+  }
+
+  res.json(db.prepare(`
+    SELECT t.*, c.partner1_name, c.partner2_name
+    FROM tasks t
+    LEFT JOIN couples c ON t.couple_id = c.id
+    WHERE t.id = ?
+  `).get(task.id));
 });
 
 // Delete task

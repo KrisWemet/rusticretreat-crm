@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
 import TodayPanel from '../../components/TodayPanel'
+import MarkDoneModal from '../../components/MarkDoneModal'
 import {
   UsersIcon,
   CalendarDaysIcon,
@@ -16,6 +17,7 @@ import {
   ArrowTrendingUpIcon,
   HeartIcon,
   BellAlertIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline'
 import { format, isToday, isTomorrow, parseISO, differenceInDays } from 'date-fns'
 
@@ -24,6 +26,17 @@ function greeting() {
   if (h < 12) return 'Good morning'
   if (h < 17) return 'Good afternoon'
   return 'Good evening'
+}
+
+// "Done" on a dashboard row: for something already handled, often outside
+// the CRM (a phone call, the venue's own email).
+function DoneButton({ onClick, label = 'Done', title }) {
+  return (
+    <button type="button" onClick={onClick} title={title}
+      className="flex-shrink-0 self-center inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50">
+      <CheckIcon className="w-3.5 h-3.5" /> {label}
+    </button>
+  )
 }
 
 function StatCard({ label, value, icon: Icon, color, sub }) {
@@ -85,6 +98,18 @@ export default function Dashboard() {
   const [attention, setAttention] = useState({ expiring_proposals: [], stalled_proposals: [], overdue_invoices: [], needs_follow_up: [] })
   const [today, setToday] = useState(null)
   const [loading, setLoading] = useState(true)
+  // Bumped after marking something done, to reload every list on the page.
+  const [reloadKey, setReloadKey] = useState(0)
+  const [marking, setMarking] = useState(null)
+  const reload = () => setReloadKey(k => k + 1)
+
+  const markTask = (t) => setMarking({ title: 'Mark task as done',
+    subject: `${t.title}${t.couple_names || t.partner1_name ? ` — ${t.couple_names || `${t.partner1_name} & ${t.partner2_name}`}` : ''}`,
+    save: (body) => getAdminAxios().patch(`/api/tasks/${t.id}/done`, body) })
+  const markFollowedUp = (c) => setMarking({ title: 'Mark as followed up', subject: `${c.partner1_name} & ${c.partner2_name}`,
+    save: (body) => getAdminAxios().patch(`/api/couples/${c.id}/contacted`, body) })
+  const markProposalFollowedUp = (p) => setMarking({ title: 'Record a follow-up', subject: `${p.partner1_name} & ${p.partner2_name} — ${p.title}`,
+    save: (body) => getAdminAxios().patch(`/api/proposals/${p.id}/followed-up`, body) })
 
   useEffect(() => {
     async function load() {
@@ -145,7 +170,8 @@ export default function Dashboard() {
       }
     }
     load()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey])
 
   const modules = [
     { to: '/clients', icon: UsersIcon, label: 'Clients & Leads', description: 'Manage couples from initial inquiry through booking.', color: 'bg-violet-100 text-violet-600', badge: stats.newLeads },
@@ -198,7 +224,8 @@ export default function Dashboard() {
         />
       </div>
 
-      <TodayPanel data={today} />
+      <TodayPanel data={today} onTaskDone={markTask} />
+      <MarkDoneModal target={marking} onClose={() => setMarking(null)} onDone={reload} />
 
       {/* Needs Attention */}
       {attentionCount > 0 && (
@@ -212,7 +239,8 @@ export default function Dashboard() {
           </div>
           <div className="divide-y divide-slate-50">
             {attention.needs_follow_up.map(c => (
-              <Link key={`fu-${c.id}`} to={`/clients/${c.id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-amber-50 transition-colors">
+              <div key={`fu-${c.id}`} className="flex items-stretch gap-2 pr-3 hover:bg-amber-50 transition-colors">
+              <Link to={`/clients/${c.id}`} className="flex-1 min-w-0 flex items-start gap-3 pl-5 py-3">
                 <div className="w-2 h-2 rounded-full bg-violet-400 mt-1.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-semibold text-slate-700">{c.partner1_name} &amp; {c.partner2_name}</div>
@@ -223,6 +251,8 @@ export default function Dashboard() {
                   <div className="text-xs text-slate-400">{c.days_old === 0 ? 'enquired today' : `enquired ${c.days_old} day${c.days_old === 1 ? '' : 's'} ago`}</div>
                 </div>
               </Link>
+              <DoneButton onClick={() => markFollowedUp(c)} title="Already followed up with them? Mark it done" />
+              </div>
             ))}
             {attention.expiring_proposals.map(p => (
               <Link key={`ep-${p.id}`} to="/proposals" className="flex items-start gap-3 px-5 py-3 hover:bg-amber-50 transition-colors">
@@ -240,7 +270,8 @@ export default function Dashboard() {
               </Link>
             ))}
             {attention.stalled_proposals.map(p => (
-              <Link key={`sp-${p.id}`} to="/proposals" className="flex items-start gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
+              <div key={`sp-${p.id}`} className="flex items-stretch gap-2 pr-3 hover:bg-slate-50 transition-colors">
+              <Link to="/proposals" className="flex-1 min-w-0 flex items-start gap-3 pl-5 py-3">
                 <div className="w-2 h-2 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-semibold text-slate-700">{p.partner1_name} &amp; {p.partner2_name}</div>
@@ -248,9 +279,13 @@ export default function Dashboard() {
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div className="text-xs font-medium text-blue-700">No response</div>
-                  <div className="text-xs text-slate-400">sent {p.sent_at ? format(parseISO(p.sent_at), 'MMM d') : '—'}</div>
+                  <div className="text-xs text-slate-400">
+                    {p.followed_up_at ? `followed up ${format(new Date(p.followed_up_at.replace(' ', 'T') + 'Z'), 'MMM d')}` : `sent ${p.sent_at ? format(parseISO(p.sent_at), 'MMM d') : '—'}`}
+                  </div>
                 </div>
               </Link>
+              <DoneButton onClick={() => markProposalFollowedUp(p)} label="Followed up" title="Already followed up on this proposal? Record it" />
+              </div>
             ))}
           </div>
         </div>
@@ -359,6 +394,10 @@ export default function Dashboard() {
                         </div>
                       )}
                     </div>
+                    <button type="button" onClick={() => markTask(t)} aria-label="Mark done" title="Mark done"
+                      className="flex-shrink-0 p-1 rounded-full text-slate-300 hover:text-emerald-600 hover:bg-emerald-50">
+                      <CheckIcon className="w-4 h-4" />
+                    </button>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                       t.priority === 'high' ? 'bg-red-100 text-red-600'
                       : t.priority === 'medium' ? 'bg-amber-100 text-amber-600'

@@ -20,14 +20,17 @@ export const pageGuides = [
         title: 'Clear your day from the dashboard',
         steps: [
           'Start at the top with "Today and this week" and click Open on each item to go straight to it.',
-          'Work down "Needs a follow-up": open each couple, reach out (phone, email or the Messages page), then click Mark contacted on their page.',
+          'Work down "Needs a follow-up": reach out however suits you (phone, your own email or the Messages page), then click Done on that row. Add a short note like "called them" and the day you did it if it wasn\'t today.',
+          'Already handled a task, or chased a proposal marked "No response", outside the CRM? Tick the task, or click Followed up on the proposal, and it comes off the list.',
           'Anything you can\'t finish today, turn into a task so it shows up again.',
         ],
       },
     ],
     tips: [
       'The same list arrives as the morning summary email at about 7 am Alberta time — but only on days with something to report.',
-      'An enquiry stops showing under "Needs a follow-up" once it has a tour booked, a proposal sent, a booking, or you click Mark contacted.',
+      'An enquiry stops showing under "Needs a follow-up" once it has a tour booked, a proposal sent, a booking, or you mark it done.',
+      'Whatever you mark done, with your note and date, is saved to the couple\'s History so everyone on staff can see it was handled.',
+      'A proposal you\'ve recorded a follow-up on comes back under "No response" two weeks later if the couple still hasn\'t answered.',
     ],
     related: ['morning-routine', 'enquiry-to-booking', 'clients'],
   },
@@ -82,7 +85,8 @@ export const pageGuides = [
         title: 'Record that you\'ve followed up with a new enquiry',
         steps: [
           'Contact the couple however suits you.',
-          'Click Mark contacted near the top. It shows "✓ Contacted" with the date; click it again to undo.',
+          'Click Mark contacted near the top. Optionally say what you did ("called them") and change the date if it was an earlier day, then click Mark as done.',
+          'It shows "✓ Contacted" with the date, and your note goes in the couple\'s History. Click it again to undo.',
         ],
       },
       {
@@ -349,7 +353,8 @@ export const pageGuides = [
     whatYouCanDo: [
       'Add a task — pick a common follow-up shortcut or type your own, choose Due in and Priority, and link it to a couple.',
       'Assign tasks to a staff member.',
-      'Mark done / Mark not done, edit, and filter by couple, due today or overdue.',
+      'Tick a task to mark it done — including one you handled outside the CRM. You can add a note ("called them") and the day it was done; both show on the task and in the couple\'s History. Tick it again to undo.',
+      'Edit, and filter by couple, due today or overdue.',
     ],
     howTo: [
       {
@@ -534,7 +539,7 @@ export const recipes = [
     steps: [
       'Read the morning summary email (about 7 am) or open the Dashboard.',
       'Tours today: check the notes and prepare the site.',
-      'Needs a follow-up: contact each couple, then Mark contacted.',
+      'Needs a follow-up: contact each couple, then click Done on their row (with a note if you like).',
       'Payments due and overdue: check your bank for e-Transfers and record any that arrived.',
       'Waiting for a signature and forms not returned: send a friendly nudge or Re-send the link.',
       'Messages: answer anything new. Tasks: clear what\'s due, and add tasks for anything you put off.',
