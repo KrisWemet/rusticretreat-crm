@@ -164,6 +164,8 @@ router.get('/today', authenticateToken, (req, res) => {
 });
 
 // Dashboard "needs attention" — expiring/stalled proposals + overdue invoices.
+// A proposal is stalled 14 days after it was sent, or after staff last
+// recorded following up on it.
 router.get('/attention', authenticateToken, (req, res) => {
   const in7days = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
   const ago14days = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
@@ -177,10 +179,10 @@ router.get('/attention', authenticateToken, (req, res) => {
   `).all(in7days);
 
   const stalled = db.prepare(`
-    SELECT p.id, p.title, p.total, p.valid_until, p.sent_at,
+    SELECT p.id, p.title, p.total, p.valid_until, p.sent_at, p.followed_up_at,
            c.id AS couple_id, c.partner1_name, c.partner2_name
     FROM proposals p JOIN couples c ON c.id = p.couple_id
-    WHERE p.status = 'sent' AND (p.valid_until IS NULL OR p.valid_until > ?) AND p.sent_at <= ?
+    WHERE p.status = 'sent' AND (p.valid_until IS NULL OR p.valid_until > ?) AND COALESCE(p.followed_up_at, p.sent_at) <= ?
     ORDER BY p.sent_at ASC
   `).all(in7days, ago14days);
 

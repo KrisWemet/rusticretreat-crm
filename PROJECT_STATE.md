@@ -508,6 +508,25 @@ refuse. Run the tests with `npm test --prefix server`.
 
 ---
 
+### New columns: the `ALTER TABLE` list in `db.js` runs before some tables exist
+
+The column-migration list in `db.js` (`for (const col of [...]) try { db.exec(col) } catch {}`)
+runs *before* the `proposals`, `forms` and later tables are created. An
+`ALTER TABLE proposals ...` placed there fails on a fresh database and the
+`catch` swallows it, so the column silently never appears — the app then 500s
+on the first query that reads it. Add a column to a later table right after
+that table's `CREATE TABLE`, as `proposals.followed_up_at` is. Run the tests on
+a fresh database to catch it.
+
+### "Mark as done" for work handled outside the CRM
+
+Tasks, enquiry follow-ups ("Mark contacted") and unanswered proposals can each
+be marked done with an optional note and an earlier date
+(`services/markDone.js`, `client/src/components/MarkDoneModal.jsx`). Each is
+written to the couple's History via `logActivity`. A proposal's follow-up only
+silences "No response" for 14 days (`proposals.followed_up_at`); it is not an
+answer from the couple.
+
 ## Architecture notes
 
 ```

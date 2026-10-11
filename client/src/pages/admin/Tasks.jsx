@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
+import MarkDoneModal from '../../components/MarkDoneModal'
 import Input, { Select, Textarea } from '../../components/ui/Input'
 import { PlusIcon, ClipboardDocumentListIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid'
@@ -32,6 +33,7 @@ export default function Tasks() {
   const [search, setSearch] = useState('')
   const [loadError, setLoadError] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [marking, setMarking] = useState(null)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
   const fetchData = async () => {
@@ -67,9 +69,17 @@ export default function Tasks() {
     } catch (err) { toast.error(err.response?.data?.error || 'Failed to save the task') }
   }
 
+  // Ticking a task asks what was done and when, so work handled outside the
+  // CRM (a phone call, the venue's own email) can be recorded. Unticking undoes it.
   const toggleComplete = async (task) => {
+    if (!task.completed) {
+      const who = task.partner1_name ? ` — ${task.partner1_name} & ${task.partner2_name}` : ''
+      setMarking({ title: 'Mark task as done', subject: `${task.title}${who}`,
+        save: (body) => getAdminAxios().patch(`/api/tasks/${task.id}/done`, body) })
+      return
+    }
     try {
-      await getAdminAxios().put(`/api/tasks/${task.id}`, { completed: !task.completed })
+      await getAdminAxios().patch(`/api/tasks/${task.id}/done`, { done: false })
       fetchData()
     } catch (err) { toast.error(err.response?.data?.error || 'Could not update the task') }
   }
@@ -179,6 +189,11 @@ export default function Tasks() {
                   <td>
                     <button onClick={() => openEdit(task)} className={`text-left font-medium text-slate-800 hover:text-rose-600 ${task.completed ? 'line-through text-slate-400' : ''}`}>{task.title}</button>
                     {task.description && <div className="text-xs text-slate-400 mt-0.5">{task.description}</div>}
+                    {task.completed && task.completed_at && (
+                      <div className="text-xs text-emerald-700 mt-0.5">
+                        Done {format(new Date(task.completed_at.replace(' ', 'T') + 'Z'), 'MMM d')}{task.completion_note ? ` — ${task.completion_note}` : ''}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${priorityStyle[task.priority]}`}>{task.priority}</span>
@@ -204,6 +219,8 @@ export default function Tasks() {
           </table>
         </div>
       )}
+
+      <MarkDoneModal target={marking} onClose={() => setMarking(null)} onDone={fetchData} />
 
       <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title={editingId ? 'Edit Task' : 'Add Task'}>
         <form onSubmit={handleSave} className="space-y-4">

@@ -12,6 +12,7 @@ import {
 import toast from 'react-hot-toast'
 import CoupleForms from '../../components/CoupleForms'
 import CoupleOverview from '../../components/CoupleOverview'
+import MarkDoneModal from '../../components/MarkDoneModal'
 import axios from 'axios'
 import { format, parseISO } from 'date-fns'
 import { REFERRAL_SOURCES, withCurrent } from '../../utils/options'
@@ -39,6 +40,7 @@ export default function ClientDetail() {
   const [showEdit, setShowEdit] = useState(false)
   const [form, setForm] = useState({})
   const [packages, setPackages] = useState([])
+  const [markingContacted, setMarkingContacted] = useState(null)
 
   const fetchData = async () => {
     const api = getAdminAxios()
@@ -62,11 +64,18 @@ export default function ClientDetail() {
 
   // Marks an enquiry as personally followed up, which takes it off the
   // dashboard's "Needs a follow-up" list.
+  // Marking asks how and when they were followed up, since it is often done
+  // outside the CRM (a call, the venue's own email).
   const toggleContacted = async (contacted) => {
+    if (contacted) {
+      setMarkingContacted({ title: 'Mark as followed up', subject: `${couple.partner1_name} & ${couple.partner2_name}`,
+        save: async (body) => { const { data } = await getAdminAxios().patch(`/api/couples/${id}/contacted`, body); setCouple(data) } })
+      return
+    }
     try {
       const { data } = await getAdminAxios().patch(`/api/couples/${id}/contacted`, { contacted })
       setCouple(data)
-      toast.success(contacted ? 'Marked as contacted' : 'Contacted mark removed')
+      toast.success('Contacted mark removed')
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not update')
     }
@@ -332,6 +341,8 @@ export default function ClientDetail() {
       )}
 
       {/* Edit Modal */}
+      <MarkDoneModal target={markingContacted} onClose={() => setMarkingContacted(null)} />
+
       <Modal isOpen={showEdit} onClose={() => setShowEdit(false)} title="Edit Couple" size="lg">
         <form onSubmit={handleEdit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

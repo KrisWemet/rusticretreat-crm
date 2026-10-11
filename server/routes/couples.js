@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { logActivity, recentActivity } = require('../services/activity');
+const { readDone, describeDone } = require('../services/markDone');
 
 // The sales-board column for a status (see PATCH /:id/stage for the reverse).
 function stageForStatus(status, currentStage) {
@@ -183,12 +184,22 @@ router.patch('/:id/stage', authenticateToken, (req, res) => {
   res.json(db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id));
 });
 
-// Mark an enquiry as personally followed up (or undo it)
+// Mark an enquiry as personally followed up (or undo it). Staff may say how
+// they followed up ("called them") and on which day; it goes in the history.
 router.patch('/:id/contacted', authenticateToken, (req, res) => {
   const couple = db.prepare('SELECT id FROM couples WHERE id = ?').get(req.params.id);
   if (!couple) return res.status(404).json({ error: 'Couple not found' });
-  const contacted = req.body?.contacted !== false;
-  db.prepare(`UPDATE couples SET contacted_at = ${contacted ? "datetime('now')" : 'NULL'} WHERE id = ?`).run(req.params.id);
+  if (req.body?.contacted === false) {
+    db.prepare('UPDATE couples SET contacted_at = NULL WHERE id = ?').run(couple.id);
+    logActivity(req, { action: 'couple.uncontacted', entity: 'couple', entityId: couple.id, coupleId: couple.id,
+      summary: 'Removed the "followed up" mark' });
+  } else {
+    const done = readDone(req.body);
+    if (done.error) return res.status(400).json({ error: done.error });
+    db.prepare('UPDATE couples SET contacted_at = ? WHERE id = ?').run(done.at, couple.id);
+    logActivity(req, { action: 'couple.contacted', entity: 'couple', entityId: couple.id, coupleId: couple.id,
+      summary: `Marked as followed up${describeDone(done)}`, detail: { note: done.note, done_on: done.doneOn } });
+  }
   res.json(db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.id));
 });
 
