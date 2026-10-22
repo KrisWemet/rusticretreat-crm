@@ -65,16 +65,16 @@ router.get('/:id', authenticateToken, (req, res) => {
 // ── Admin: create proposal ───────────────────────────────────────────────────
 router.post('/', authenticateToken, (req, res) => {
   const { couple_id, title, package_name, event_date, end_date, guest_count,
-    tax_rate, deposit_pct, valid_until, notes, items } = req.body;
+    tax_rate, deposit_pct, valid_until, notes, items, custom_dates } = req.body;
   if (!couple_id || !title) return res.status(400).json({ error: 'couple_id and title are required' });
 
   const result = db.prepare(`
     INSERT INTO proposals (couple_id, title, package_name, event_date, end_date, guest_count,
-      tax_rate, deposit_pct, valid_until, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      tax_rate, deposit_pct, valid_until, notes, custom_dates)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(couple_id, title, package_name || null, event_date || null, end_date || null,
     guest_count || null, tax_rate != null ? tax_rate : 5, deposit_pct != null ? deposit_pct : 25,
-    valid_until || null, notes || null);
+    valid_until || null, notes || null, custom_dates ? 1 : 0);
 
   saveItems(result.lastInsertRowid, items);
   recomputeTotals(result.lastInsertRowid);
@@ -86,11 +86,11 @@ router.put('/:id', authenticateToken, (req, res) => {
   const existing = db.prepare('SELECT * FROM proposals WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Proposal not found' });
   const { title, package_name, event_date, end_date, guest_count,
-    tax_rate, deposit_pct, valid_until, notes, status, items } = req.body;
+    tax_rate, deposit_pct, valid_until, notes, status, items, custom_dates } = req.body;
 
   db.prepare(`
     UPDATE proposals SET title = ?, package_name = ?, event_date = ?, end_date = ?, guest_count = ?,
-      tax_rate = ?, deposit_pct = ?, valid_until = ?, notes = ?, status = ?
+      tax_rate = ?, deposit_pct = ?, valid_until = ?, notes = ?, status = ?, custom_dates = ?
     WHERE id = ?
   `).run(
     title ?? existing.title, package_name ?? existing.package_name,
@@ -99,7 +99,9 @@ router.put('/:id', authenticateToken, (req, res) => {
     tax_rate != null ? tax_rate : existing.tax_rate,
     deposit_pct != null ? deposit_pct : existing.deposit_pct,
     valid_until ?? existing.valid_until, notes ?? existing.notes,
-    status ?? existing.status, req.params.id
+    status ?? existing.status,
+    custom_dates !== undefined ? (custom_dates ? 1 : 0) : (existing.custom_dates || 0),
+    req.params.id
   );
 
   if (items) saveItems(req.params.id, items);
@@ -357,10 +359,10 @@ router.post('/public/:token/accept', publicActionLimit, (req, res) => {
     ).all(proposal.id).map(r => r.label).join(', ');
 
     const booking = db.prepare(`
-      INSERT INTO bookings (couple_id, event_date, end_date, package_name, guest_count, total_price, add_ons, payment_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+      INSERT INTO bookings (couple_id, event_date, end_date, package_name, guest_count, total_price, add_ons, payment_status, custom_dates)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
     `).run(proposal.couple_id, proposal.event_date, proposal.end_date, proposal.package_name,
-      proposal.guest_count, proposal.total, addOnLabels || null);
+      proposal.guest_count, proposal.total, addOnLabels || null, proposal.custom_dates ? 1 : 0);
 
     // Deposit, 2nd payment and balance, on the dates the signed agreement uses.
     const insertInvoice = db.prepare(`

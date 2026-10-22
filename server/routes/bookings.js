@@ -50,7 +50,7 @@ router.post('/', authenticateToken, (req, res) => {
   const {
     couple_id, event_date, end_date, start_time, end_time, package_name,
     guest_count, ceremony_location, reception_location, catering_type,
-    special_requests, payment_status, deposit_paid, total_price, add_ons
+    special_requests, payment_status, deposit_paid, total_price, add_ons, custom_dates
   } = req.body;
 
   if (!couple_id || !event_date) {
@@ -62,16 +62,16 @@ router.post('/', authenticateToken, (req, res) => {
   let result;
   try {
     result = db.transaction(() => {
-      assertBookable(db, { event_date, end_date, package_name, guest_count });
+      assertBookable(db, { event_date, end_date, package_name, guest_count, custom_dates });
       return db.prepare(`
         INSERT INTO bookings (couple_id, event_date, end_date, start_time, end_time, package_name, guest_count,
           ceremony_location, reception_location, catering_type, special_requests,
-          payment_status, deposit_paid, total_price, add_ons)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          payment_status, deposit_paid, total_price, add_ons, custom_dates)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(couple_id, event_date, end_date || null, start_time || null, end_time || null, package_name || null,
         guest_count || null, ceremony_location || null, reception_location || null,
         catering_type || null, special_requests || null, payment_status || 'pending',
-        deposit_paid || 0, total_price || 0, add_ons || null);
+        deposit_paid || 0, total_price || 0, add_ons || null, custom_dates ? 1 : 0);
     })();
   } catch (err) {
     if (sendRuleError(res, err)) return;
@@ -90,7 +90,7 @@ router.put('/:id', authenticateToken, (req, res) => {
   const {
     event_date, end_date, start_time, end_time, package_name, guest_count,
     ceremony_location, reception_location, catering_type, special_requests,
-    payment_status, deposit_paid, total_price, add_ons
+    payment_status, deposit_paid, total_price, add_ons, custom_dates
   } = req.body;
 
   // Only re-check what this edit changes, so a booking made before a rule
@@ -100,8 +100,10 @@ router.put('/:id', authenticateToken, (req, res) => {
     end_date: end_date !== undefined ? end_date : booking.end_date,
     package_name: package_name !== undefined ? package_name : booking.package_name,
     guest_count: guest_count !== undefined ? guest_count : booking.guest_count,
+    custom_dates: custom_dates !== undefined ? (custom_dates ? 1 : 0) : (booking.custom_dates || 0),
   };
-  const datesChanged = next.event_date !== booking.event_date || (next.end_date || null) !== (booking.end_date || null);
+  const datesChanged = next.event_date !== booking.event_date || (next.end_date || null) !== (booking.end_date || null)
+    || next.custom_dates !== (booking.custom_dates || 0);
   const packageChanged = (next.package_name || null) !== (booking.package_name || null);
   const guestsChanged = String(next.guest_count ?? '') !== String(booking.guest_count ?? '');
 
@@ -118,7 +120,7 @@ router.put('/:id', authenticateToken, (req, res) => {
           event_date = ?, end_date = ?, start_time = ?, end_time = ?, package_name = ?,
           guest_count = ?, ceremony_location = ?, reception_location = ?,
           catering_type = ?, special_requests = ?, payment_status = ?,
-          deposit_paid = ?, total_price = ?, add_ons = ?
+          deposit_paid = ?, total_price = ?, add_ons = ?, custom_dates = ?
         WHERE id = ?
       `).run(
         event_date || booking.event_date,
@@ -135,6 +137,7 @@ router.put('/:id', authenticateToken, (req, res) => {
         deposit_paid !== undefined ? deposit_paid : booking.deposit_paid,
         total_price !== undefined ? total_price : booking.total_price,
         add_ons !== undefined ? add_ons : booking.add_ons,
+        next.custom_dates,
         req.params.id
       );
     })();

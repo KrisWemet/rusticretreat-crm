@@ -9,6 +9,8 @@
 //     reset the property. Owner-blocked dates occupy only themselves.
 //   • 3-Day Weekend runs Friday–Sunday.
 //   • 5-Day Experience runs Wednesday–Sunday, Thursday–Monday or Friday–Tuesday.
+//     Staff can override either with custom dates (custom_dates = 1), which
+//     skips only the weekday pattern; clashes and blocked dates still apply.
 //   • The 2-Day Weekday Escape is no longer offered for new bookings.
 //   • The reception is capped at 100 guests (80 included; 81–100 are overage,
 //     priced on the proposal).
@@ -79,7 +81,7 @@ function lastDay(start, end, kind) {
  * Check a proposed booking against the venue rules.
  *
  * @param db              better-sqlite3 handle
- * @param booking         { event_date, end_date, package_name, guest_count }
+ * @param booking         { event_date, end_date, package_name, guest_count, custom_dates }
  * @param options.excludeBookingId   the booking being edited, if any
  * @param options.excludeCoupleId    ignore this couple's own bookings (a signed
  *                                   contract updates the booking its accepted
@@ -108,13 +110,13 @@ function assertBookable(db, booking, options = {}) {
       throw new BookingRuleError('The 2-Day Weekday Escape is no longer offered. Choose the 3-Day Weekend or the 5-Day Experience.', 400);
     }
     const rule = ALLOWED_STARTS[kind];
-    if (rule && checkWindow) {
+    if (rule && checkWindow && !Number(booking.custom_dates)) {
       const length = PACKAGE_LENGTH[kind];
       const end = rawEnd ?? start + length - 1;
       if (!rule.days.includes(weekday(start)) || end - start + 1 !== length) {
         throw new BookingRuleError(
           `${booking.package_name} must run ${rule.label} (${length} days). ` +
-          `${fmt(start)} to ${fmt(end)} does not fit.`, 400);
+          `${fmt(start)} to ${fmt(end)} does not fit. To use other days, tick "Custom dates".`, 400);
       }
     }
   }

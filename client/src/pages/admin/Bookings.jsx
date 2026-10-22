@@ -8,6 +8,8 @@ import toast from 'react-hot-toast'
 import { format, parseISO } from 'date-fns'
 import { packagePriceFor, withGst } from '../../utils/packagePrice'
 import { CEREMONY_SPACES, RECEPTION_SPACES } from '../../utils/options'
+import StayDates from '../../components/StayDates'
+import { withUsualEnd } from '../../utils/stayDates'
 
 const paymentStyle = {
   pending: 'bg-amber-100 text-amber-700',
@@ -26,7 +28,7 @@ function expectedTotal(packages, form) {
 }
 
 const emptyForm = {
-  couple_id: '', event_date: '', end_date: '',
+  couple_id: '', event_date: '', end_date: '', custom_dates: 0,
   package_name: '', guest_count: '', ceremony_location: '', reception_location: '',
   catering_type: '', add_ons: '', special_requests: '', payment_status: 'pending', deposit_paid: '', total_price: ''
 }
@@ -48,14 +50,20 @@ export default function Bookings() {
 
   // Changing the package or check-in date refills the total, unless staff have
   // typed their own figure (anything other than the previous suggestion).
-  const fPriced = (k) => (e) => setForm(p => {
-    const next = { ...p, [k]: e.target.value }
+  // Apply a change and keep the price in step with the package and year,
+  // unless staff typed their own price.
+  const priced = (p, next) => {
     const before = expectedTotal(packages, p)
     const after = expectedTotal(packages, next)
     const untouched = p.total_price === '' || (before != null && Number(p.total_price) === before)
     if (after != null && untouched) next.total_price = String(after)
     return next
+  }
+  const fPriced = (k) => (e) => setForm(p => {
+    const next = { ...p, [k]: e.target.value }
+    return priced(p, k === 'package_name' ? withUsualEnd(next) : next)
   })
+  const setDates = (patch) => setForm(p => priced(p, { ...p, ...patch }))
 
   // Locations offered: the venue's spaces plus anything typed on earlier bookings.
   const spaces = (base, key) => [...new Set([...base, ...bookings.map(b => b[key]).filter(Boolean)])]
@@ -103,7 +111,7 @@ export default function Bookings() {
 
   const openEdit = (b) => {
     setEditBooking(b)
-    setForm({ couple_id: b.couple_id, event_date: b.event_date || '', end_date: b.end_date || '', package_name: b.package_name || '', guest_count: b.guest_count || '', ceremony_location: b.ceremony_location || '', reception_location: b.reception_location || '', catering_type: b.catering_type || '', add_ons: b.add_ons || '', special_requests: b.special_requests || '', payment_status: b.payment_status || 'pending', deposit_paid: b.deposit_paid || '', total_price: b.total_price || '' })
+    setForm({ couple_id: b.couple_id, event_date: b.event_date || '', end_date: b.end_date || '', custom_dates: b.custom_dates || 0, package_name: b.package_name || '', guest_count: b.guest_count || '', ceremony_location: b.ceremony_location || '', reception_location: b.reception_location || '', catering_type: b.catering_type || '', add_ons: b.add_ons || '', special_requests: b.special_requests || '', payment_status: b.payment_status || 'pending', deposit_paid: b.deposit_paid || '', total_price: b.total_price || '' })
     setShowForm(true)
   }
 
@@ -234,10 +242,8 @@ export default function Bookings() {
             <option value="">Select couple...</option>
             {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
           </Select>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label="Check-In Date" type="date" value={form.event_date} onChange={fPriced('event_date')} required />
-            <Input label="Check-Out Date" type="date" value={form.end_date} onChange={f('end_date')} />
-          </div>
+          <StayDates idPrefix="booking" start={form.event_date} end={form.end_date} custom={form.custom_dates}
+            packageName={form.package_name} onChange={setDates} required />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Package" value={form.package_name} onChange={fPriced('package_name')}>
               <option value="">Select package...</option>

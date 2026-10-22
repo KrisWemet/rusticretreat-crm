@@ -8,6 +8,8 @@ import {
 import toast from 'react-hot-toast'
 import { packagePriceFor } from '../../utils/packagePrice'
 import { format, parseISO } from 'date-fns'
+import StayDates from '../../components/StayDates'
+import { withUsualEnd } from '../../utils/stayDates'
 
 const STATUS = {
   draft:    'bg-slate-100 text-slate-600',
@@ -18,7 +20,7 @@ const STATUS = {
 }
 
 const emptyForm = {
-  couple_id: '', title: '', package_name: '', event_date: '', end_date: '',
+  couple_id: '', title: '', package_name: '', event_date: '', end_date: '', custom_dates: 0,
   guest_count: '', tax_rate: 5, deposit_pct: 25, valid_until: '', notes: '',
   items: [],
 }
@@ -85,7 +87,7 @@ export default function Proposals() {
       const { data } = await api.get(`/api/proposals/${id}`)
       setForm({
         couple_id: data.couple_id, title: data.title, package_name: data.package_name || '',
-        event_date: data.event_date || '', end_date: data.end_date || '',
+        event_date: data.event_date || '', end_date: data.end_date || '', custom_dates: data.custom_dates || 0,
         guest_count: data.guest_count || '', tax_rate: data.tax_rate, deposit_pct: data.deposit_pct,
         valid_until: data.valid_until || '', notes: data.notes || '',
         items: data.items.map(i => ({ label: i.label, description: i.description || '', quantity: i.quantity, unit_price: i.unit_price, amount: i.amount, kind: i.kind })),
@@ -100,7 +102,7 @@ export default function Proposals() {
       const { data } = await api.get(`/api/proposals/${id}`)
       setForm({
         couple_id: data.couple_id, title: `${data.title} (copy)`, package_name: data.package_name || '',
-        event_date: data.event_date || '', end_date: data.end_date || '',
+        event_date: data.event_date || '', end_date: data.end_date || '', custom_dates: data.custom_dates || 0,
         guest_count: data.guest_count || '', tax_rate: data.tax_rate, deposit_pct: data.deposit_pct,
         valid_until: '', notes: data.notes || '',
         items: data.items.map(i => ({ label: i.label, description: i.description || '', quantity: i.quantity, unit_price: i.unit_price, amount: i.amount, kind: i.kind })),
@@ -130,12 +132,12 @@ export default function Proposals() {
     // Priced for the wedding's year: set the check-in date first.
     setForm(f => {
       const price = packagePriceFor(pkg, f.event_date)
-      return {
+      return withUsualEnd({
         ...f,
         package_name: pkg.name,
         title: f.title || `${pkg.name} Proposal`,
         items: [{ label: pkg.name, description: pkg.description || '', quantity: 1, unit_price: price, amount: price, kind: 'package' }, ...f.items.filter(i => i.kind !== 'package')],
-      }
+      })
     })
   }
   function addAddon(a) {
@@ -308,17 +310,13 @@ export default function Proposals() {
                   <label htmlFor="proposal-proposal-title-2" className="label">Proposal Title</label>
                   <input id="proposal-proposal-title-2" name="proposal-proposal-title-2" className="input-field" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="3-Day Weekend Proposal" />
                 </div>
-                <div>
-                  <label htmlFor="proposal-check-in-date-3" className="label">Check-In Date</label>
-                  <input id="proposal-check-in-date-3" name="proposal-check-in-date-3" type="date" className="input-field" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
-                </div>
-                <div>
-                  <label htmlFor="proposal-check-out-date-4" className="label">Check-Out Date</label>
-                  <input id="proposal-check-out-date-4" name="proposal-check-out-date-4" type="date" className="input-field" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+                <div className="sm:col-span-2">
+                  <StayDates idPrefix="proposal" start={form.event_date} end={form.end_date} custom={form.custom_dates}
+                    packageName={form.package_name} onChange={patch => setForm(f => ({ ...f, ...patch }))} />
                 </div>
                 <div>
                   <label htmlFor="proposal-guest-count-5" className="label">Guest Count</label>
-                  <input id="proposal-guest-count-5" name="proposal-guest-count-5" type="number" min="1" max="80" className="input-field" value={form.guest_count} onChange={e => setForm(f => ({ ...f, guest_count: e.target.value }))} placeholder="e.g. 60" />
+                  <input id="proposal-guest-count-5" name="proposal-guest-count-5" type="number" min="1" max="100" className="input-field" value={form.guest_count} onChange={e => setForm(f => ({ ...f, guest_count: e.target.value }))} placeholder="e.g. 60" />
                 </div>
                 <div>
                   <label htmlFor="proposal-valid-until-6" className="label">Valid Until</label>
