@@ -653,6 +653,8 @@ See `DEPLOY.md` for the full write-up.
   backup or upload is emailed to `ADMIN_EMAIL`.
 - Daily jobs run in Alberta time from one runner (`services/schedule.js`,
   recorded in `job_runs`); the Backups page shows each job's last run.
+- The 7 am morning summary email is **off** (owner asked, Nov 2026). It only
+  registers when `MORNING_SUMMARY_EMAIL=on`; the Dashboard shows the same list.
 - The printable executed contract has never been eyeballed by the owner in
   production (verified locally: toolbar hidden, three signature blocks, all
   three parties labelled).
