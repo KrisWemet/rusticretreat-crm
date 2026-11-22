@@ -1,6 +1,6 @@
 # Rustic Retreat CRM: handoff notes
 
-Last updated: 27 September 2026. Written so a new chat can pick up where the last one stopped.
+Last updated: 22 November 2026. Written so a new chat can pick up where the last one stopped.
 
 This file lives in the live CRM repo, `KrisWemet/rusticretreat-crm`, since 27 Sep 2026. It used to live in the old repo `KrisWemet/rustic-retreat-crm` (with a hyphen), which now only points here. Keep it up to date in this repo.
 
@@ -272,6 +272,39 @@ The owner asked for a plan to finish the CRM. Decisions made along the way:
 - **Editing:** all the text lives in `client/src/help/guides.js`. **When a screen changes, update its guide there.** `server/test/helpContent.test.js` fails CI if a sidebar page has no guide or a link is broken.
 - **Also fixed:** the Packages add-on type said "Per guest (over 60)"; it now says over 80, matching the extra-guest rule.
 
+### Planning Pod parity (22 Nov 2026)
+
+The owner asked for the CRM to do what Planning Pod does. Planning Pod was researched from public sources (its site is blocked from Claude's sandbox, and no account was used); the full feature inventory is `docs/planning-pod-features.md`. "REA" (github.com/morluto/rea) was asked for: it inspects apps you run or a logged-in browser session, so it could not see Planning Pod from here. With a Planning Pod login it could inspect the real screens, from the owner's own computer or a recorded HAR file.
+
+**Built (staff side; the couple portal stays off):**
+- **A couple's page now has tabs:** Overview (as before), Event plan, Run of show, Guests, Floor plans, Vendors, Files & notes.
+  - **Event plan:** a "ready for the weekend?" list (agreement signed, deposit, balance, guest count, on-site contacts, run of show, vendors confirmed, floor plan, forms), venue-only notes for the day, and a **printable event order** (Planning Pod's BEO). It pulls setup/teardown times and on-site contacts from the signed agreement. A **vendor copy** leaves prices off.
+  - **Run of show:** every day of the stay hour by hour, with where and who. It prints whole or for one vendor, and can be saved as a template for the next wedding.
+  - **Guests:** RSVPs, meals, dietary needs and plus-ones, with CSV import and export.
+  - **Floor plans:** drag tables, dance floor, tents, bars and more onto the space. Select a table to seat guests. Prints with an equipment count and table lists, and can be saved as a venue layout for future weddings.
+  - **Vendors:** the couple's vendors with arrival times and confirmed or not, added from the directory or by hand.
+  - **Files & notes:** licences, insurance, layouts (stored in the database, staff only), plus a dated log of calls, emails, meetings and visits.
+- **Vendors page:** a **vendor directory** of the venue's own vendors, with stars for recommended ones and insurance expiry (expired shows in red). This was an open item.
+- **Tasks → Checklists:** to-do lists timed from check-in, check-out, booking or enquiry date. A "Booked wedding: venue checklist" comes ready, built from the agreement's deadlines (Final Details Form 7 days before, structures notice 5 days before, damage deposit at check-in, inspection within 48 hours). It is **off until the owner turns on automatic use**, and tasks remind staff only.
+- **Email templates** (Settings) with placeholders such as `{first_names}`, `{wedding_date}` and `{balance_owing}`, used from Messages. Staff still read and send each email themselves.
+- **Calendar sync** (Settings, admin turns it on): a private address for Google Calendar, Outlook or a phone.
+- **Reports** (new sidebar page): payments received with GST, what is still owed by lateness, weddings by year, enquiries by source, and every couple's contacts, each as CSV.
+- **Bugs fixed:**
+  - Accepting a proposal told couples to expect a "wedding portal login" while the portal is off; it now says the rental agreement will follow by email.
+  - Proposal links expired about 30 hours early (the evening before their date).
+  - The CRM's own enquiry form refused more than 80 guests (the reception holds 100).
+
+**Considered and not built:**
+- **The owner's earlier decisions stand:** the couple portal, card payments, SMS and camping tracking stay off.
+- **Planning Pod features left for later:** dated date-holds with an expiry email, change orders after signing, category service charges, QuickBooks, and a public availability calendar for the website.
+
+**Owner to-dos for this round:**
+- Settings → Calendar sync: turn it on and add the address in Google Calendar.
+- Tasks → Checklists: check the venue checklist and decide whether it should apply automatically when a couple books.
+- Settings → Email templates: read the starting templates and adjust the wording.
+- Vendors → Vendor directory: add the vendors you work with.
+- Draw the reception layout once on a couple's Floor plans tab and save it as a venue layout.
+
 ## Open items
 
 1. **Shannon & Chris booking shows $6,439.**
@@ -298,7 +331,6 @@ The owner asked for a plan to finish the CRM. Decisions made along the way:
    - **Optional:** if `ADMIN_BOOTSTRAP_PASSWORD` is still set in Railway, it can now be removed (the log says "already applied; it is safe to unset it").
 4. **Later, optional:**
    - card payments (Stripe), text messages (SMS) and camping tracking: not built this round, by the owner's choice
-   - a venue-wide preferred-vendor list (the Vendors page lists each couple's own vendors)
    - delete repo A's paused Vercel and Supabase projects for good, if the owner is sure nothing in them is needed
    - add camping tracking
    - confirm the cancellation wording in the agreement

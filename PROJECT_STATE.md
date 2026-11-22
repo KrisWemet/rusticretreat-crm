@@ -4,7 +4,7 @@ Running handoff document. **Update it when you change something structural, hit
 a trap worth recording, or change the deployment.** It exists so a new session
 does not rediscover the same landmines.
 
-Last updated: 2026-09-28 · branch `main` (Railway deploys from it).
+Last updated: 2026-11-22 · branch `main` (Railway deploys from it).
 The owner-facing handoff (business rules, what was built when, open items) is
 `HANDOFF.md` at the root of this repo; this file is the technical one.
 
@@ -63,6 +63,27 @@ the default price for weddings in that year; `services/packagePricing.js` and
 `client/src/utils/packagePrice.js`. Contract packets carry a `season` and a
 contract for a wedding in another year is refused. The 2028 agreement is derived
 from the 2027 one and differs only in its price table.
+**Event planning, staff side (Nov 2026, built to match Planning Pod).** The
+timeline, guest and vendor tables were portal-only, and the portal is off, so
+nobody could use them. Each couple's page now has tabs (`?tab=` in the URL):
+
+| Tab | What | Code |
+| --- | --- | --- |
+| Event plan | readiness list, venue notes, checklist apply, printable event order (BEO) | `services/eventOrder.js`, `routes/eventOrder.js` |
+| Run of show | multi-day items (`timeline_events.day_date`), who/where/category, templates | `routes/timeline.js` |
+| Guests | RSVP/meals/dietary/party, CSV import + export | `routes/guests.js` |
+| Floor plans | drag-and-drop plan, seating on `guests.seat_plan_id/seat_table`, venue layouts | `routes/floorplans.js`, `services/floorPlan.js` |
+| Vendors | couple's vendors with arrival time, add from the directory | `routes/vendors.js`, `routes/vendorDirectory.js` |
+| Files & notes | files in `couple_files` (DB, like contract files), dated `couple_notes` | `routes/coupleFiles.js`, `routes/notes.js` |
+
+Venue-wide: vendor directory (Vendors page), checklist templates timed from
+check-in/check-out/booked/enquiry (`services/taskTemplates.js`; Tasks →
+Checklists), email templates with `{placeholders}` (`services/mergeFields.js`;
+Settings, used in Messages), a private iCal feed (`services/icsFeed.js`;
+Settings → Calendar sync) and a Reports page with CSVs (`routes/reports.js`).
+The research behind it is `docs/planning-pod-features.md` (public sources
+only: planningpod.com is blocked from the sandbox); the gap list is in HANDOFF.md.
+
 - **SMS / unified inbox** — code exists (`services/sms.js`, `routes/sms.js`) but is off: no provider keys are set. See below.
 - **Vercel** — the original target, deferred. See below.
 
@@ -506,6 +527,52 @@ date; staff messages do. Contracts are checked when the venue countersigns,
 excluding the couple's own booking, because the final signature is too late to
 refuse. Run the tests with `npm test --prefix server`.
 
+### Proposal validity is an Alberta calendar day
+
+`valid_until` means "valid through that day". The public proposal page used to
+compare `new Date(valid_until)` — UTC midnight at the *start* of the day, 6 pm
+Alberta time the evening before — and wrote `status='expired'`, so links died
+about 30 hours early while the accept handler and the 3 am job disagreed.
+Compare the string with `albertaToday()` (`services/schedule.js`), everywhere.
+
+### Floor plans have two renderers, like contracts
+
+The editor (`client/.../planning/FloorPlanEditor.jsx`) draws in React; the
+printed plan and the event order use the server's SVG (`services/floorPlan.js`)
+so a printout never depends on a bundle. Element sizes, labels and shapes come
+from the server (`GET /api/floorplans/element-types`), but the drawing code and
+the layer order (areas → floors → tables → labels, so a table on the dance
+floor stays clickable) exist in both. **A new element type means editing both.**
+Seats live on the guest; saving a plan without a table unseats its guests.
+
+### Checklists apply from every enquiry and booking path
+
+`autoApply(coupleId, 'on_booking' | 'on_enquiry')` is called after proposal
+acceptance, the final contract signature (not on a date clash), staff saving a
+booking, the website forms, `/inquire`, and staff Add Couple. It never throws.
+A new path that books or creates an enquiry must call it too. Tasks remember
+`template_item_id`, which is how applying twice adds nothing. Checklists remind
+staff only — the owner's rule is "remind me, not them".
+
+### A hidden label inside a scrolling table can scroll the whole page
+
+`sr-only` is `position: absolute`. Inside an `overflow-x-auto` card with no
+positioned ancestor it escapes the card and widened the page by 104 px on a
+phone. Give such a card `relative`. The phone check in the verification script
+compares `scrollWidth` with `clientWidth` on every page.
+
+### CSV exports: formula guard and BOM
+
+`services/planning.js` `csvCell` prefixes `'` to anything starting with `= + - @`
+(a guest named `=HYPERLINK(...)` must stay text) and `sendCsv` adds a UTF-8 BOM
+so Excel keeps accents. `fetch().text()` strips the BOM, so tests check bytes.
+
+### The calendar feed is public by token
+
+`/api/calendar/feed/<token>.ics` is on `PUBLIC_PATHS` (calendar apps send no
+cookies). The token is in `app_settings` (now created unconditionally in
+`db.js`); off until an admin turns it on; "Make a new address" retires the old.
+
 ---
 
 ## Architecture notes
@@ -665,7 +732,7 @@ See `DEPLOY.md` for the full write-up.
 ## Testing
 
 `npm test --prefix server` runs the server tests (`server/test/*.test.js`, Node's
-built-in runner), and CI runs them plus a client build on every push and PR
+built-in runner; `planning`, `venueTools` and `feedAndReports` cover the Nov 2026 work), and CI runs them plus a client build on every push and PR
 (`.github/workflows/server-tests.yml`). For screens, run the production build
 locally and drive it with Playwright + Chromium (`/opt/pw-browsers/chromium`,
 `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`; do not run `playwright install`).

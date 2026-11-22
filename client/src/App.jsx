@@ -40,6 +40,7 @@ import PublicForm from './pages/PublicForm'
 import PortalForms from './pages/portal/Forms'
 import Settings from './pages/admin/Settings'
 import Help from './pages/admin/Help'
+import Reports from './pages/admin/Reports'
 import NotFound from './pages/NotFound'
 
 function App() {
@@ -93,6 +94,7 @@ function App() {
             <Route path="tasks" element={<Tasks />} />
             <Route path="vendors" element={<VendorsAdmin />} />
             <Route path="analytics" element={<Analytics />} />
+            <Route path="reports" element={<Reports />} />
             <Route path="packages" element={<Packages />} />
             <Route path="backups" element={<Backups />} />
             <Route path="help" element={<Help />} />

@@ -7,6 +7,12 @@ const { authenticateToken } = require('../middleware/auth');
 const email = require('../services/email');
 const { assertBookable, sendRuleError, BookingRuleError } = require('../services/bookingRules');
 const { buildPaymentSchedule } = require('../services/paymentSchedule');
+const { albertaToday } = require('../services/schedule');
+
+// A proposal is valid THROUGH its valid_until day, on Alberta's calendar. Comparing
+// new Date(valid_until) with now used UTC midnight at the start of that day, which
+// is 6 pm Alberta time the evening before, so links expired more than a day early.
+const pastValidUntil = (p) => !!p.valid_until && p.valid_until < albertaToday();
 
 // Recompute subtotal/tax/total from a proposal's line items.
 function recomputeTotals(proposalId) {
@@ -313,11 +319,12 @@ router.get('/public/:token', publicViewLimit, (req, res) => {
   if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
   proposal.items = db.prepare('SELECT * FROM proposal_items WHERE proposal_id = ? ORDER BY order_index, id').all(proposal.id);
   // Auto-expire if past the validity date and still pending
-  if (proposal.status === 'sent' && proposal.valid_until && new Date(proposal.valid_until) < new Date()) {
+  if (proposal.status === 'sent' && pastValidUntil(proposal)) {
     db.prepare(`UPDATE proposals SET status = 'expired' WHERE id = ?`).run(proposal.id);
     proposal.status = 'expired';
   }
-  res.json(proposal);
+  // The acceptance message must not promise a portal login that does not exist.
+  res.json({ ...proposal, portal_enabled: process.env.ENABLE_COUPLE_PORTAL === '1' });
 });
 
 // ── Public: accept a proposal → creates booking + payment schedule ───────────
@@ -328,7 +335,7 @@ router.post('/public/:token/accept', publicActionLimit, (req, res) => {
   const proposal = db.prepare('SELECT * FROM proposals WHERE public_token = ?').get(req.params.token);
   if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
   if (proposal.status === 'accepted') return res.status(400).json({ error: 'This proposal has already been accepted' });
-  const pastValidity = proposal.valid_until && new Date(proposal.valid_until + 'T23:59:59') < new Date();
+  const pastValidity = pastValidUntil(proposal);
   if (proposal.status === 'expired' || (proposal.status === 'sent' && pastValidity)) {
     return res.status(400).json({ error: 'This proposal has expired — please contact us for an updated quote' });
   }
@@ -386,6 +393,9 @@ router.post('/public/:token/accept', publicActionLimit, (req, res) => {
       booking_rule: true,
     });
   }
+
+  // Staff checklist set to apply on booking, if any. Never throws.
+  require('../services/taskTemplates').autoApply(proposal.couple_id, 'on_booking');
 
   // Notify staff that the proposal was accepted (booking + invoices now exist).
   const couple = db.prepare('SELECT partner1_name, partner2_name FROM couples WHERE id = ?').get(proposal.couple_id);

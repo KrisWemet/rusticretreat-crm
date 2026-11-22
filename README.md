@@ -10,6 +10,10 @@ It is deliberately **not** connected to the public wedding website.
 
 **Staff side** — pipeline, couples, bookings, venue calendar, proposals,
 contracts, invoices and payments, tours, tasks, forms, messages, analytics.
+Each couple's page also plans the wedding: run of show, guest list, floor plans
+with seating, vendors, files and notes, and a printable event order. Plus a
+vendor directory, checklist templates, email templates, reports with CSV
+export, and a calendar feed for Google Calendar or Outlook.
 
 **Couple portal** — their own dashboard, documents, checklist, budget, guest
 list, timeline, vendor list, forms, messages, and online payment.

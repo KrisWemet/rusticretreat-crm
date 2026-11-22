@@ -71,7 +71,11 @@ export default function PublicProposal() {
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5"><CheckCircleIcon className="w-9 h-9 text-emerald-600" /></div>
           <h2 className="text-2xl font-bold text-slate-900 mb-2">You're Booked! 🎉</h2>
           <p className="text-slate-500 mb-4">Thank you, {name}! We've received your acceptance and your weekend is reserved. We'll be in touch shortly with your deposit invoice and next steps.</p>
-          <p className="text-sm text-rose-700 bg-rose-50 rounded-xl p-3">Keep an eye on your inbox for your contract and wedding portal login.</p>
+          <p className="text-sm text-rose-700 bg-rose-50 rounded-xl p-3">
+            {proposal?.portal_enabled
+              ? 'Keep an eye on your inbox for your contract and wedding portal login.'
+              : 'Keep an eye on your inbox: your rental agreement will follow by email.'}
+          </p>
         </div>
       </div>
     )

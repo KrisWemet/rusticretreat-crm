@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import VendorDirectory from '../../components/VendorDirectory'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
 import Input, { Select, Textarea } from '../../components/ui/Input'
@@ -12,7 +14,7 @@ const emptyForm = {
 
 const vendorTypes = ['Photography', 'Videography', 'Catering', 'Florist', 'Music/DJ', 'Officiant', 'Hair & Makeup', 'Transportation', 'Cake/Bakery', 'Lighting', 'Other']
 
-export default function VendorsAdmin() {
+function CouplesVendors() {
   const { getAdminAxios } = useAuth()
   const [vendors, setVendors] = useState([])
   const [couples, setCouples] = useState([])
@@ -73,11 +75,11 @@ export default function VendorsAdmin() {
   }, {})
 
   return (
-    <div className="p-6 space-y-5 max-w-7xl">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="page-title">Couples' Vendors</h1>
-          <p className="page-subtitle">{vendors.length} vendors across all clients</p>
+          <h2 className="text-lg font-semibold text-slate-900">Every couple’s vendors</h2>
+          <p className="page-subtitle">{vendors.length} vendors across all clients. Each couple’s own list is also on their page, under Vendors.</p>
         </div>
         <button className="btn-primary" onClick={openAdd}>
           <PlusIcon className="w-4 h-4" />
@@ -195,6 +197,30 @@ export default function VendorsAdmin() {
           </div>
         </form>
       </Modal>
+    </div>
+  )
+}
+
+// Two lists: the venue's own directory of vendors it knows and recommends, and
+// every vendor each couple has booked.
+export default function VendorsAdmin() {
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'couples' ? 'couples' : 'directory'
+  return (
+    <div className="p-6 space-y-5 max-w-7xl">
+      <div>
+        <h1 className="page-title">Vendors</h1>
+        <p className="page-subtitle">Your vendor directory, and who each couple has booked.</p>
+      </div>
+      <div role="tablist" aria-label="Vendor lists" className="flex gap-1 border-b border-slate-200">
+        {[['directory', 'Vendor directory'], ['couples', 'Couples’ vendors']].map(([k, label]) => (
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setParams(k === 'directory' ? {} : { tab: k }, { replace: true })}
+            className={`px-3.5 py-2 text-sm font-medium border-b-2 -mb-px ${tab === k ? 'border-rose-600 text-rose-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'directory' ? <VendorDirectory /> : <CouplesVendors />}
     </div>
   )
 }

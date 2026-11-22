@@ -64,6 +64,9 @@ const BOOKING_DATA = [
   'form_responses', 'form_assignments',
   'proposal_items', 'proposals',
   'timeline_events', 'checklist_items', 'budget_items', 'guests', 'documents',
+  // floor_plans is not listed: a couple's plans cascade with the couple, and
+  // rows with no couple are the venue's saved layouts (venue setup, below).
+  'couple_files', 'couple_notes',
   // vendors is each couple's own supplier list (couple_id NOT NULL), not the
   // venue's preferred-vendor directory — it belongs with the booking data.
   'vendors',
@@ -73,7 +76,9 @@ const BOOKING_DATA = [
 
 // Venue configuration — real setup work, not demo filler, so it survives by
 // default. --everything clears it for a genuinely blank slate.
-const VENUE_SETUP = ['form_fields', 'forms', 'addons', 'packages'];
+const VENUE_SETUP = ['form_fields', 'forms', 'addons', 'packages',
+  'vendor_directory', 'email_templates', 'task_template_items', 'task_templates', 'timeline_templates',
+  'floor_plans'];
 
 const tables = everything ? [...BOOKING_DATA, ...VENUE_SETUP] : BOOKING_DATA;
 

@@ -235,3 +235,25 @@ test('if the date was taken meanwhile, the signatures stand and staff get a task
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM bookings WHERE couple_id = ?').get(id).n, 0);
   assert.ok(db.prepare("SELECT 1 FROM tasks WHERE couple_id = ? AND title = 'Date clash on a signed contract'").get(id));
 });
+
+test('a checklist set to apply on booking is added at the final signature, and not when the date clashed', async () => {
+  const tpl = db.prepare("SELECT id FROM task_templates WHERE name = 'Booked wedding: venue checklist'").get();
+  db.prepare("UPDATE task_templates SET auto_apply = 'on_booking' WHERE id = ?").run(tpl.id);
+  try {
+    const { id, cid } = await signedChain({ date: '2034-07-07' });
+    await signAs(cid, 2, 'Ava');
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE couple_id = ? AND template_item_id IS NOT NULL').get(id).n, 0, 'nothing before the booking exists');
+    assert.equal((await signAs(cid, 3, 'Ben')).status, 200);
+    const deposit = db.prepare("SELECT due_date FROM tasks WHERE couple_id = ? AND title = 'Collect the $1,000 damage deposit at check-in'").get(id);
+    assert.equal(deposit?.due_date, '2034-07-07', 'due on check-in day');
+
+    const clash = await signedChain({ date: '2035-07-06' });
+    await signAs(clash.cid, 2, 'Ava');
+    const rival = couple({ status: 'booked' });
+    db.prepare("INSERT INTO bookings (couple_id, event_date, package_name) VALUES (?, '2035-07-06', '3-Day Weekend')").run(rival);
+    await signAs(clash.cid, 3, 'Ben');
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE couple_id = ? AND template_item_id IS NOT NULL').get(clash.id).n, 0, 'no checklist for a booking that did not happen');
+  } finally {
+    db.prepare("UPDATE task_templates SET auto_apply = 'none' WHERE id = ?").run(tpl.id);
+  }
+});

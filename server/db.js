@@ -1219,4 +1219,172 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// ── Event planning, staff side ───────────────────────────────────────────────
+// The timeline, guest list and vendor tables were built for the couple portal,
+// which is switched off — so until now nobody could use them. Staff now plan
+// each wedding with them directly. A wedding here runs over three or five days,
+// so a run-of-show item needs its own day, not just a time.
+for (const col of [
+  'ALTER TABLE timeline_events ADD COLUMN day_date DATE',
+  'ALTER TABLE timeline_events ADD COLUMN assigned_to TEXT',
+  'ALTER TABLE timeline_events ADD COLUMN category TEXT',
+  // Household or group, so a family can be found and seated together.
+  'ALTER TABLE guests ADD COLUMN party TEXT',
+  // Seat assignment: which floor plan, and which table element on it.
+  'ALTER TABLE guests ADD COLUMN seat_plan_id INTEGER',
+  'ALTER TABLE guests ADD COLUMN seat_table TEXT',
+  // A couple's vendor copied from the venue's directory keeps a link back to it.
+  'ALTER TABLE vendors ADD COLUMN directory_id INTEGER',
+  'ALTER TABLE vendors ADD COLUMN arrival_time TEXT',
+  // Venue-only notes for the day, printed on the event order.
+  'ALTER TABLE couples ADD COLUMN event_notes TEXT',
+  // The checklist-template item a task came from, so applying twice adds nothing.
+  'ALTER TABLE tasks ADD COLUMN template_item_id INTEGER',
+]) { try { db.exec(col); } catch (_) {} }
+
+db.exec(`
+  -- Small venue-wide settings (e.g. the calendar feed's private token). The
+  -- bootstrap above only creates this when it runs, so make sure it exists.
+  CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT);
+
+  -- couple_id NULL is a venue layout saved as a template for future weddings.
+  CREATE TABLE IF NOT EXISTS floor_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER REFERENCES couples(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    width_ft REAL NOT NULL DEFAULT 80,
+    height_ft REAL NOT NULL DEFAULT 50,
+    items TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_floor_plans_couple ON floor_plans(couple_id);
+
+  -- Day offsets from the first day, so a schedule can be reused for any dates.
+  CREATE TABLE IF NOT EXISTS timeline_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    items TEXT NOT NULL DEFAULT '[]',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Files kept in the database like contract_files: on the volume, in every
+  -- backup, and served only to signed-in staff.
+  CREATE TABLE IF NOT EXISTS couple_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    category TEXT,
+    data BLOB NOT NULL,
+    uploaded_by TEXT,
+    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_couple_files_couple ON couple_files(couple_id);
+
+  -- Dated notes with an author: calls, meetings and anything worth remembering.
+  CREATE TABLE IF NOT EXISTS couple_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'note' CHECK(kind IN ('note', 'call', 'email', 'meeting', 'visit')),
+    body TEXT NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    author TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME
+  );
+  CREATE INDEX IF NOT EXISTS idx_couple_notes_couple ON couple_notes(couple_id, created_at);
+
+  -- The venue's own list of vendors it knows and recommends. A couple's vendor
+  -- list (vendors) holds copies, so editing the directory never rewrites what a
+  -- past wedding recorded.
+  CREATE TABLE IF NOT EXISTS vendor_directory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category TEXT NOT NULL,
+    business_name TEXT NOT NULL,
+    contact_name TEXT,
+    phone TEXT,
+    email TEXT,
+    website TEXT,
+    notes TEXT,
+    preferred INTEGER NOT NULL DEFAULT 1,
+    insurance_expires DATE,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME
+  );
+
+  -- Reusable emails with {placeholders} filled from the couple's record.
+  CREATE TABLE IF NOT EXISTS email_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    subject TEXT,
+    body TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME
+  );
+
+  -- Staff checklists: each item falls due a number of days before or after a
+  -- date on the couple's record. These are reminders for the venue, never
+  -- emails to the couple (the owner's rule: remind me, not them).
+  CREATE TABLE IF NOT EXISTS task_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    auto_apply TEXT NOT NULL DEFAULT 'none' CHECK(auto_apply IN ('none', 'on_enquiry', 'on_booking')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS task_template_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id INTEGER NOT NULL REFERENCES task_templates(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    anchor TEXT NOT NULL DEFAULT 'checkin' CHECK(anchor IN ('checkin', 'checkout', 'booked', 'enquiry')),
+    offset_days INTEGER NOT NULL DEFAULT 0,
+    priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high')),
+    assigned_to TEXT,
+    order_index INTEGER DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_task_template_items_tpl ON task_template_items(template_id);
+`);
+
+// Starting points the owner can edit or delete. Seeded once, so a deleted
+// template stays deleted.
+runOnce('seed-email-templates-v1', () => {
+  const add = db.prepare('INSERT INTO email_templates (name, subject, body) VALUES (?, ?, ?)');
+  [
+    ['Check in', 'Checking in from Rustic Retreat', 'Hi {first_names}!\n\nJust checking in. Do you have any questions we can help with?\n\n{staff_name}\nRustic Retreat'],
+    ['After a tour', 'Thank you for visiting Rustic Retreat', 'Hi {first_names},\n\nThanks so much for visiting Rustic Retreat! Let us know if you would like us to put together a proposal for your dates.\n\n{staff_name}'],
+    ['Proposal ready', 'Your Rustic Retreat proposal', 'Hi {first_names},\n\nYour proposal is ready. Take a look when you have a moment and let us know if you have any questions.\n\n{staff_name}'],
+    ['Contract ready to sign', 'Your rental agreement is ready to sign', 'Hi {first_names},\n\nYour rental agreement is ready to sign. Let us know if you have any questions before you do.\n\n{staff_name}'],
+    ['Payment reminder', 'Your next payment for {wedding_date}', 'Hi {first_names},\n\nA friendly reminder that your next payment of {next_payment_amount} is due {next_payment_due}. You can send it by Interac e-Transfer to {etransfer_email}.\n\nThank you!\n{staff_name}'],
+    ['Payment received', 'Payment received, thank you', 'Hi {first_names},\n\nWe have received your payment. Your remaining balance is {balance_owing}.\n\nThank you!\n{staff_name}'],
+    ['Day-of timeline and Final Details Form', 'Your day-of timeline and Final Details Form', 'Hi {first_names},\n\nYour check-in on {check_in} is coming up. Please send us your day-of timeline together with the Final Details Form no later than 7 days before check-in.\n\n{staff_name}'],
+    ['Final guest count', 'Final guest count for {wedding_date}', 'Hi {first_names},\n\nCould you confirm your final guest count for us?\n\n{staff_name}'],
+  ].forEach(t => add.run(...t));
+});
+
+// Drawn from the rental agreement's own deadlines (Final Details Form and
+// timeline 7 days before check-in, structures notice 5 days before, damage
+// deposit at check-in, inspection within 48 hours of check-out). Applied by
+// hand until the owner switches on automatic use.
+runOnce('seed-task-template-v1', () => {
+  const tpl = db.prepare(`INSERT INTO task_templates (name, description, auto_apply) VALUES (?, ?, 'none')`)
+    .run('Booked wedding: venue checklist', 'The venue’s own to-dos for each booked wedding, timed from the rental agreement’s deadlines.').lastInsertRowid;
+  const add = db.prepare(`INSERT INTO task_template_items (template_id, title, description, anchor, offset_days, priority, order_index) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  [
+    ['Confirm the deposit arrived', 'Record it on Payments when it does.', 'booked', 7, 'high'],
+    ['Send the Final Details Form and Power Requirements Form', 'Both are due back 7 days before check-in.', 'checkin', -30, 'high'],
+    ['Collect Final Details Form, day-of timeline and power requirements', 'Due 7 days before check-in. Issue an overage invoice if guest, tent or RV counts went up.', 'checkin', -7, 'high'],
+    ['Confirm temporary structures and their placement', 'Written notice of tents and other structures is due 5 days before check-in.', 'checkin', -5, 'medium'],
+    ['Prepare the property', 'Trails, sound system, firewood and propane, cabins.', 'checkin', -2, 'high'],
+    ['Collect the $1,000 damage deposit at check-in', null, 'checkin', 0, 'high'],
+    ['Post-event inspection and damage deposit decision', 'Within 48 hours of check-out.', 'checkout', 1, 'high'],
+    ['Send a thank-you and review request', null, 'checkout', 7, 'low'],
+  ].forEach(([title, description, anchor, offset, priority], i) => add.run(tpl, title, description, anchor, offset, priority, i));
+});
+
 module.exports = db;

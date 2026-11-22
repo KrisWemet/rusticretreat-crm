@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
+import EventPlan from '../../components/planning/EventPlan'
+import RunOfShow from '../../components/planning/RunOfShow'
+import GuestManager from '../../components/planning/GuestManager'
+import FloorPlans from '../../components/planning/FloorPlans'
+import CoupleVendors from '../../components/planning/CoupleVendors'
+import FilesAndNotes from '../../components/planning/FilesAndNotes'
 import { useAuth } from '../../contexts/AuthContext'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
@@ -28,6 +34,19 @@ const STAGE_LABEL = {
   inquiry: 'Inquiry', tour: 'Tour', proposal: 'Proposal', booked: 'Booked', lost: 'Lost',
 }
 
+// The couple's record on the first tab; planning the wedding on the rest.
+// The tab lives in the address (?tab=guests) so it survives a refresh and
+// can be linked to.
+const TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'event', label: 'Event plan' },
+  { key: 'schedule', label: 'Run of show' },
+  { key: 'guests', label: 'Guests' },
+  { key: 'floorplans', label: 'Floor plans' },
+  { key: 'vendors', label: 'Vendors' },
+  { key: 'files', label: 'Files & notes' },
+]
+
 export default function ClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -39,6 +58,9 @@ export default function ClientDetail() {
   const [showEdit, setShowEdit] = useState(false)
   const [form, setForm] = useState({})
   const [packages, setPackages] = useState([])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = TABS.some(t => t.key === searchParams.get('tab')) ? searchParams.get('tab') : 'overview'
+  const setTab = (key) => setSearchParams(key === 'overview' ? {} : { tab: key }, { replace: true })
 
   const fetchData = async () => {
     const api = getAdminAxios()
@@ -222,6 +244,23 @@ export default function ClientDetail() {
         </div>
       )}
 
+      <div role="tablist" aria-label="Couple sections" className="flex gap-1 overflow-x-auto border-b border-slate-200 -mx-1 px-1">
+        {TABS.map(t => (
+          <button key={t.key} role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}
+            className={`whitespace-nowrap px-3.5 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === t.key ? 'border-rose-600 text-rose-700' : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'event' && <EventPlan coupleId={id} onTab={setTab} />}
+      {tab === 'schedule' && <RunOfShow coupleId={id} couple={couple} />}
+      {tab === 'guests' && <GuestManager coupleId={id} couple={couple} />}
+      {tab === 'floorplans' && <FloorPlans coupleId={id} />}
+      {tab === 'vendors' && <CoupleVendors coupleId={id} />}
+      {tab === 'files' && <FilesAndNotes coupleId={id} />}
+
+      {tab === 'overview' && <>
       {/* Main info cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Contact Info */}
@@ -330,6 +369,7 @@ export default function ClientDetail() {
           <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{couple.notes}</p>
         </div>
       )}
+      </>}
 
       {/* Edit Modal */}
       <Modal isOpen={showEdit} onClose={() => setShowEdit(false)} title="Edit Couple" size="lg">

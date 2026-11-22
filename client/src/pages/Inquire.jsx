@@ -108,7 +108,7 @@ export default function Inquire() {
         <div className="grid grid-cols-3 gap-4">
           {[
             { icon: CalendarDaysIcon, label: 'Multi-Day Weekends', desc: '60 hours together, not 6' },
-            { icon: UserGroupIcon,    label: 'Up to 80 Guests',     desc: '65 private off-grid acres' },
+            { icon: UserGroupIcon,    label: 'Up to 100 Guests',     desc: '65 private off-grid acres' },
             { icon: ChatBubbleLeftRightIcon, label: 'One Wedding Per Weekend', desc: 'The whole property is yours' },
           ].map(({ icon: Icon, label, desc }) => (
             <div key={label} className="bg-white rounded-xl border border-slate-100 p-4 text-center">
@@ -151,8 +151,8 @@ export default function Inquire() {
                 <input id="inquire-preferred-wedding-date-5" name="inquire-preferred-wedding-date-5" type="date" value={form.wedding_date} onChange={f('wedding_date')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" />
               </div>
               <div>
-                <label htmlFor="inquire-estimated-guest-count-6" className="block text-sm font-medium text-slate-700 mb-1">Estimated Guest Count <span className="text-slate-400 font-normal">(max 80)</span></label>
-                <input id="inquire-estimated-guest-count-6" name="inquire-estimated-guest-count-6" type="number" min="1" max="80" value={form.guest_count} onChange={f('guest_count')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="e.g. 60" />
+                <label htmlFor="inquire-estimated-guest-count-6" className="block text-sm font-medium text-slate-700 mb-1">Estimated Guest Count <span className="text-slate-400 font-normal">(up to 100)</span></label>
+                <input id="inquire-estimated-guest-count-6" name="inquire-estimated-guest-count-6" type="number" min="1" max="100" value={form.guest_count} onChange={f('guest_count')} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent" placeholder="e.g. 60" />
               </div>
             </div>
             {dateStatus && (

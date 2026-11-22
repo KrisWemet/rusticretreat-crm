@@ -47,14 +47,15 @@ router.post('/portal', authenticateCouple, (req, res) => {
 
 // Admin: Add vendor for couple
 router.post('/couple/:coupleId', authenticateToken, (req, res) => {
-  const { vendor_type, business_name, contact_name, phone, email, website, notes, booked } = req.body;
+  const { vendor_type, business_name, contact_name, phone, email, website, notes, booked, arrival_time } = req.body;
   if (!vendor_type || !business_name) return res.status(400).json({ error: 'Vendor type and business name required' });
+  if (!db.prepare('SELECT 1 FROM couples WHERE id = ?').get(req.params.coupleId)) return res.status(404).json({ error: 'Couple not found' });
 
   const result = db.prepare(`
-    INSERT INTO vendors (couple_id, vendor_type, business_name, contact_name, phone, email, website, notes, booked)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO vendors (couple_id, vendor_type, business_name, contact_name, phone, email, website, notes, booked, arrival_time)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(req.params.coupleId, vendor_type, business_name, contact_name || null, phone || null,
-    email || null, website || null, notes || null, booked ? 1 : 0);
+    email || null, website || null, notes || null, booked ? 1 : 0, arrival_time || null);
 
   const vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(vendor);
@@ -69,12 +70,12 @@ router.put('/:id', authenticateAny, (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const { vendor_type, business_name, contact_name, phone, email, website, notes, booked } = req.body;
+  const { vendor_type, business_name, contact_name, phone, email, website, notes, booked, arrival_time } = req.body;
 
   db.prepare(`
     UPDATE vendors SET
       vendor_type = ?, business_name = ?, contact_name = ?,
-      phone = ?, email = ?, website = ?, notes = ?, booked = ?
+      phone = ?, email = ?, website = ?, notes = ?, booked = ?, arrival_time = ?
     WHERE id = ?
   `).run(
     vendor_type || vendor.vendor_type,
@@ -85,6 +86,7 @@ router.put('/:id', authenticateAny, (req, res) => {
     website !== undefined ? website : vendor.website,
     notes !== undefined ? notes : vendor.notes,
     booked !== undefined ? (booked ? 1 : 0) : vendor.booked,
+    arrival_time !== undefined ? (arrival_time || null) : vendor.arrival_time,
     req.params.id
   );
 

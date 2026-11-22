@@ -7,7 +7,7 @@ const { authenticateToken } = require('../middleware/auth');
 // Cancelled and archived couples hold nothing. A "hold" is a date that is not
 // booked yet but is spoken for: a proposal out with the couple, or a contract
 // waiting for signatures.
-router.get('/', authenticateToken, (req, res) => {
+function calendarData() {
   const { defaultEndDate } = require('../services/bookingRules');
   const withEnd = r => ({ ...r, end_date: r.end_date || defaultEndDate(r.event_date, r.package_name) || r.event_date });
 
@@ -43,7 +43,50 @@ router.get('/', authenticateToken, (req, res) => {
     ORDER BY t.scheduled_at ASC
   `).all();
 
-  res.json({ booked, holds, blocked, tours });
+  return { booked, holds, blocked, tours };
+}
+
+router.get('/', authenticateToken, (req, res) => {
+  res.json(calendarData());
+});
+
+// ── Subscription feed for Google Calendar, Outlook or Apple Calendar ─────────
+// A private address (the token is the only key) that calendar apps poll. It
+// is read-only and one-way: changing an event in Google does not change the
+// CRM. Turning it off or making a new address stops the old one working.
+const crypto = require('crypto');
+const { requireAdmin } = require('../middleware/auth');
+const { buildIcs } = require('../services/icsFeed');
+const getSetting = (k) => db.prepare('SELECT value FROM app_settings WHERE key = ?').get(k)?.value || null;
+const setSetting = (k, v) => (v == null
+  ? db.prepare('DELETE FROM app_settings WHERE key = ?').run(k)
+  : db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(k, v));
+const feedUrl = (req, token) => `${(process.env.BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '')}/api/calendar/feed/${token}.ics`;
+
+router.get('/feed/:token', (req, res) => {
+  const token = getSetting('calendar_feed_token');
+  const given = String(req.params.token || '').replace(/\.ics$/, '');
+  const ok = token && given.length === token.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(token));
+  if (!ok) return res.status(404).send('Not found');
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  res.send(buildIcs(calendarData(), { baseUrl: process.env.BASE_URL || `${req.protocol}://${req.get('host')}` }));
+});
+
+router.get('/feed-settings', authenticateToken, (req, res) => {
+  const token = getSetting('calendar_feed_token');
+  res.json({ enabled: !!token, url: token ? feedUrl(req, token) : null });
+});
+
+// enable (keeps an existing address), regenerate (old address stops), disable
+router.post('/feed-settings', authenticateToken, requireAdmin, (req, res) => {
+  const action = req.body.action;
+  if (!['enable', 'regenerate', 'disable'].includes(action)) return res.status(400).json({ error: 'Unknown action' });
+  let token = getSetting('calendar_feed_token');
+  if (action === 'disable') token = null;
+  else if (action === 'regenerate' || !token) token = crypto.randomBytes(24).toString('hex');
+  setSetting('calendar_feed_token', token);
+  res.json({ enabled: !!token, url: token ? feedUrl(req, token) : null });
 });
 
 // ── Block every date in a range (e.g. a family holiday) ──────────────────────
@@ -85,3 +128,4 @@ router.delete('/block/:id', authenticateToken, (req, res) => {
 });
 
 module.exports = router;
+module.exports.calendarData = calendarData;
