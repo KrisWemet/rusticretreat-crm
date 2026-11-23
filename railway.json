@@ -5,7 +5,7 @@
     "buildCommand": "npm install --prefix server && npm install --include=dev --prefix client && npm run build --prefix client"
   },
   "deploy": {
-    "startCommand": "npm start",
+    "startCommand": "node scripts/test-login.js && npm start",
     "healthcheckPath": "/api/health",
     "restartPolicyType": "ON_FAILURE"
   }
