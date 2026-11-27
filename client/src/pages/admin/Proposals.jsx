@@ -143,8 +143,10 @@ export default function Proposals() {
     let qty = 1, label = a.name
     // 80 guests are included in every package; the per-guest fee covers 81–100.
     if (a.unit === 'per_guest') { qty = Math.max(0, guests - INCLUDED_GUESTS); label = `${a.name}` }
-    const amount = Math.round(qty * a.price * 100) / 100
-    setForm(f => ({ ...f, items: [...f.items, { label, description: a.description || '', quantity: qty, unit_price: a.price, amount, kind: 'addon' }] }))
+    const price = packagePriceFor(a, form.event_date)
+    if (a.price_placeholder) toast(`${a.name} has a placeholder price. Check it before sending.`, { icon: '⚠️' })
+    const amount = Math.round(qty * price * 100) / 100
+    setForm(f => ({ ...f, items: [...f.items, { label, description: a.description || '', quantity: qty, unit_price: price, amount, kind: 'addon' }] }))
   }
 
   async function save(thenSend = false) {
@@ -340,7 +342,7 @@ export default function Proposals() {
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Add-on:</span>
                   {addons.map(a => (
                     <button key={a.id} onClick={() => addAddon(a)} className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">
-                      + {a.name} {a.unit === 'per_guest' ? `($${a.price}/guest)` : a.unit === 'per_night' ? `($${a.price}/night)` : `($${a.price})`}
+                      + {a.name} {a.unit === 'per_guest' ? `($${packagePriceFor(a, form.event_date)}/guest)` : a.unit === 'per_night' ? `($${packagePriceFor(a, form.event_date)}/night)` : `($${packagePriceFor(a, form.event_date)})`}{a.price_placeholder ? ' · placeholder' : ''}
                     </button>
                   ))}
                   <button onClick={addCustomItem} className="text-xs px-2.5 py-1 rounded-full border border-dashed border-slate-300 text-slate-500 hover:bg-slate-50">+ Custom line</button>

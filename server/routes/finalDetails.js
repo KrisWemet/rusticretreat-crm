@@ -6,6 +6,7 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const rateLimit = require('../middleware/rateLimit');
 const email = require('../services/email');
 const fd = require('../services/finalDetails');
+const extras = require('../services/extras');
 const { logActivity } = require('../services/activity');
 const { albertaToday } = require('../services/schedule');
 
@@ -86,7 +87,7 @@ router.post('/couple/:coupleId/link', authenticateToken, async (req, res) => {
 router.post('/couple/:coupleId/quote', authenticateToken, (req, res) => {
   if (!coupleOf(req.params.coupleId)) return res.status(404).json({ error: 'Couple not found' });
   const v = fd.view(req.params.coupleId);
-  const { value } = fd.cleanInput(req.body);
+  const { value } = fd.cleanInput(req.body, { offered: v.offered });
   res.json(fd.compute(value, { rates: v.rates, nights: v.nights }));
 });
 
@@ -96,7 +97,7 @@ router.put('/couple/:coupleId', authenticateToken, (req, res) => {
   if (!c) return res.status(404).json({ error: 'Couple not found' });
   const rec = fd.ensureRecord(c.id);
   if (rec.submitted_at) return res.status(409).json({ error: 'This form has been submitted and is locked. An admin can unlock it if it must change.' });
-  const { value, errors } = fd.cleanInput({ ...rec, ...req.body });
+  const { value, errors } = fd.cleanInput({ ...rec, ...req.body }, { coupleId: c.id });
   if (errors.length) return res.status(400).json({ error: errors.join('. ') });
   let nights = rec.nights;
   if (req.body.nights !== undefined) {
@@ -118,7 +119,7 @@ router.post('/couple/:coupleId/submit', authenticateToken, (req, res) => {
   if (rec.submitted_at) return res.status(409).json({ error: 'Already submitted' });
   const confirmedBy = String(req.body.confirmed_by || '').trim();
   if (!confirmedBy) return res.status(400).json({ error: 'Enter who confirmed these counts' });
-  const { value, errors } = fd.cleanInput(req.body, { require: true });
+  const { value, errors } = fd.cleanInput(req.body, { coupleId: c.id, require: true });
   if (errors.length) return res.status(400).json({ error: errors.join('. ') });
   const r = submit(rec, value, { by: `staff (${req.user?.name || 'staff'})`, name: confirmedBy, ip: req.ip, ua: req.get('user-agent') });
   if (r.error) return res.status(400).json({ error: r.error });
@@ -144,10 +145,14 @@ router.post('/couple/:coupleId/approve', authenticateToken, (req, res) => {
   db.transaction(() => {
     let invoiceId = null;
     if (q.total > 0) {
-      const lines = [...q.lines.map(l => `${l.label}: $${l.amount.toFixed(2)}`), `GST ${q.gst_rate}%: $${q.gst.toFixed(2)}`].join('\n');
-      invoiceId = db.prepare(`INSERT INTO invoices (couple_id, booking_id, description, amount, due_date, notes) VALUES (?, ?, ?, ?, ?, ?)`)
-        .run(c.id, booking?.id || null, 'Final Details overages (Section 2.3)', q.total, due,
-          `${lines}\nOverage fees are non-refundable regardless of final counts.`).lastInsertRowid;
+      // One invoice line per overage or extra, then GST, so the couple sees
+      // exactly what they are paying for.
+      const lines = [
+        ...q.lines.map(l => ({ label: l.label, quantity: 1, unit_price: l.amount, amount: l.amount })),
+        ...(q.gst > 0 ? [{ label: `GST ${q.gst_rate}%`, quantity: 1, unit_price: q.gst, amount: q.gst, kind: 'gst' }] : []),
+      ];
+      invoiceId = extras.createItemisedInvoice({ coupleId: c.id, bookingId: booking?.id || null, description: 'Final Details overages (Section 2.3)',
+        dueDate: due, notes: 'Overage fees are non-refundable regardless of final counts.', lines }).id;
     }
     db.prepare(`UPDATE final_details SET reviewed_at = datetime('now'), reviewed_by = ?, invoice_id = ? WHERE id = ?`)
       .run(req.user?.name || 'staff', invoiceId, rec.id);
@@ -192,7 +197,7 @@ function publicView(rec) {
     rates: { included_guests: r.included_guests, guest_fee: r.guest_fee, max_guests: r.max_guests, included_campers: r.included_campers,
       included_tents: r.included_tents, tent_fee_per_night: r.tent_fee_per_night, included_rvs: r.included_rvs,
       rv_fee_per_night: r.rv_fee_per_night, max_rvs: r.max_rvs, tents_per_extra_rv: r.tents_per_extra_rv, gst_rate: r.gst_rate },
-    offered: v.offered.map(a => ({ id: a.id, name: a.name, description: a.description, price: a.price })),
+    offered: v.offered.map(a => ({ id: a.id, name: a.name, description: a.description, price: a.price, unit: a.unit, unit_label: a.unit_label || null })),
     values: { guests: rec.guests, campers: rec.campers, tents: rec.tents, rvs: rec.rvs, rv_over_30ft: rec.rv_over_30ft, notes: rec.notes,
       extras: rec.extras.map(e => ({ addon_id: e.addon_id, quantity: e.quantity, name: e.name })) },
     quote: v.quote,
@@ -213,8 +218,8 @@ router.post('/public/:token/quote', publicLimit, (req, res) => {
   const rec = fd.recordForToken(req.params.token);
   if (!rec) return res.status(404).json({ error: NOT_FOUND });
   if (rec.submitted_at) return res.json(rec.quote);
-  const { value } = fd.cleanInput(req.body);
   const v = fd.view(rec.couple_id, rec);
+  const { value } = fd.cleanInput(req.body, { offered: v.offered });
   res.json(fd.compute(value, { rates: v.rates, nights: v.nights }));
 });
 
@@ -226,7 +231,7 @@ router.post('/public/:token/submit', submitLimit, async (req, res) => {
     const name = String(req.body.signer_name || '').trim();
     if (!name) return res.status(400).json({ error: 'Type your full name to submit' });
     if (req.body.agreed !== true) return res.status(400).json({ error: 'Please confirm you understand the counts are final once submitted' });
-    const { value, errors } = fd.cleanInput(req.body, { require: true });
+    const { value, errors } = fd.cleanInput(req.body, { coupleId: rec.couple_id, require: true });
     if (errors.length) return res.status(400).json({ error: errors.join('. ') });
     const r = submit(rec, value, { by: 'couple', name, ip: req.ip, ua: req.get('user-agent') });
     if (r.error) return res.status(400).json({ error: r.error });

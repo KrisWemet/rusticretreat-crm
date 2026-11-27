@@ -352,6 +352,34 @@ If deductions come to more than the deposit, one click makes an invoice for the 
 
 **Owner to-dos:** ask the accountant how deductions kept from a deposit should be booked, and whether GST applies to them. The CRM currently treats them as non-GST amounts, listed separately. An invoice for charges beyond the deposit is an ordinary invoice, so the payments report counts it as GST-included like every other invoice.
 
+### Extras list and itemised invoices (27 Nov 2026)
+
+Item 4 on the list. The owner's answers: extras change by year and the 2027 prices aren't decided yet, so placeholders were fine; the firewood shed is free but extra firewood is charged; "décor" means consumables used up (batteries, candles, zip ties) plus a small laundry fee for linens; extras added after booking go on a separate invoice.
+
+- **New extras** in Packages & Add-Ons, each marked **Placeholder price**:
+
+  | Extra | Placeholder price |
+  |---|---|
+  | Propane tank | $40 per 20 lb tank |
+  | Extra firewood | $15 per bundle |
+  | Signage | $25 per sign |
+  | Linen laundry fee | $50 per event |
+  | Décor consumables | $5 per item (staff-side only, counted at check-out) |
+
+  A placeholder is never shown to couples and can't be billed without typing the real price. Setting a price clears the mark.
+- **Prices by wedding year** for add-ons, like packages. The Final Details Form, the extras invoice and proposals use the price for the couple's year. Each extra can also show its unit, e.g. "per 20 lb tank".
+- **Bill extras** on each couple's **Event plan** tab:
+  - Choose items and quantities. Prices fill in, and you can type over them.
+  - Add a "something else" line for anything not on the list.
+  - It creates **its own invoice**: a line per item plus GST, due in two weeks (or by the Final Details deadline before the stay). The signed payment schedule isn't touched.
+- **Itemised invoices everywhere:**
+  - Payments shows each invoice's lines.
+  - Receipts and reminders list them, and so does the printed statement.
+  - The Final Details overage invoice and the damage-beyond-deposit invoice are itemised too.
+  - The event order lists extras to have ready (no prices on the vendor copy).
+
+**Owner to-dos:** set the real 2027 prices for the five new extras (pencil next to each in Packages & Add-Ons). Add a 2028 price when you know it.
+
 ## Open items
 
 1. **Shannon & Chris booking shows $6,439.**

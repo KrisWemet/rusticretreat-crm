@@ -90,7 +90,7 @@ export default function FinalDetailsFields({ rates, offered = [], values, onChan
                   value={qty(a.id)} onChange={e => setQty(a.id, e.target.value)} aria-label={`How many: ${a.name}`}
                   className="w-20 px-2 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 disabled:bg-slate-50" />
                 <label htmlFor={`${idPrefix}-extra-${a.id}`} className="text-sm text-slate-700 flex-1">
-                  <span className="font-medium text-slate-800">{a.name}</span> <span className="text-slate-500">· {money(a.price)} {UNIT[a.unit] || 'each'}</span>
+                  <span className="font-medium text-slate-800">{a.name}</span> <span className="text-slate-500">· {money(a.price)} {a.unit_label || UNIT[a.unit] || 'each'}</span>
                   {a.description && <span className="block text-xs text-slate-500">{a.description}</span>}
                 </label>
               </div>

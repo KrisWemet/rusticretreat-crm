@@ -70,7 +70,7 @@ const BOOKING_DATA = [
   // vendors is each couple's own supplier list (couple_id NOT NULL), not the
   // venue's preferred-vendor directory — it belongs with the booking data.
   'vendors',
-  'messages', 'tasks', 'tours', 'contracts', 'invoices', 'bookings',
+  'messages', 'tasks', 'tours', 'contracts', 'invoice_items', 'invoices', 'bookings',
   'blocked_dates', 'couples',
 ];
 

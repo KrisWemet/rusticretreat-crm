@@ -4,7 +4,7 @@ import { PlusIcon, PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon } from '@
 import toast from 'react-hot-toast'
 
 const EMPTY = { name: '', description: '', price: '', max_guests: '', includes: '', is_active: true, seasons: [] }
-const EMPTY_ADDON = { name: '', description: '', price: '', unit: 'flat', on_final_form: true }
+const EMPTY_ADDON = { name: '', description: '', price: '', unit: 'flat', on_final_form: true, unit_label: '', seasons: [], price_placeholder: false }
 const UNIT_LABEL = { flat: 'flat', per_guest: 'per guest', per_night: 'per night' }
 
 export default function Packages() {
@@ -31,13 +31,16 @@ export default function Packages() {
 
   function openAddonAdd() { setAddonForm(EMPTY_ADDON); setAddonModal('add') }
   function openAddonEdit(a) {
-    setAddonForm({ name: a.name, description: a.description || '', price: a.price, unit: a.unit, on_final_form: a.on_final_form !== 0 })
+    setAddonForm({ name: a.name, description: a.description || '', price: a.price, unit: a.unit, on_final_form: !!a.on_final_form, unit_label: a.unit_label || '',
+      seasons: Object.entries(a.season_prices || {}).map(([year, price]) => ({ year, price })), price_placeholder: !!a.price_placeholder })
     setAddonModal(a)
   }
   async function saveAddon() {
     if (!addonForm.name || addonForm.price === '') return toast.error('Name and price are required')
     try {
-      const payload = { name: addonForm.name, description: addonForm.description || null, price: parseFloat(addonForm.price), unit: addonForm.unit, on_final_form: !!addonForm.on_final_form }
+      const payload = { name: addonForm.name, description: addonForm.description || null, price: parseFloat(addonForm.price), unit: addonForm.unit, on_final_form: !!addonForm.on_final_form,
+        unit_label: addonForm.unit_label.trim() || null, price_placeholder: !!addonForm.price_placeholder,
+        season_prices: Object.fromEntries(addonForm.seasons.filter(r => r.year && r.price !== '').map(r => [String(r.year), parseFloat(r.price)])) }
       if (addonModal === 'add') { await api.post('/api/addons', payload); toast.success('Add-on created') }
       else { await api.put(`/api/addons/${addonModal.id}`, payload); toast.success('Add-on updated') }
       setAddonModal(null); load()
@@ -211,10 +214,14 @@ export default function Packages() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-slate-800 text-sm">{a.name}</span>
-                  <span className="text-xs text-slate-400">${Number(a.price).toLocaleString()} {UNIT_LABEL[a.unit]}</span>
-                  {a.on_final_form !== 0 && <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">On Final Details Form</span>}
+                  <span className="text-xs text-slate-400">${Number(a.price).toLocaleString()} {a.unit_label || UNIT_LABEL[a.unit]}</span>
+                  {a.price_placeholder && <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium" title="Not offered to couples, and staff must type a price to bill it, until you set the real price">Placeholder price</span>}
+                  {a.on_final_form && !a.price_placeholder && <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">On Final Details Form</span>}
                 </div>
                 {a.description && <p className="text-xs text-slate-400 truncate">{a.description}</p>}
+                {Object.keys(a.season_prices || {}).length > 0 && (
+                  <p className="text-xs text-slate-500">{Object.entries(a.season_prices).sort().map(([y, p]) => `${y} weddings: $${Number(p).toLocaleString()}`).join(' · ')}</p>
+                )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button onClick={() => openAddonEdit(a)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg"><PencilIcon className="w-4 h-4" /></button>
@@ -241,7 +248,7 @@ export default function Packages() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="packages-price-cad-2" className="label">Price (CAD $)</label>
-                  <input id="packages-price-cad-2" name="packages-price-cad-2" className="input-field" type="number" min="0" value={addonForm.price} onChange={e => setAddonForm(f => ({ ...f, price: e.target.value }))} placeholder="750" />
+                  <input id="packages-price-cad-2" name="packages-price-cad-2" className="input-field" type="number" min="0" value={addonForm.price} onChange={e => setAddonForm(f => ({ ...f, price: e.target.value, price_placeholder: false }))} placeholder="750" />
                 </div>
                 <div>
                   <label htmlFor="packages-charged-3" className="label">Charged</label>
@@ -256,6 +263,30 @@ export default function Packages() {
                 <label htmlFor="packages-description-4" className="label">Description</label>
                 <textarea id="packages-description-4" name="packages-description-4" className="input-field" rows={2} value={addonForm.description} onChange={e => setAddonForm(f => ({ ...f, description: e.target.value }))} placeholder="Shown to couples on the proposal…" />
               </div>
+              <div>
+                <label htmlFor="addon-unit-label" className="label">Shown after the price <span className="text-slate-400 font-normal">(optional)</span></label>
+                <input id="addon-unit-label" name="addon-unit-label" className="input-field" value={addonForm.unit_label} onChange={e => setAddonForm(f => ({ ...f, unit_label: e.target.value }))} placeholder="e.g. per 20 lb tank, per sign, per bundle" />
+              </div>
+              <div>
+                <p className="label">Prices by wedding year <span className="text-slate-400 font-normal">(before GST — overrides the price above for that year)</span></p>
+                <div className="space-y-2">
+                  {addonForm.seasons.map((row, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input aria-label={`Add-on year ${i + 1}`} name={`addon-year-${i}`} className="input-field w-24" type="number" min="2020" max="2100" placeholder="2028" value={row.year}
+                        onChange={e => setAddonForm(f => ({ ...f, seasons: f.seasons.map((r, j) => j === i ? { ...r, year: e.target.value } : r) }))} />
+                      <input aria-label={`Add-on price for year ${i + 1}`} name={`addon-year-price-${i}`} className="input-field flex-1" type="number" min="0" step="0.01" placeholder="45" value={row.price}
+                        onChange={e => setAddonForm(f => ({ ...f, price_placeholder: false, seasons: f.seasons.map((r, j) => j === i ? { ...r, price: e.target.value } : r) }))} />
+                      <button type="button" onClick={() => setAddonForm(f => ({ ...f, seasons: f.seasons.filter((_, j) => j !== i) }))} className="text-xs text-red-500 hover:text-red-700 px-2">Remove</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setAddonForm(f => ({ ...f, seasons: [...f.seasons, { year: '', price: '' }] }))} className="text-xs text-rose-600 hover:text-rose-700 font-medium">+ Add a year</button>
+                </div>
+              </div>
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="addon-placeholder" className="mt-0.5" checked={!!addonForm.price_placeholder}
+                  onChange={e => setAddonForm(f => ({ ...f, price_placeholder: e.target.checked }))} />
+                <span>The price is a placeholder <span className="block text-xs text-slate-500">Kept off the Final Details Form, and staff must type a price to bill it, until you set the real price. Changing a price above clears this.</span></span>
+              </label>
               <label className="flex items-start gap-2 text-sm text-slate-700">
                 <input type="checkbox" name="addon-on-final-form" className="mt-0.5" checked={!!addonForm.on_final_form}
                   onChange={e => setAddonForm(f => ({ ...f, on_final_form: e.target.checked }))} />

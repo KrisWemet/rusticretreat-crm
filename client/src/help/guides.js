@@ -285,6 +285,16 @@ export const pageGuides = [
     ],
     howTo: [
       {
+        title: 'Bill a couple for extras (propane, firewood, consumables, linens)',
+        steps: [
+          'Open the couple\'s page → Event plan → Extras → Bill extras.',
+          'Choose each extra and how many. The price fills in for the year of their stay; type over it if you agreed something else. For a placeholder price, type what you are charging.',
+          'Use "Something else" for anything not on the list.',
+          'Check the due date and click Create invoice. It is a separate invoice with a line for each item plus GST, so their payment schedule stays as signed.',
+          'Record the e-Transfer on Payments as usual. The receipt email lists the items.',
+        ],
+      },
+      {
         title: 'Handle the $1,000 damage deposit',
         steps: [
           'Open the couple\'s page → Event plan → Damage deposit. The dashboard reminds you in the week of check-in.',
@@ -481,10 +491,20 @@ export const pageGuides = [
     whatYouCanDo: [
       'Create and edit packages: name, description, what\'s included, max guests, and prices by wedding year.',
       'Mark a package Active or Inactive.',
-      'Manage the Add-On Catalog: flat fee, per guest or per night.',
+      'Manage the Add-On Catalog: flat fee, per guest or per night, with what shows after the price (for example "per 20 lb tank").',
+      'Give an add-on a different price for each wedding year, like a package.',
+      'An add-on marked "Placeholder price" is not offered to couples and cannot be billed without typing the real price. Changing its price clears the mark.',
       'Tick "Offer on the Final Details Form" on an add-on (propane, firewood, generator…) so couples can choose it, with a quantity, when they send their final numbers.',
     ],
     howTo: [
+      {
+        title: 'Set the price of an extra',
+        steps: [
+          'Click the pencil next to the extra (for example Propane tank).',
+          'Type the price before GST. For a price that only applies to one wedding year, use + Add a year.',
+          'Save. If it was a placeholder price, it now shows on the Final Details Form (when "Offer on the Final Details Form" is ticked) and can be billed.',
+        ],
+      },
       {
         title: 'Set next year\'s prices',
         steps: [
@@ -705,6 +725,10 @@ export const recipes = [
 ]
 
 export const faq = [
+  {
+    q: 'Why can\'t I change the amount of some invoices?',
+    a: 'Invoices for extras, Final Details overages and damage beyond the deposit are made of lines, and the total is the sum of the lines. To change one, delete it (if unpaid) and bill the extras again with the right lines.',
+  },
   {
     q: 'Why isn\'t the damage deposit in my payments or GST report?',
     a: 'A refundable deposit is money you are holding, not income, so it is kept off invoices and the payments report. Payments → Damage deposits shows what you are holding, and its CSV lists what was kept for deductions, for your bookkeeper.',

@@ -466,15 +466,28 @@ function dueWording(daysUntilDue) {
   return `in ${daysUntilDue} days`;
 }
 
-async function sendPaymentReminder({ to, coupleId, coupleNames, description, amount, dueDate, daysUntilDue }) {
+// The lines of an itemised invoice (extras, overages), for reminders and
+// receipts. Empty for an ordinary one-amount invoice.
+function itemsBlock(items) {
+  if (!items || !items.length) return { text: '', html: '' };
+  const { lineText } = require('./extras');
+  return {
+    text: `\n${items.map(l => `  - ${lineText(l)}`).join('\n')}\n`,
+    html: `<table cellpadding="4" style="border-collapse:collapse;font-size:14px;margin:8px 0 16px">${items.map(l =>
+      `<tr><td style="color:#475569">${esc(l.label)}${l.kind !== 'gst' && Number(l.quantity) !== 1 ? ` × ${esc(String(Number(l.quantity)))}` : ''}</td><td style="text-align:right;padding-left:24px">$${money(l.amount)}</td></tr>`).join('')}</table>`,
+  };
+}
+
+async function sendPaymentReminder({ to, coupleId, coupleNames, description, amount, dueDate, daysUntilDue, items }) {
   const urgency = dueWording(daysUntilDue);
   const pay = howToPay({ coupleNames, description });
+  const lines = itemsBlock(items);
   return send({
     coupleId,
     kind: 'payment-reminder',
     to,
     subject: `Payment reminder: ${description} due ${urgency}`,
-    text: `Hi ${coupleNames},\n\nThis is a friendly reminder that your payment "${description}" of $${money(amount)} CAD is due ${urgency} (${dueDate}).\n\n${pay.text}\n\nIf you have already paid, thank you, and please ignore this reminder. Questions? Just reply to this email.\n\nWarm regards,\nRustic Retreat`,
+    text: `Hi ${coupleNames},\n\nThis is a friendly reminder that your payment "${description}" of $${money(amount)} CAD is due ${urgency} (${dueDate}).\n${lines.text}\n${pay.text}\n\nIf you have already paid, thank you, and please ignore this reminder. Questions? Just reply to this email.\n\nWarm regards,\nRustic Retreat`,
     html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
 <p>This is a friendly reminder that your payment is coming up:</p>
 <table cellpadding="8" style="border-collapse:collapse;background:#fdf2f8;border-radius:8px;width:100%;max-width:400px;margin:16px 0">
@@ -482,14 +495,15 @@ async function sendPaymentReminder({ to, coupleId, coupleNames, description, amo
 <tr><td style="color:#888">Amount:</td><td><strong style="color:#e11d48">$${money(amount)} CAD</strong></td></tr>
 <tr><td style="color:#888">Due Date:</td><td><strong>${esc(dueDate)}</strong></td></tr>
 </table>
-${pay.html}
+${lines.html}${pay.html}
 <p>If you have already paid, thank you, and please ignore this reminder. Questions? Just reply to this email.</p>
 <p>Warm regards,<br>Rustic Retreat</p>`,
   });
 }
 
 // ── Payment receipt to couple ────────────────────────────────────────────────
-async function sendPaymentReceipt({ to, coupleId, coupleNames, description, amount, paymentMethod, paidDate, balance }) {
+async function sendPaymentReceipt({ to, coupleId, coupleNames, description, amount, paymentMethod, paidDate, balance, items }) {
+  const lines = itemsBlock(items);
   const balanceLine = balance > 0
     ? `Remaining balance: $${money(balance)} CAD`
     : 'Your balance is paid in full — thank you!';
@@ -503,7 +517,7 @@ async function sendPaymentReceipt({ to, coupleId, coupleNames, description, amou
     kind: 'payment-receipt',
     to,
     subject: `Payment received — ${description} (Rustic Retreat)`,
-    text: `Hi ${coupleNames},\n\nThis confirms we've received your payment. Thank you!\n\nPayment: ${description}\nAmount: $${money(amount)} CAD\nMethod: ${paymentMethod}\nDate: ${paidDate}\n\n${balanceLine}${scheduleLink.text}\n\nWarm regards,\nRustic Retreat`,
+    text: `Hi ${coupleNames},\n\nThis confirms we've received your payment. Thank you!\n\nPayment: ${description}\nAmount: $${money(amount)} CAD\nMethod: ${paymentMethod}\nDate: ${paidDate}\n${lines.text}\n${balanceLine}${scheduleLink.text}\n\nWarm regards,\nRustic Retreat`,
     html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
 <p>This confirms we've received your payment — thank you! 🎉</p>
 <table cellpadding="8" style="border-collapse:collapse;background:#f0fdf4;border-radius:8px;width:100%;max-width:420px;margin:16px 0">
@@ -513,7 +527,7 @@ async function sendPaymentReceipt({ to, coupleId, coupleNames, description, amou
 <tr><td style="color:#888">Date:</td><td>${esc(paidDate)}</td></tr>
 <tr><td style="color:#888">Balance:</td><td><strong>${balance > 0 ? '$' + money(balance) + ' CAD' : 'Paid in full ✓'}</strong></td></tr>
 </table>
-${scheduleLink.html}
+${lines.html}${scheduleLink.html}
 <p>Warm regards,<br>Rustic Retreat</p>`,
   });
 }
