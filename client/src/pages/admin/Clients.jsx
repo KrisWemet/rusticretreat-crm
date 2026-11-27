@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
+import ExistingBookingsModal from '../../components/ExistingBookingsModal'
 import Input, { Select } from '../../components/ui/Input'
 import { PlusIcon, MagnifyingGlassIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
@@ -30,6 +31,7 @@ export default function Clients() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [showExisting, setShowExisting] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [packages, setPackages] = useState([])
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
@@ -84,10 +86,15 @@ export default function Clients() {
           <h1 className="page-title">Clients & Leads</h1>
           <p className="page-subtitle">{couples.length} total records</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowAdd(true)}>
-          <PlusIcon className="w-4 h-4" />
-          Add Couple
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={() => setShowExisting(true)}>
+            Add Existing Bookings
+          </button>
+          <button className="btn-primary" onClick={() => setShowAdd(true)}>
+            <PlusIcon className="w-4 h-4" />
+            Add Couple
+          </button>
+        </div>
       </div>
 
       {/* Status tabs + Search */}
@@ -242,6 +249,8 @@ export default function Clients() {
           </div>
         </form>
       </Modal>
+
+      <ExistingBookingsModal isOpen={showExisting} onClose={() => setShowExisting(false)} onAdded={(n) => n && fetchCouples()} />
     </div>
   )
 }

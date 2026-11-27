@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
+import ExistingBookingsModal from '../../components/ExistingBookingsModal'
 import Input, { Select, Textarea } from '../../components/ui/Input'
 import { PlusIcon, CalendarDaysIcon, MapPinIcon, UsersIcon, CurrencyDollarIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
@@ -42,6 +43,7 @@ export default function Bookings() {
   const [search, setSearch] = useState('')
   const [when, setWhen] = useState('upcoming')
   const [showForm, setShowForm] = useState(false)
+  const [showExisting, setShowExisting] = useState(false)
   const [editBooking, setEditBooking] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
@@ -132,10 +134,15 @@ export default function Bookings() {
           <h1 className="page-title">Bookings</h1>
           <p className="page-subtitle">{bookings.length} total bookings</p>
         </div>
-        <button className="btn-primary" onClick={() => { setForm(emptyForm); setEditBooking(null); setShowForm(true) }}>
-          <PlusIcon className="w-4 h-4" />
-          New Booking
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={() => setShowExisting(true)}>
+            Add Existing Bookings
+          </button>
+          <button className="btn-primary" onClick={() => { setForm(emptyForm); setEditBooking(null); setShowForm(true) }}>
+            <PlusIcon className="w-4 h-4" />
+            New Booking
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -284,6 +291,7 @@ export default function Bookings() {
           </div>
         </form>
       </Modal>
+      <ExistingBookingsModal isOpen={showExisting} onClose={() => setShowExisting(false)} onAdded={(n) => n && fetchData()} />
     </div>
   )
 }
