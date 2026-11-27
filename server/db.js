@@ -1421,6 +1421,58 @@ runOnce('final-form-skip-extra-guest', () => {
   db.prepare("UPDATE addons SET on_final_form = 0 WHERE name LIKE 'Extra Guest%'").run();
 });
 
+// Extras (the agreement's Section 5 list): a unit shown after the price
+// ("per 20 lb tank"), prices by wedding year like packages, and a flag for a
+// placeholder price the owner has not set yet. A placeholder is never offered
+// to a couple or put on an invoice without staff typing the real price.
+for (const sql of [
+  'ALTER TABLE addons ADD COLUMN unit_label TEXT',
+  'ALTER TABLE addons ADD COLUMN season_prices TEXT',
+  'ALTER TABLE addons ADD COLUMN price_placeholder INTEGER DEFAULT 0',
+]) { try { db.exec(sql); } catch (_) {} }
+
+// Invoice lines. An invoice made from extras or a form keeps what it was for:
+// each item with its quantity and price, and the GST line. `amount` on the
+// invoice stays the total, so everything that reads invoices still works.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invoice_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    addon_id INTEGER,
+    label TEXT NOT NULL,
+    quantity REAL NOT NULL DEFAULT 1,
+    unit_price REAL NOT NULL DEFAULT 0,
+    amount REAL NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL DEFAULT 'item' CHECK(kind IN ('item', 'gst', 'credit')),
+    order_index INTEGER DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id);
+`);
+
+// The owner's extras that were missing (Nov 2026), added with placeholder
+// prices because the 2027 prices are not decided. Skipped if one by that name
+// already exists, so nothing the owner made is touched.
+runOnce('extras-list-2027', () => {
+  const exists = db.prepare('SELECT 1 FROM addons WHERE LOWER(name) = LOWER(?)');
+  const add = db.prepare(`INSERT INTO addons (name, description, price, unit, unit_label, on_final_form, price_placeholder, is_active)
+    VALUES (?, ?, ?, 'flat', ?, ?, 1, 1)`);
+  [
+    ['Propane tank', 'A full propane tank for heaters or cooking, beyond the propane BBQ included with your package.', 40, 'per 20 lb tank', 1],
+    ['Extra firewood', 'Firewood beyond the self-serve firewood shed, which is included.', 15, 'per bundle', 1],
+    ['Signage', 'Directional or welcome signs set out for your guests.', 25, 'per sign', 1],
+    ['Linen laundry fee', 'For use of the venue linens.', 50, 'per event', 1],
+    ['Décor consumables', 'Batteries, candles, zip ties and other décor-shed supplies used up during your stay. Counted at check-out.', 5, 'per item', 0],
+  ].forEach(([name, description, price, unitLabel, onForm]) => {
+    if (!exists.get(name)) add.run(name, description, price, unitLabel, onForm);
+  });
+  // Day-of coordination is in the agreement (Section 5.4) with its price "not
+  // fixed": it depends on the support asked for. Added only if the venue has
+  // no coordination add-on under any name; staff type the agreed price.
+  if (!db.prepare("SELECT 1 FROM addons WHERE LOWER(name) LIKE '%coordinat%'").get()) {
+    add.run('Day-of Coordination', 'On-site Rustic Retreat coordinator for your ceremony day. The price depends on the level of support (rental agreement, Section 5.4).', 600, 'priced per couple', 0);
+  }
+});
+
 // Starting points the owner can edit or delete. Seeded once, so a deleted
 // template stays deleted.
 runOnce('seed-email-templates-v1', () => {

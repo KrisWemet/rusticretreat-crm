@@ -40,6 +40,7 @@ async function checkAndSendReminders() {
       amount: invoice.amount,
       dueDate: dueDate.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }),
       daysUntilDue,
+      items: require('./extras').itemsFor(invoice.id),
     });
     if (r && r.delivered) {
       // Earlier reminders that were skipped are not worth sending late.

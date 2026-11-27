@@ -140,6 +140,11 @@ function buildEventOrder(coupleId) {
     agreement, onsite, vendors, days, guests: guestSummary, plans, forms, forms_outstanding: formsOutstanding,
     payments: { total, paid, balance: Math.max(0, total - paid), next },
     tasks_open: tasksOpen, readiness, final,
+    // Extras billed on itemised invoices (propane, signage…), for the team to
+    // have ready. Overage and deposit lines are not "things to set out".
+    extras_ordered: db.prepare(`SELECT it.label, SUM(it.quantity) AS quantity, SUM(it.amount) AS amount FROM invoice_items it
+      JOIN invoices i ON i.id = it.invoice_id WHERE i.couple_id = ? AND it.kind = 'item' AND it.addon_id IS NOT NULL
+      GROUP BY it.label ORDER BY it.label`).all(coupleId),
     deposit: (() => { const d = damageDeposit.view(coupleId); return { status: d.status, expected: d.agreed_amount, received: d.received, received_at: d.record?.received_at || null, method: d.record?.received_method || null }; })(),
   };
 }
@@ -207,6 +212,7 @@ ${row('Expected guests', expected ? esc(String(expected)) : '')}
 ${row('Ceremony', esc(eo.booking?.ceremony_location || ''))}
 ${row('Reception', esc(eo.booking?.reception_location || ''))}
 ${row('Add-ons', esc(eo.booking?.add_ons || ''))}
+${row('Extras ordered', (eo.extras_ordered || []).map(x => `${esc(x.label)} × ${esc(String(Number(x.quantity)))}${financials ? ` <span class="muted">(${money(x.amount)})</span>` : ''}`).join('<br>'))}
 </table></div>
 <div><h2>Contacts</h2><table>${contacts}</table>
 ${eo.agreement.preferred_contact ? `<p class="muted">Preferred contact: ${esc(eo.agreement.preferred_contact)}</p>` : ''}</div>

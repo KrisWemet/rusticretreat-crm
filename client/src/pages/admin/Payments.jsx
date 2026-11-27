@@ -437,6 +437,13 @@ export default function Payments() {
                     </td>
                     <td>
                       <div className="text-slate-700">{inv.description}</div>
+                      {inv.items?.length > 0 && (
+                        <ul className="text-xs text-slate-500 mt-0.5 space-y-0.5">
+                          {inv.items.map(l => (
+                            <li key={l.id}>{l.label}{l.kind === 'item' && Number(l.quantity) !== 1 ? ` × ${Number(l.quantity)}` : ''} · {money(l.amount)}</li>
+                          ))}
+                        </ul>
+                      )}
                       {inv.notes && <div className="text-xs text-slate-400 mt-0.5">{inv.notes}</div>}
                     </td>
                     <td className="font-semibold text-slate-800">{money(inv.amount)}</td>
@@ -537,7 +544,9 @@ export default function Payments() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="edit-amount" className="label">Amount (incl. GST)</label>
-                <input id="edit-amount" type="number" min="0" step="0.01" required value={editForm.amount} onChange={e => setEditForm(p => ({ ...p, amount: e.target.value }))} className="input-field" />
+                <input id="edit-amount" type="number" min="0" step="0.01" required value={editForm.amount} onChange={e => setEditForm(p => ({ ...p, amount: e.target.value }))} className="input-field"
+                  disabled={editing?.items?.length > 0} title={editing?.items?.length > 0 ? 'This invoice is made of itemised lines; its total follows them' : undefined} />
+                {editing?.items?.length > 0 && <p className="text-xs text-slate-500 mt-1">Itemised invoice: the amount is the sum of its lines.</p>}
               </div>
               <div>
                 <label htmlFor="edit-due" className="label">Due date</label>

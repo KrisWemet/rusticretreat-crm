@@ -4,6 +4,7 @@ const db = require('../db');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const email = require('../services/email');
 const dd = require('../services/damageDeposit');
+const extras = require('../services/extras');
 const { logActivity } = require('../services/activity');
 const { albertaToday } = require('../services/schedule');
 const { sendCsv } = require('../services/planning');
@@ -125,10 +126,15 @@ router.post('/couple/:coupleId/excess-invoice', authenticateToken, withCouple((r
   if (!(v.excess > 0)) return res.status(400).json({ error: 'The deductions do not go beyond the deposit' });
   if (rec.excess_invoice_id) return res.json(v);
   const booking = db.prepare('SELECT id FROM bookings WHERE couple_id = ? ORDER BY event_date DESC, id DESC').get(c.id);
-  const notes = [...rec.deductions.map(d => `${d.label}: ${d.description} — ${money(d.amount)}`), `Less the damage deposit received: −${money(v.received)}`].join('\n');
+  // One line per deduction, less the deposit already held: the lines add up
+  // to exactly what is still owed.
+  const lines = [
+    ...rec.deductions.map(d => ({ label: `${d.label}: ${d.description}`, quantity: 1, unit_price: d.amount, amount: d.amount })),
+    { label: 'Less the damage deposit received', quantity: 1, unit_price: -v.received, amount: -v.received, kind: 'credit' },
+  ];
   db.transaction(() => {
-    const id = db.prepare('INSERT INTO invoices (couple_id, booking_id, description, amount, due_date, notes) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(c.id, booking?.id || null, 'Damage charges beyond the damage deposit (Section 4.2)', v.excess, albertaToday(), notes).lastInsertRowid;
+    const { id } = extras.createItemisedInvoice({ coupleId: c.id, bookingId: booking?.id || null,
+      description: 'Damage charges beyond the damage deposit (Section 4.2)', dueDate: albertaToday(), lines });
     db.prepare("UPDATE damage_deposits SET excess_invoice_id = ?, updated_at = datetime('now') WHERE id = ?").run(id, rec.id);
   })();
   logActivity(req, { action: 'damage_deposit.excess_invoiced', entity: 'damage_deposit', entityId: rec.id, coupleId: c.id,

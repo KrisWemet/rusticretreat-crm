@@ -5,6 +5,8 @@ const { buildPaymentSchedule, normaliseCustomSchedule } = require('../services/p
 const { authenticateToken } = require('../middleware/auth');
 const { logActivity } = require('../services/activity');
 const email = require('../services/email');
+const extras = require('../services/extras');
+const withItems = (rows) => { const by = extras.itemsByInvoice(rows.map(r => r.id)); return rows.map(r => ({ ...r, items: by[r.id] || [] })); };
 
 // Totals across a couple's invoices: contracted, paid, and outstanding balance.
 function coupleStatement(coupleId) {
@@ -24,7 +26,7 @@ router.get('/', authenticateToken, (req, res) => {
     FROM invoices i JOIN couples c ON c.id = i.couple_id
     ORDER BY i.due_date ASC, i.created_at DESC
   `).all();
-  res.json(rows);
+  res.json(withItems(rows));
 });
 
 // ── Admin: get invoices for a couple ─────────────────────────────────────────
@@ -32,7 +34,7 @@ router.get('/couple/:coupleId', authenticateToken, (req, res) => {
   const rows = db.prepare(`
     SELECT * FROM invoices WHERE couple_id = ? ORDER BY due_date ASC, created_at DESC
   `).all(req.params.coupleId);
-  res.json(rows);
+  res.json(withItems(rows));
 });
 
 // ── Admin: create invoice ────────────────────────────────────────────────────
@@ -79,6 +81,7 @@ function markInvoicePaid(invoiceId, paid, paymentMethod, { paidAt = null, refere
         paymentMethod: paymentMethod || invoice.payment_method || 'E-Transfer',
         paidDate: new Date(when.length === 10 ? when + 'T12:00:00Z' : when).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Edmonton' }),
         balance,
+        items: extras.itemsFor(invoice.id),
       });
     }
   }
@@ -108,6 +111,11 @@ router.put('/:id', authenticateToken, (req, res) => {
   const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id);
   if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
   const { description, amount, due_date, notes } = req.body;
+  // An itemised invoice's total is the sum of its lines; changing it alone
+  // would make the two disagree.
+  if (amount != null && Number(amount) !== Number(invoice.amount) && extras.itemsFor(invoice.id).length) {
+    return res.status(409).json({ error: 'This invoice is made of itemised lines, so its amount cannot be typed over. Delete it and bill the extras again with the right lines.' });
+  }
   db.prepare(`
     UPDATE invoices SET description = ?, amount = ?, due_date = ?, notes = ? WHERE id = ?
   `).run(
@@ -207,6 +215,7 @@ router.post('/:id/remind', authenticateToken, async (req, res) => {
     amount: inv.amount,
     dueDate: inv.due_date ? new Date(inv.due_date + 'T12:00:00Z').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : 'now',
     daysUntilDue: days,
+    items: extras.itemsFor(inv.id),
   });
   if (!r.delivered) return res.status(502).json({ error: `The reminder did not send: ${r.error}` });
   logActivity(req, { action: 'invoice.reminded', entity: 'invoice', entityId: inv.id, coupleId: inv.couple_id,
@@ -218,7 +227,7 @@ router.post('/:id/remind', authenticateToken, async (req, res) => {
 router.get('/couple/:coupleId/statement/print', authenticateToken, (req, res) => {
   const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(req.params.coupleId);
   if (!couple) return res.status(404).json({ error: 'Couple not found' });
-  const rows = db.prepare('SELECT * FROM invoices WHERE couple_id = ? ORDER BY due_date IS NULL, due_date, id').all(couple.id);
+  const rows = withItems(db.prepare('SELECT * FROM invoices WHERE couple_id = ? ORDER BY due_date IS NULL, due_date, id').all(couple.id));
   const st = coupleStatement(couple.id);
   const { ETRANSFER_EMAIL } = require('../venue');
   const esc = email.esc;
@@ -234,7 +243,7 @@ th{font-size:12px;text-transform:uppercase;color:#64748b}td.r,th.r{text-align:ri
 <h1>Rustic Retreat — Payment statement</h1>
 <p class="muted">${esc(couple.partner1_name)} &amp; ${esc(couple.partner2_name)} · ${esc(couple.email || '')}<br>As of ${day(today)}</p>
 <table><thead><tr><th>Payment</th><th>Due</th><th>Status</th><th class="r">Amount</th></tr></thead><tbody>
-${rows.map(r => `<tr><td>${esc(r.description)}</td><td>${day(r.due_date)}</td><td>${r.paid ? `Paid ${day(r.paid_at)}${r.payment_method ? ` · ${esc(r.payment_method)}` : ''}` : (r.due_date && r.due_date < today ? '<strong style="color:#dc2626">Overdue</strong>' : 'Due')}</td><td class="r">${money(r.amount)}</td></tr>`).join('')}
+${rows.map(r => `<tr><td>${esc(r.description)}${r.items.length ? `<div class="muted">${r.items.map(l => esc(extras.lineText(l))).join('<br>')}</div>` : ''}</td><td>${day(r.due_date)}</td><td>${r.paid ? `Paid ${day(r.paid_at)}${r.payment_method ? ` · ${esc(r.payment_method)}` : ''}` : (r.due_date && r.due_date < today ? '<strong style="color:#dc2626">Overdue</strong>' : 'Due')}</td><td class="r">${money(r.amount)}</td></tr>`).join('')}
 </tbody><tfoot><tr class="tot"><td colspan="3">Total</td><td class="r">${money(st.total)}</td></tr>
 <tr class="tot"><td colspan="3">Paid</td><td class="r">${money(st.paid)}</td></tr>
 <tr class="tot"><td colspan="3">Balance owing</td><td class="r">${money(st.balance)}</td></tr></tfoot></table>

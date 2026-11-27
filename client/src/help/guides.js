@@ -251,9 +251,9 @@ export const pageGuides = [
     summary: 'Prepare, send, sign and store wedding contracts, with a full signing record.',
     whatYouCanDo: [
       'New Contract for a couple, and fill in the venue\'s details before sending (Prepare contract).',
-      'Send signing links; each partner signs online, then you Sign as the venue.',
+      'Sign as the venue first: that locks the terms and emails partner 1 their signing link. Partner 2 gets theirs after partner 1 signs.',
       'Re-send the current signer\'s link (this also renews its expiry).',
-      'Add a contract signed on paper or elsewhere, so every contract is on file.',
+      'Record Signed Contract: add one signed on paper or elsewhere, with the signed copy attached, so every contract is on file.',
       'Download / print PDF; see signing progress and the consent record (date, IP address, device).',
       'Search and filter by status.',
     ],
@@ -284,6 +284,16 @@ export const pageGuides = [
       'Damage deposits: what you are holding right now, whose refund is still to send, and a CSV of every deposit. Deposits are not invoices, because a refundable deposit is not income.',
     ],
     howTo: [
+      {
+        title: 'Bill a couple for extras (propane, firewood, consumables, linens)',
+        steps: [
+          'Open the couple\'s page → Event plan → Extras → Bill extras.',
+          'Choose each extra and how many. The price fills in for the year of their stay; type over it if you agreed something else. For a placeholder price, type what you are charging.',
+          'Use "Something else" for anything not on the list.',
+          'Check the due date and click Create invoice. It is a separate invoice with a line for each item plus GST, so their payment schedule stays as signed.',
+          'Record the e-Transfer on Payments as usual. The receipt email lists the items.',
+        ],
+      },
       {
         title: 'Handle the $1,000 damage deposit',
         steps: [
@@ -481,10 +491,20 @@ export const pageGuides = [
     whatYouCanDo: [
       'Create and edit packages: name, description, what\'s included, max guests, and prices by wedding year.',
       'Mark a package Active or Inactive.',
-      'Manage the Add-On Catalog: flat fee, per guest or per night.',
+      'Manage the Add-On Catalog: flat fee, per guest or per night, with what shows after the price (for example "per 20 lb tank").',
+      'Give an add-on a different price for each wedding year, like a package.',
+      'An add-on marked "Placeholder price" is not offered to couples and cannot be billed without typing the real price. Changing its price clears the mark.',
       'Tick "Offer on the Final Details Form" on an add-on (propane, firewood, generator…) so couples can choose it, with a quantity, when they send their final numbers.',
     ],
     howTo: [
+      {
+        title: 'Set the price of an extra',
+        steps: [
+          'Click the pencil next to the extra (for example Propane tank).',
+          'Type the price before GST. For a price that only applies to one wedding year, use + Add a year.',
+          'Save. If it was a placeholder price, it now shows on the Final Details Form (when "Offer on the Final Details Form" is ticked) and can be billed.',
+        ],
+      },
       {
         title: 'Set next year\'s prices',
         steps: [
@@ -579,7 +599,7 @@ export const recipes = [
       'Contact the couple, then click Mark contacted on their page (or book a tour, which also counts).',
       'Book a site tour on Site Tours; leave the confirmation email box ticked. Mark it completed after the visit.',
       'Build and send a proposal on Proposals. The couple can accept it online.',
-      'Create the contract on Contracts, prepare the venue details, and send it. Each partner signs, then you Sign as the venue.',
+      'Create the contract on Contracts, prepare the venue details, and send it. You Sign as the venue first; then each partner signs by email link.',
       'On the final signature the couple becomes booked and the 25 / 25 / 50 payment schedule is created.',
       'From here, Payments reminds the couple before each due date. You record each payment as it arrives.',
     ],
@@ -621,11 +641,11 @@ export const recipes = [
       'On Contracts, click New Contract and choose the couple (or Generate Contract on their page).',
       'Fill in the event details: package, dates, times, ceremony and reception locations, guest count (100 at most).',
       'Use "Fill in the venue\'s details before sending" to check the wording and the price including GST.',
-      'Send it. Partner 1 signs first by email link, then Partner 2 if there is one.',
+      'Click Sign as the venue. You sign first: that locks the terms, so nothing can change after the couple sees it, and emails Partner 1 their signing link.',
+      'Partner 1 signs by email link, then Partner 2 gets theirs.',
       'Watch Signing progress. If a link expired or got lost, click Re-send the current signer\'s link.',
-      'When the couple has signed, click Sign as the venue.',
       'Done: the couple is booked, the payment schedule is created if needed, and you can Download / print PDF.',
-      'Signed on paper? Use "Add a contract signed on paper or elsewhere" so it\'s on file too.',
+      'Signed on paper? Click Record Signed Contract and attach the signed copy, so it\'s on file too.',
     ],
     links: ['contracts', 'payments'],
   },
@@ -705,6 +725,10 @@ export const recipes = [
 ]
 
 export const faq = [
+  {
+    q: 'Why can\'t I change the amount of some invoices?',
+    a: 'Invoices for extras, Final Details overages and damage beyond the deposit are made of lines, and the total is the sum of the lines. To change one, delete it (if unpaid) and bill the extras again with the right lines.',
+  },
   {
     q: 'Why isn\'t the damage deposit in my payments or GST report?',
     a: 'A refundable deposit is money you are holding, not income, so it is kept off invoices and the payments report. Payments → Damage deposits shows what you are holding, and its CSV lists what was kept for deductions, for your bookkeeper.',

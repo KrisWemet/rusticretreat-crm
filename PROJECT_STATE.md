@@ -121,6 +121,25 @@ with nothing recorded is only chased for 14 days after check-out, so weddings
 from before this existed do not flood the list; a deposit actually received is
 chased until it is closed.
 
+**Extras and itemised invoices (Nov 2026).** Add-ons gained `unit_label`,
+`season_prices` (same shape and validation as packages, `services/packagePricing.js`)
+and `price_placeholder`. The runOnce `extras-list-2027` added Propane tank,
+Extra firewood, Signage, Linen laundry fee and Décor consumables with
+**placeholder prices** (the owner has not set 2027 prices). It also re-adds
+Day-of Coordination (agreement 5.4: price "not fixed") only when no add-on name
+contains "coordinat", so an owner's renamed or edited one is never duplicated. A placeholder add-on
+is never offered on the Final Details Form and cannot be billed unless staff type
+the line's price; saving a new price clears the flag (the client unticks it as
+soon as a price is typed). New table `invoice_items`: an invoice's `amount` stays
+the total (GST included), lines are the breakdown, and `PUT /api/invoices/:id`
+refuses an amount change on an itemised invoice. `services/extras.js` owns
+`createItemisedInvoice`, pricing and line validation; `routes/extras.js`
+(`/api/extras/couple/:id`) bills extras as a **separate** invoice (lines + GST),
+never touching the signed schedule. The Final Details overage invoice and the
+damage-deposit excess invoice are itemised too. Lines show on Payments, in
+receipts and reminders, on the printed statement, and (catalog extras only, no
+prices on the vendor copy) on the event order. Add-on prices are before GST.
+
 **Forgot password (Nov 2026).** `/forgot-password` → `POST /api/auth/forgot-password`
 (5 per 15 min per IP). Same reply whether or not the address has a login; the
 email is not awaited, so a real address does not answer more slowly. It reuses

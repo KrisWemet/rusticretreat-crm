@@ -32,7 +32,7 @@ const RATE_LABELS = {
   included_campers: 'Overnight campers included', included_tents: 'Tents included',
   tent_fee_per_night: 'Fee per extra tent, per night ($)', included_rvs: 'RVs included',
   rv_fee_per_night: 'Fee per extra RV, per night ($)', max_rvs: 'Most RVs allowed',
-  tents_per_extra_rv: 'Unused tent slots per extra RV', gst_rate: 'GST on overages (%)',
+  tents_per_extra_rv: 'Unused tent slots per extra RV', gst_rate: 'GST on overages and extras (%)',
   deadline_days: 'Due this many days before check-in',
 };
 
@@ -77,16 +77,21 @@ function stayFor(coupleId) {
 
 const deadlineFor = (checkIn, rates = getRates()) => (checkIn ? addDays(checkIn, -rates.deadline_days) : null);
 
-// Extras the couple may choose: active add-ons marked for the form.
-function offeredExtras() {
-  return db.prepare(`SELECT id, name, description, price, unit FROM addons
-    WHERE is_active = 1 AND COALESCE(on_final_form, 1) = 1 ORDER BY name COLLATE NOCASE`).all();
+// Extras the couple may choose: active add-ons marked for the form, priced for
+// the year of their stay. One still on a placeholder price is left off until
+// the owner sets it.
+function offeredExtras(checkIn = null) {
+  const { priceFor } = require('./packagePricing');
+  return db.prepare(`SELECT id, name, description, price, unit, unit_label, season_prices FROM addons
+    WHERE is_active = 1 AND COALESCE(on_final_form, 1) = 1 AND COALESCE(price_placeholder, 0) = 0 ORDER BY name COLLATE NOCASE`).all()
+    .map(({ season_prices, ...a }) => ({ ...a, price: round2(priceFor({ price: a.price, season_prices }, checkIn)) }));
 }
 
 const COUNT_FIELDS = ['guests', 'campers', 'tents', 'rvs'];
 
 // Reads what was typed. `require` makes every count mandatory (for submitting).
-function cleanInput(body = {}, { offered = offeredExtras(), require = false } = {}) {
+// Pass the couple so extras are priced for the year of their stay.
+function cleanInput(body = {}, { coupleId = null, offered = offeredExtras(coupleId ? stayFor(coupleId)?.check_in : null), require = false } = {}) {
   const value = {}, errors = [];
   for (const f of COUNT_FIELDS) {
     const raw = body[f];
@@ -108,7 +113,7 @@ function cleanInput(body = {}, { offered = offeredExtras(), require = false } = 
     const q = Number(e.quantity);
     if (!a || !Number.isInteger(q) || q <= 0) continue;
     if (q > 1000) { errors.push(`${a.name}: at most 1,000`); continue; }
-    value.extras.push({ addon_id: a.id, name: a.name, unit: a.unit, unit_price: Number(a.price), quantity: q });
+    value.extras.push({ addon_id: a.id, name: a.name, unit: a.unit, unit_label: a.unit_label || null, unit_price: Number(a.price), quantity: q });
   }
   return { value, errors };
 }
@@ -186,7 +191,7 @@ function view(coupleId, rec = recordFor(coupleId)) {
   return {
     record: rec || null, stay, nights, rates, deadline,
     overdue: !!(deadline && !rec?.submitted_at && deadline < albertaToday()),
-    offered: offeredExtras(), quote,
+    offered: offeredExtras(stay?.check_in), quote,
   };
 }
 
