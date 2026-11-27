@@ -1465,6 +1465,12 @@ runOnce('extras-list-2027', () => {
   ].forEach(([name, description, price, unitLabel, onForm]) => {
     if (!exists.get(name)) add.run(name, description, price, unitLabel, onForm);
   });
+  // Day-of coordination is in the agreement (Section 5.4) with its price "not
+  // fixed": it depends on the support asked for. Added only if the venue has
+  // no coordination add-on under any name; staff type the agreed price.
+  if (!db.prepare("SELECT 1 FROM addons WHERE LOWER(name) LIKE '%coordinat%'").get()) {
+    add.run('Day-of Coordination', 'On-site Rustic Retreat coordinator for your ceremony day. The price depends on the level of support (rental agreement, Section 5.4).', 600, 'priced per couple', 0);
+  }
 });
 
 // Starting points the owner can edit or delete. Seeded once, so a deleted

@@ -169,3 +169,32 @@ test('the couple’s form shows each extra’s own unit (“per 20 lb tank”)',
   assert.equal(offered.price, 44);
   assert.equal(offered.unit_label, 'per 20 lb tank');
 });
+
+// Day-of coordination (agreement Section 5.4) must exist after the update,
+// whatever the live database holds — added only when no coordination add-on
+// exists under any name, never duplicated, never touching the owner's own.
+test('Day-of Coordination is kept if present and added if missing, never twice', () => {
+  const { execFileSync } = require('child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rr-coord-'));
+  const boot = (code) => execFileSync(process.execPath, ['-e', code], {
+    cwd: path.join(__dirname, '..'), encoding: 'utf8',
+    env: { ...process.env, DB_PATH: path.join(dir, 'c.db'), JWT_SECRET: 'x', NODE_ENV: 'test' },
+  });
+  const count = "const db = require('./db'); process.stdout.write(JSON.stringify(db.prepare(\"SELECT name, price_placeholder FROM addons WHERE LOWER(name) LIKE '%coordinat%'\").all()));";
+  try {
+    // A fresh database already has it from the starting list: still one.
+    const present = JSON.parse(boot(count).trim().split('\n').pop());
+    assert.equal(present.length, 1);
+    assert.equal(present[0].price_placeholder, 0, 'the owner’s existing one is not changed');
+    // Deleted by the owner and the update not yet applied: it comes back, as a placeholder.
+    boot("const db = require('./db'); db.prepare(\"DELETE FROM addons WHERE name = 'Day-of Coordination'\").run(); db.prepare(\"DELETE FROM app_migrations WHERE name = 'extras-list-2027'\").run();");
+    const added = JSON.parse(boot(count).trim().split('\n').pop());
+    assert.deepEqual(added, [{ name: 'Day-of Coordination', price_placeholder: 1 }]);
+    // Renamed by the owner ("Wedding day coordination"): left alone, no duplicate.
+    boot("const db = require('./db'); db.prepare(\"UPDATE addons SET name = 'Wedding day coordination' WHERE name = 'Day-of Coordination'\").run(); db.prepare(\"DELETE FROM app_migrations WHERE name = 'extras-list-2027'\").run();");
+    const renamed = JSON.parse(boot(count).trim().split('\n').pop());
+    assert.deepEqual(renamed.map(r => r.name), ['Wedding day coordination']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

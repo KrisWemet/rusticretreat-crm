@@ -125,7 +125,9 @@ chased until it is closed.
 `season_prices` (same shape and validation as packages, `services/packagePricing.js`)
 and `price_placeholder`. The runOnce `extras-list-2027` added Propane tank,
 Extra firewood, Signage, Linen laundry fee and Décor consumables with
-**placeholder prices** (the owner has not set 2027 prices). A placeholder add-on
+**placeholder prices** (the owner has not set 2027 prices). It also re-adds
+Day-of Coordination (agreement 5.4: price "not fixed") only when no add-on name
+contains "coordinat", so an owner's renamed or edited one is never duplicated. A placeholder add-on
 is never offered on the Final Details Form and cannot be billed unless staff type
 the line's price; saving a new price clears the flag (the client unticks it as
 soon as a price is typed). New table `invoice_items`: an invoice's `amount` stays

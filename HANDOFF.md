@@ -365,8 +365,10 @@ Item 4 on the list. The owner's answers: extras change by year and the 2027 pric
   | Signage | $25 per sign |
   | Linen laundry fee | $50 per event |
   | Décor consumables | $5 per item (staff-side only, counted at check-out) |
+  | Day-of Coordination | only if missing: $600, "priced per couple" (staff-side only) |
 
   A placeholder is never shown to couples and can't be billed without typing the real price. Setting a price clears the mark.
+- **Day-of Coordination** was in the CRM's starting list ($600 flat), which loaded when the live database was first created. Whether it is still there could not be checked from the sandbox. The one-time step therefore adds it only if no add-on with "coordination" in its name exists. Agreement Section 5.4 says its price is not fixed and depends on the support asked for, so a re-added one is a placeholder and staff type the agreed price. An existing one is left exactly as it is.
 - **Prices by wedding year** for add-ons, like packages. The Final Details Form, the extras invoice and proposals use the price for the couple's year. Each extra can also show its unit, e.g. "per 20 lb tank".
 - **Bill extras** on each couple's **Event plan** tab:
   - Choose items and quantities. Prices fill in, and you can type over them.
