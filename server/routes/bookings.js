@@ -79,6 +79,8 @@ router.post('/', authenticateToken, (req, res) => {
   }
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(result.lastInsertRowid);
+  // Staff checklist set to apply on booking, if any. Never throws.
+  require('../services/taskTemplates').autoApply(booking.couple_id, 'on_booking');
   res.status(201).json(booking);
 });
 

@@ -69,15 +69,22 @@ export const pageGuides = [
     slug: 'client-page',
     title: 'A couple\'s page',
     path: '/clients/:id',
-    summary: 'Everything about one couple in one place: contact details, bookings, payments, contracts, forms, tasks, emails and history.',
+    summary: 'Everything about one couple in one place. Overview holds their record; the other tabs plan the wedding weekend: event plan, run of show, guests, floor plans, vendors, and files and notes.',
     whatYouCanDo: [
       'Edit contact and wedding details (Edit Couple), including Partner 2.',
       'Mark contacted, so they leave the "Needs a follow-up" list.',
       'See their booking and tours, balance owing and next payment, contracts and signing progress, forms, tasks, every email the CRM sent them, and the history of changes.',
       'Add a task for this couple, start a New Proposal, or Generate Contract.',
       'Archive the couple (and Restore them later).',
+      'Event plan: see what is still missing before the weekend, keep the venue’s notes for the day, add a checklist of tasks, and print the event order (with or without prices).',
+      'Run of show: plan every day of the stay hour by hour, with where each thing happens and who is responsible; print it whole or for one vendor; save it as a template for other weddings.',
+      'Guests: keep the guest list with RSVPs, meals, dietary needs and plus-ones; import a spreadsheet (CSV) and export one.',
+      'Floor plans: drag tables, the dance floor, tents and more onto a plan of the space, then seat guests at tables and print it.',
+      'Vendors: add the couple’s vendors from your directory or by hand, with arrival times and whether each is confirmed.',
+      'Files & notes: keep files (licence, insurance, layouts) and a dated log of calls, emails, meetings and visits.',
     ],
     howTo: [
+      { title: 'Plan the wedding weekend', recipe: 'plan-weekend' },
       {
         title: 'Record that you\'ve followed up with a new enquiry',
         steps: [
@@ -97,8 +104,11 @@ export const pageGuides = [
       'Always archive rather than delete. Only an admin can delete permanently, and never once a contract is signed or a payment is recorded.',
       '"Emails sent" shows whether each email reached the mail service — handy when a couple says they never got something.',
       '"History" shows who changed what and when (payments recorded, prices changed, archives).',
+      'The event order is built from the booking, the signed agreement (setup and teardown times, on-site contacts), the run of show, vendors, guests and floor plans. Print it again after changes; a printed copy does not update itself.',
+      'In the run of show, times between midnight and 5 AM are listed at the end of their day, so a 12:30 AM sparkler exit stays with Saturday night.',
+      'Removing a table from a floor plan unseats the guests who were at it; they show again under "Not seated yet".',
     ],
-    related: ['enquiry-to-booking', 'clients', 'payments'],
+    related: ['plan-weekend', 'enquiry-to-booking', 'clients', 'payments'],
   },
   {
     slug: 'pipeline',
@@ -324,7 +334,7 @@ export const pageGuides = [
     whatYouCanDo: [
       'Search conversations and open a couple\'s thread.',
       'Write an email with an optional subject; it is sent with the venue as the reply-to address.',
-      'Insert a quick reply for common answers.',
+      'Use a template: pick a saved email and its placeholders (names, dates, amounts owing) fill in from the couple’s record. Read it, edit it, then send.',
     ],
     howTo: [
       {
@@ -338,8 +348,10 @@ export const pageGuides = [
     ],
     tips: [
       'Emailing from here keeps a copy on the couple\'s page under "Emails sent", so anyone on staff can see what was said.',
+      'If a template needs something the couple\'s record doesn\'t have yet (say, a wedding date), you get a warning to check before sending.',
+      'Edit the templates on Settings → Email templates.',
     ],
-    related: ['client-page', 'morning-routine'],
+    related: ['client-page', 'morning-routine', 'settings'],
   },
   {
     slug: 'tasks',
@@ -350,8 +362,17 @@ export const pageGuides = [
       'Add a task — pick a common follow-up shortcut or type your own, choose Due in and Priority, and link it to a couple.',
       'Assign tasks to a staff member.',
       'Mark done / Mark not done, edit, and filter by couple, due today or overdue.',
+      'Checklists: lists of to-dos timed from a couple\'s check-in, check-out, booking or enquiry date. Apply one to a couple, or set it to apply by itself when a couple enquires or books.',
     ],
     howTo: [
+      {
+        title: 'Set up a checklist for every booked wedding',
+        steps: [
+          'Click Checklists, then Edit on "Booked wedding: venue checklist" (or New checklist).',
+          'For each task set how many days before or after which date it falls due, its priority and who does it.',
+          'Set "When to use it" to "Automatically when a couple books", and save. Each new booking then gets the tasks with real due dates.',
+        ],
+      },
       {
         title: 'Never forget a follow-up',
         steps: [
@@ -364,30 +385,32 @@ export const pageGuides = [
     tips: [
       'The Tasks badge in the sidebar counts tasks due today or overdue.',
       'You can also add a task straight from a couple\'s page.',
+      'A checklist "Booked wedding: venue checklist" comes ready, timed from the rental agreement\'s deadlines. It is off until you set "When to use it". Applying a checklist twice adds only what is missing.',
+      'Checklist tasks remind the venue only; nothing is ever emailed to the couple.',
     ],
-    related: ['morning-routine', 'client-page'],
+    related: ['morning-routine', 'client-page', 'plan-weekend'],
   },
   {
     slug: 'vendors',
     title: 'Vendors',
     path: '/vendors',
-    summary: 'Each couple\'s vendors — photographer, caterer, DJ and so on — with contact details.',
+    summary: 'Your vendor directory (the vendors you know and recommend), and every vendor each couple has booked.',
     whatYouCanDo: [
-      'Add a vendor for a couple with type, business and contact name, email, phone and website.',
-      'Switch a vendor between "considering" and booked.',
-      'Search, edit and delete vendors.',
+      'Vendor directory: add the caterers, photographers, rentals and others you work with. Star the ones you recommend and note when their insurance expires (expired shows in red).',
+      'See how many weddings each directory vendor has worked.',
+      'Couples\' vendors: every couple\'s vendors in one list, searchable, with booked status.',
     ],
     howTo: [
       {
         title: 'Keep the wedding weekend contacts together',
         steps: [
-          'Add each vendor the couple books, choosing the couple and vendor type.',
-          'Click the status to mark them booked once confirmed.',
-          'Before the weekend, search by the couple\'s name to see everyone arriving.',
+          'Open the couple\'s page → Vendors tab.',
+          'Pick from your vendor directory and click Add, or click New vendor for someone new.',
+          'Note when each arrives and click the status to mark them confirmed. They all print on the event order.',
         ],
       },
     ],
-    tips: ['This page lists each couple\'s own vendors; it is not a venue-wide preferred-vendor list.'],
+    tips: ['Adding a directory vendor to a couple copies their details, so editing the directory later never changes what a past wedding recorded.', 'Removing a vendor from the directory keeps them on couples who already have them.'],
     related: ['before-after-wedding'],
   },
   {
@@ -411,7 +434,32 @@ export const pageGuides = [
       },
     ],
     tips: ['Figures are only as good as the data: fill in "How they heard about us" and move lost couples to Lost in the pipeline.'],
-    related: ['pipeline', 'clients'],
+    related: ['pipeline', 'clients', 'reports'],
+  },
+  {
+    slug: 'reports',
+    title: 'Reports',
+    path: '/reports',
+    summary: 'Money received, money still owed, weddings by year and enquiries by source, each downloadable as a CSV.',
+    whatYouCanDo: [
+      'Payments received between two dates, by month, with the GST included in them (5/105 of each amount, since totals include GST).',
+      'Still owed: every unpaid invoice, grouped by how late it is. Cancelled and archived couples are left out.',
+      'Weddings by year: dates, package, guests, paid and balance.',
+      'Enquiries by source: where couples heard about you, how many booked, and the booking rate.',
+      'Download any of these as a CSV, plus every couple\'s contact details.',
+    ],
+    howTo: [
+      {
+        title: 'Send your accountant last year\'s payments',
+        steps: [
+          'Click Last year (or pick the dates).',
+          'Under Payments received, click CSV. The file opens in Excel or Google Sheets.',
+          'The GST column shows the GST inside each payment.',
+        ],
+      },
+    ],
+    tips: ['A payment counts on the day you recorded the money arriving, not the day it was due.', 'Record each payment on the Payments page as it arrives so these reports stay right.'],
+    related: ['payments', 'analytics', 'payment-recipe'],
   },
   {
     slug: 'packages',
@@ -422,6 +470,7 @@ export const pageGuides = [
       'Create and edit packages: name, description, what\'s included, max guests, and prices by wedding year.',
       'Mark a package Active or Inactive.',
       'Manage the Add-On Catalog: flat fee, per guest or per night.',
+      'Tick "Offer on the Final Details Form" on an add-on (propane, firewood, generator…) so couples can choose it, with a quantity, when they send their final numbers.',
     ],
     howTo: [
       {
@@ -467,18 +516,29 @@ export const pageGuides = [
     slug: 'settings',
     title: 'Settings',
     path: '/settings',
-    summary: 'Your password, and (for admins) who can log in.',
+    summary: 'Your password, who can log in (admins), email templates, Final Details rates and calendar sync.',
     whatYouCanDo: [
       'Change your password (at least 10 characters).',
       'Admins: invite someone to sign up (they choose their own password), send a login a link to choose a new password, or remove a login.',
+      'Email templates: write and edit the saved emails used on Messages, with placeholders such as {first_names}, {wedding_date} and {balance_owing}.',
+      'Calendar sync (admins turn it on): a private address that shows weddings, holds, blocked dates and site tours in Google Calendar, Outlook or a phone.',
+      'Final Details Form rates (admins change them): guests, tents and RVs included, the fee for each extra, the caps, GST on overages and how many days before check-in the form is due. They start as the rental agreement\'s Section 2.3 table.',
     ],
     howTo: [
       {
         title: 'Give a new staff member access',
         recipe: 'staff-settings',
       },
+      {
+        title: 'See the venue calendar in Google Calendar',
+        steps: [
+          'An admin clicks Turn on calendar sync under Calendar sync, then Copy.',
+          'In Google Calendar on a computer: Other calendars → + → From URL, paste, and Add calendar.',
+          'Google checks for changes every few hours, so a booking made now can take a while to appear.',
+        ],
+      },
     ],
-    tips: ['Remove a login as soon as someone leaves — their past work stays in the history.'],
+    tips: ['Remove a login as soon as someone leaves — their past work stays in the history.', 'The calendar address is private but not secret-proof: anyone who has it sees couples\' names and dates. If it is shared by mistake, click Make a new address.'],
     related: ['staff-settings', 'backups'],
   },
   {
@@ -600,7 +660,8 @@ export const recipes = [
     steps: [
       'Change your own password on Settings (at least 10 characters).',
       'Admins: under "Who can log in", click Invite to sign up, enter their name and email, pick the role and tick Email them the link. They open the link and choose their own password. The link works once and lasts 7 days; you can also copy it and text it.',
-      'Someone forgot their password? Click Send password link next to their name. They get an email to choose a new one.',
+      'Forgot your own password? On the sign-in page click "Forgot your password?" and enter your email. A link to choose a new one arrives by email; it works once and lasts 2 hours. Check spam if it does not arrive.',
+      'An admin can also click Send password link next to someone\'s name. They get an email to choose a new one.',
       'Emails are not case-sensitive when signing in; passwords are.',
       'Staff logins can do the day-to-day work; Admin logins can also manage logins and backups, and permanently delete.',
       'Remove a login when someone leaves.',
@@ -608,9 +669,44 @@ export const recipes = [
     ],
     links: ['settings', 'backups'],
   },
+  {
+    slug: 'plan-weekend',
+    title: 'Plan the wedding weekend',
+    summary: 'From booked to the morning of check-in: schedule, guests, layout, vendors and the event order.',
+    steps: [
+      'Open the couple\'s page. The Event plan tab lists what is still missing (signed agreement, payments, guest count, on-site contacts, run of show, vendors, floor plan, forms, Final Details Form).',
+      'A few weeks before check-in, Event plan → Final Details Form: click Email the link to the couple (or Make a link to copy and text it). They enter their final guests, campers, tents, RVs and extras and see the overage fees as they type. It is due 7 days before check-in and locks when they submit.',
+      'Taking the numbers by phone instead? Click Fill it in for them, type the numbers, say who confirmed them, and Submit and lock.',
+      'When it comes in (you get an email), check the numbers and click Approve. If anything is owing, that makes an overage invoice due on the form\'s due date; record the e-Transfer on Payments as usual. Only an admin can reopen a submitted form, and not once its invoice is paid.',
+      'Event plan → Checklists: add the venue checklist so each deadline becomes a dated task.',
+      'Run of show: add each day hour by hour (check-in, vendor arrivals, ceremony, dinner, quiet hours, check-out), or start from a saved template. Give each item a place and the person responsible.',
+      'Guests: add guests or import the couple\'s spreadsheet (CSV). Track RSVPs, meals and dietary needs.',
+      'Floor plans: New floor plan, then add tables, the dance floor and anything else, drag them into place and save. Select a table to seat guests at it.',
+      'Vendors: add everyone working the weekend, with arrival times, and mark each one confirmed.',
+      'Event plan: write the venue\'s notes for the day, then Print event order. It includes the final counts once the Final Details Form is in. Use Vendor copy (no prices) for anyone who should not see payments.',
+      'Print the run of show for one vendor by choosing them in the filter first.',
+    ],
+    links: ['client-page', 'tasks', 'vendors', 'before-after-wedding'],
+  },
 ]
 
 export const faq = [
+  {
+    q: 'A couple made a mistake on their Final Details Form after submitting. Can it be changed?',
+    a: 'The agreement says submitted counts are final, so the couple cannot change it. An admin can click Reopen form on the Event plan tab if the venue agrees; that withdraws the unpaid overage invoice so you can approve again. Once the overage invoice is paid it cannot be reopened. Record any change as a new invoice instead.',
+  },
+  {
+    q: 'Is GST added to Final Details overage fees?',
+    a: 'Yes, 5% by default, on the assumption that overages are taxed like the package. Change it under Settings → Final Details Form rates if your accountant says otherwise.',
+  },
+  {
+    q: 'Can couples see the run of show, guest list or floor plan?',
+    a: 'Not while the couple portal is switched off. These are staff tools; print the run of show or event order (vendor copy has no prices) when you want to share them.',
+  },
+  {
+    q: 'Does the calendar in Google update straight away?',
+    a: 'No. Google Calendar checks a subscribed calendar every few hours. The CRM itself is always current.',
+  },
   {
     q: 'Why didn\'t the couple get an automatic follow-up email?',
     a: 'On purpose. The CRM reminds you (dashboard and morning email) instead of emailing couples, so every enquiry gets a personal reply. Payment reminders are the only automatic emails couples get.',

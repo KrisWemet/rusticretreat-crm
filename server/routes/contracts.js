@@ -1276,6 +1276,10 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       });
     }
 
+    // The venue's own booked-wedding checklist, when the owner has set one to
+    // apply on booking. Staff tasks only; never throws.
+    if (!dateClash) require('../services/taskTemplates').autoApply(contract.couple_id, 'on_booking');
+
     // Create / reveal portal credentials — only while the portal is in use.
     let plain_password = null;
     let is_new_account = false;

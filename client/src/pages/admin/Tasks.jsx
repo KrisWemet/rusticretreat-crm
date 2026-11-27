@@ -9,6 +9,7 @@ import { CheckCircleIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { format, parseISO, isPast, isToday, addDays } from 'date-fns'
 import { TASK_TITLES, DUE_IN, withCurrent } from '../../utils/options'
+import ChecklistManager from '../../components/ChecklistManager'
 
 const priorityStyle = {
   high: 'bg-red-100 text-red-700',
@@ -34,6 +35,7 @@ export default function Tasks() {
   const [form, setForm] = useState(emptyForm)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
+  const [showChecklists, setShowChecklists] = useState(false)
   const fetchData = async () => {
     const api = getAdminAxios()
     const [tRes, cRes, sRes] = await Promise.all([api.get('/api/tasks'), api.get('/api/couples'), api.get('/api/auth/staff')])
@@ -114,11 +116,18 @@ export default function Tasks() {
             {incompleteCount} incomplete{overdueCount > 0 ? ` · ${overdueCount} overdue` : ''}
           </p>
         </div>
-        <button className="btn-primary" onClick={openAdd}>
-          <PlusIcon className="w-4 h-4" />
-          Add Task
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={() => setShowChecklists(true)}>
+            <ClipboardDocumentListIcon className="w-4 h-4" />
+            Checklists
+          </button>
+          <button className="btn-primary" onClick={openAdd}>
+            <PlusIcon className="w-4 h-4" />
+            Add Task
+          </button>
+        </div>
       </div>
+      <ChecklistManager isOpen={showChecklists} onClose={() => setShowChecklists(false)} onApplied={() => fetchData().catch(() => {})} />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -133,13 +142,13 @@ export default function Tasks() {
             </button>
           ))}
         </div>
-        <select aria-label="Filter by couple" value={coupleFilter} onChange={e => setCoupleFilter(e.target.value)} className="input-field w-full sm:w-56">
+        <select id="tasks-couple-filter" name="tasks-couple-filter" aria-label="Filter by couple" value={coupleFilter} onChange={e => setCoupleFilter(e.target.value)} className="input-field w-full sm:w-56">
           <option value="">All couples</option>
           {couples.map(c => <option key={c.id} value={c.id}>{c.partner1_name} & {c.partner2_name}</option>)}
         </select>
         <div className="relative flex-1 min-w-[10rem]">
           <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="search" aria-label="Search tasks" placeholder="Search tasks…" value={search} onChange={e => setSearch(e.target.value)} className="input-field pl-9" />
+          <input type="search" id="tasks-search" name="tasks-search" aria-label="Search tasks" placeholder="Search tasks…" value={search} onChange={e => setSearch(e.target.value)} className="input-field pl-9" />
         </div>
       </div>
 

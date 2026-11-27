@@ -54,6 +54,7 @@ export default function CoupleSearch() {
         onFocus={() => results.length && setOpen(true)}
         onKeyDown={onKey}
         placeholder="Find a couple…"
+        id="couple-search" name="couple-search"
         aria-label="Find a couple by name, email or phone"
         className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-1.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-200"
       />

@@ -110,6 +110,9 @@ export default function Login() {
                 required
                 className="input-field"
               />
+              <div className="mt-1.5 text-right">
+                <Link to="/forgot-password" className="text-xs font-medium text-rose-600 hover:text-rose-700">Forgot your password?</Link>
+              </div>
             </div>
             <button
               type="submit"

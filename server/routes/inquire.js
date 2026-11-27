@@ -91,6 +91,7 @@ router.post('/', rateLimit({ windowMs: 3600000, max: 5 }), (req, res) => {
 
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(result.lastInsertRowid);
     const coupleNames = `${partner1_name} & ${partner2_name}`;
+    require('../services/taskTemplates').autoApply(couple.id, 'on_enquiry');
 
     // Add initial welcome message in the CRM
     db.prepare(`
@@ -137,6 +138,8 @@ router.post('/', rateLimit({ windowMs: 3600000, max: 5 }), (req, res) => {
 // Formspree so the venue is always told.
 async function respondToWebsite(req, res, kind, result) {
   if (!result.ok) return res.status(result.status).json({ error: result.error });
+  // A brand-new enquiry gets any checklist the owner set to apply on enquiry.
+  if (result.created && result.coupleId) require('../services/taskTemplates').autoApply(result.coupleId, 'on_enquiry');
   if (result.ignored || req.body._notify !== '1') return res.status(201).json({ success: true, notified: !!result.ignored });
   const mail = await email.sendWebsiteSubmissionAdmin({ kind, coupleId: result.coupleId, ...result.notice });
   if (!mail.delivered) console.error(`[website ${kind}] saved couple ${result.coupleId} but the notification email failed: ${mail.error}`);

@@ -254,6 +254,39 @@ router.post('/users/:id/password-link', authenticateToken, requireAdmin, async (
   res.status(201).json({ id, name: user.name, email: user.email, role: user.role, user_id: user.id, url, expires_days: INVITE_DAYS, emailed });
 });
 
+// ── Forgot password (self-service) ───────────────────────────────────────────
+// Anyone can ask for a link, but it only ever goes to the address already on
+// the login, and the reply is the same whether or not the address has one, so
+// this page cannot be used to find out who works here. The link is the same
+// one-time "choose a new password" link an admin can send, but short-lived.
+const RESET_HOURS = 2;
+const forgotLimiter = rateLimit({ windowMs: 900000, max: 5, name: 'forgot-password' });
+const FORGOT_REPLY = 'If that email has a login, we have sent it a link to choose a new password. It works once and expires in 2 hours. Check your spam folder if it does not arrive in a few minutes.';
+
+router.post('/forgot-password', forgotLimiter, (req, res) => {
+  const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ error: 'Enter the email address you sign in with.' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(cleanEmail);
+  if (user) {
+    db.prepare('DELETE FROM user_invites WHERE user_id = ? AND used_at IS NULL').run(user.id);
+    const token = crypto.randomBytes(24).toString('hex');
+    const id = db.prepare(`INSERT INTO user_invites (token_hash, name, email, role, user_id, created_by, expires_at)
+                           VALUES (?, ?, ?, ?, ?, NULL, datetime('now', ?))`)
+      .run(hashToken(token), user.name, user.email, user.role, user.id, `+${RESET_HOURS} hours`).lastInsertRowid;
+    logActivity({ user: { userId: user.id, name: user.name } }, {
+      action: 'user.password_reset_requested', entity: 'user', entityId: user.id,
+      summary: `${user.name} asked for a password reset link (invite ${id})`,
+    });
+    // Not awaited: waiting on the mail service would make a real address answer
+    // more slowly than an unknown one. The result is logged by send().
+    Promise.resolve(email.sendPasswordResetRequest({ to: user.email, name: user.name, url: inviteUrl(token), hours: RESET_HOURS }))
+      .catch(err => console.error('[auth] password reset email failed:', err.message));
+  }
+  res.json({ ok: true, message: FORGOT_REPLY });
+});
+
 router.delete('/invites/:id', authenticateToken, requireAdmin, (req, res) => {
   const r = db.prepare('DELETE FROM user_invites WHERE id = ? AND used_at IS NULL').run(req.params.id);
   if (!r.changes) return res.status(404).json({ error: 'Invite not found' });

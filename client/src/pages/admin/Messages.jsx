@@ -26,6 +26,25 @@ export default function Messages() {
   // couple portal is switched on.
   const [channel, setChannel] = useState('email')
   const messagesEndRef = useRef(null)
+  // Saved email templates (Settings → Email templates). Their {placeholders}
+  // are filled in by the server from the couple's record; the text lands in
+  // the message box to be read and edited before anything is sent.
+  const [templates, setTemplates] = useState([])
+  useEffect(() => { getAdminAxios().get('/api/email-templates').then(r => setTemplates(r.data)).catch(() => {}) }, [getAdminAxios])
+  const applyTemplate = async (value) => {
+    if (!value || !selectedCouple) return
+    if (value.startsWith('quick:')) {
+      const t = MESSAGE_TEMPLATES.find(m => `quick:${m.label}` === value)
+      if (t) setNewMessage(t.text.replace('{names}', firstNames(selectedCouple)))
+      return
+    }
+    try {
+      const { data } = await getAdminAxios().post('/api/email-templates/render', { template_id: Number(value), couple_id: selectedCouple.couple_id })
+      setNewMessage(data.body)
+      if (data.subject) setSubject(data.subject)
+      if (data.missing.length) toast(`Check before sending: nothing on file for ${data.missing_labels.join(', ').toLowerCase()}.`, { icon: '⚠️', duration: 7000 })
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not fill in the template') }
+  }
 
   const fetchConversations = async () => {
     const r = await getAdminAxios().get('/api/messages')
@@ -276,16 +295,15 @@ export default function Messages() {
                   {config.sms_enabled && channelButton('sms', 'Text', canText, canText ? 'Send to their phone' : optedOut ? 'They replied STOP' : 'No phone number on file')}
                   {config.portal_enabled && channelButton('portal', 'Portal message', true, 'Post in their wedding portal')}
                   <select
-                    aria-label="Insert a quick reply"
+                    aria-label="Insert a saved email template"
                     value=""
-                    onChange={e => {
-                      const t = MESSAGE_TEMPLATES.find(m => m.label === e.target.value)
-                      if (t) setNewMessage(t.text.replace('{names}', firstNames(selectedCouple)))
-                    }}
+                    onChange={e => applyTemplate(e.target.value)}
                     className="ml-auto text-xs border border-slate-200 rounded px-2 py-1 bg-white text-slate-600"
                   >
-                    <option value="">Quick reply...</option>
-                    {MESSAGE_TEMPLATES.map(m => <option key={m.label} value={m.label}>{m.label}</option>)}
+                    <option value="">Use a template...</option>
+                    {templates.length > 0
+                      ? templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)
+                      : MESSAGE_TEMPLATES.map(m => <option key={m.label} value={`quick:${m.label}`}>{m.label}</option>)}
                   </select>
                 </div>
                 {channel === 'email' && (

@@ -85,6 +85,8 @@ router.post('/', authenticateToken, (req, res) => {
       venue_package || null, status || 'lead', notes || null, budget_total || 0, referral_source || null);
 
     const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(result.lastInsertRowid);
+    // A couple added by hand as an enquiry gets any checklist set to apply on enquiry.
+    if (['lead', 'inquiry'].includes(couple.status)) require('../services/taskTemplates').autoApply(couple.id, 'on_enquiry');
     res.status(201).json(couple);
   } catch (err) {
     if (err.message.includes('UNIQUE constraint')) {

@@ -21,6 +21,7 @@ import {
   ClipboardDocumentCheckIcon,
   Cog6ToothIcon,
   QuestionMarkCircleIcon,
+  DocumentChartBarIcon,
 } from '@heroicons/react/24/outline'
 
 export const navItems = [
@@ -38,6 +39,7 @@ export const navItems = [
   { to: '/tasks',      icon: ClipboardDocumentListIcon, label: 'Tasks', badge: 'tasks' },
   { to: '/vendors',    icon: BuildingStorefrontIcon,    label: 'Vendors' },
   { to: '/analytics',  icon: ChartBarIcon,              label: 'Analytics' },
+  { to: '/reports',    icon: DocumentChartBarIcon,      label: 'Reports' },
   { to: '/packages',   icon: CubeIcon,                  label: 'Packages' },
   { to: '/backups',    icon: ShieldCheckIcon,           label: 'Backups' },
   { to: '/help',       icon: QuestionMarkCircleIcon,    label: 'Help & Guides' },

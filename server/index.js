@@ -76,14 +76,19 @@ const PUBLIC_PATHS = [
   /^\/api\/payments\/webhook$/,      // Stripe authenticates by signature instead
   /^\/api\/sms\/inbound$/,           // the SMS provider signs its webhooks too
   /^\/api\/email\/inbound$/,         // Resend posts received mail, signed
+  /^\/api\/calendar\/feed\//,       // calendar apps polling the private feed (token in the path)
   /^\/sign\//,                       // couple opening their contract signing link
   /^\/api\/contracts\/sign\//,       // …and the API that page calls, incl. /print
   /^\/proposal\//,                   // couple reviewing a proposal
   /^\/api\/proposals\/public\//,
   /^\/form\//,                       // couple filling in a form from their private link
   /^\/api\/forms\/public\//,          // …and the API that page calls (token + rate limit)
+  /^\/final-details\//,              // couple filling in the Final Details Form from their private link
+  /^\/api\/final-details\/public\//,  // …and the API that page calls (token + rate limit)
   /^\/inquire\/?$/,                  // public enquiry form
   /^\/signup\//,                     // staff choosing a password from their invite link
+  /^\/forgot-password\/?$/,          // staff asking for a reset link (no login, by definition)
+  /^\/api\/auth\/forgot-password$/,   // …and the API it calls (rate limited, same reply for any address)
   /^\/api\/auth\/invite\//,           // …and the API that page calls (token + rate limit)
   /^\/api\/inquire/,
   /^\/assets\//,                     // JS/CSS the above pages need to render
@@ -158,6 +163,15 @@ app.use('/api/proposals', require('./routes/proposals'));
 app.use('/api/forms', require('./routes/forms'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/backup', require('./routes/backup'));
+app.use('/api/floorplans', require('./routes/floorplans'));
+app.use('/api/couple-files', require('./routes/coupleFiles'));
+app.use('/api/notes', require('./routes/notes'));
+app.use('/api/event-order', require('./routes/eventOrder'));
+app.use('/api/vendor-directory', require('./routes/vendorDirectory'));
+app.use('/api/task-templates', require('./routes/taskTemplates'));
+app.use('/api/email-templates', require('./routes/emailTemplates'));
+app.use('/api/reports', require('./routes/reports'));
+app.use('/api/final-details', require('./routes/finalDetails'));
 
 // ── Daily jobs (Alberta time; see services/schedule.js) ─────────────────────
 const schedule = require('./services/schedule');
