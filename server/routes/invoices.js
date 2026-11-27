@@ -19,6 +19,11 @@ function coupleStatement(coupleId) {
   return { total: row.total, paid: row.paid, balance: row.total - row.paid };
 }
 
+// The couple's package, which picks the payment plan (midweek is 50/50).
+const packageOf = (coupleId) => (coupleId
+  ? db.prepare('SELECT package_name FROM bookings WHERE couple_id = ? ORDER BY event_date DESC, id DESC').get(coupleId)?.package_name || null
+  : null);
+
 // ── Admin: get all invoices ──────────────────────────────────────────────────
 router.get('/', authenticateToken, (req, res) => {
   const rows = db.prepare(`
@@ -154,9 +159,9 @@ router.delete('/:id', authenticateToken, (req, res) => {
 // ── Admin: the standard schedule for a total and check-in, without saving ─────
 // The Payments page shows it so staff can adjust it (e.g. split the deposit).
 router.post('/schedule-preview', authenticateToken, (req, res) => {
-  const { total_price, wedding_date } = req.body;
+  const { total_price, wedding_date, couple_id } = req.body;
   if (!total_price || total_price <= 0) return res.status(400).json({ error: 'total_price required' });
-  res.json(buildPaymentSchedule({ total: Number(total_price), checkIn: wedding_date || null }));
+  res.json(buildPaymentSchedule({ total: Number(total_price), checkIn: wedding_date || null, packageName: packageOf(couple_id) }));
 });
 
 // ── Admin: replace a couple's unpaid invoices with a payment schedule ─────────
@@ -176,7 +181,7 @@ router.post('/schedule/:coupleId', authenticateToken, (req, res) => {
     catch (err) { return res.status(400).json({ error: err.message }); }
   } else {
     // Same instalments and dates as Section 4 of the signed agreement.
-    items = buildPaymentSchedule({ total: Number(total_price), checkIn: wedding_date })
+    items = buildPaymentSchedule({ total: Number(total_price), checkIn: wedding_date, packageName: packageOf(req.params.coupleId) })
       .map(p => ({ description: p.label, amount: p.amount, due_date: p.due_date }));
   }
 
@@ -216,6 +221,7 @@ router.post('/:id/remind', authenticateToken, async (req, res) => {
     dueDate: inv.due_date ? new Date(inv.due_date + 'T12:00:00Z').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : 'now',
     daysUntilDue: days,
     items: extras.itemsFor(inv.id),
+    ...(require('../services/cardPayments').enabled() ? { payUrl: require('../services/cardPayments').payUrlFor(inv.id), cardFeePct: require('../services/cardPayments').feePct() } : {}),
   });
   if (!r.delivered) return res.status(502).json({ error: `The reminder did not send: ${r.error}` });
   logActivity(req, { action: 'invoice.reminded', entity: 'invoice', entityId: inv.id, coupleId: inv.couple_id,

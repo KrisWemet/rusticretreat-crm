@@ -88,8 +88,8 @@ export default function Payments() {
 
   useEffect(() => { fetchData().catch(err => toast.error(err.response?.data?.error || 'Could not load payments. Check your connection and refresh.')).finally(() => setLoading(false)) }, [])
 
-  const preview = async (total, checkIn) =>
-    (await getAdminAxios().post('/api/invoices/schedule-preview', { total_price: Number(total), wedding_date: checkIn || null })).data
+  const preview = async (total, checkIn, coupleId) =>
+    (await getAdminAxios().post('/api/invoices/schedule-preview', { total_price: Number(total), wedding_date: checkIn || null, couple_id: coupleId || null })).data
 
   // When couple is selected in Add form, load their booking so a payment can be
   // picked as a share of its total.
@@ -102,7 +102,7 @@ export default function Payments() {
       const b = r.data[0]
       if (b) setForm(p => ({ ...p, due_date: b.event_date || '' }))
       if (b && Number(b.total_price) > 0) {
-        setAddBooking({ total: Number(b.total_price), checkIn: b.event_date, schedule: await preview(b.total_price, b.event_date) })
+        setAddBooking({ total: Number(b.total_price), checkIn: b.event_date, schedule: await preview(b.total_price, b.event_date, coupleId) })
       }
     } catch {}
   }
@@ -134,7 +134,7 @@ export default function Payments() {
   useEffect(() => {
     if (!showSchedule || !(Number(scheduleForm.total_price) > 0)) { setScheduleItems([]); return }
     let cancelled = false
-    preview(scheduleForm.total_price, scheduleForm.wedding_date)
+    preview(scheduleForm.total_price, scheduleForm.wedding_date, scheduleForm.couple_id)
       .then(rows => { if (!cancelled) setScheduleItems(rows.map(r => ({ description: r.label, amount: String(r.amount), due_date: r.due_date || '' }))) })
       .catch(() => {})
     return () => { cancelled = true }
@@ -258,6 +258,15 @@ export default function Payments() {
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to update the invoice')
     }
+  }
+
+  // The invoice's private pay link (e-Transfer details, and card payment when it is on).
+  const copyPayLink = async (inv) => {
+    try {
+      const { data } = await getAdminAxios().post(`/api/payments/invoice/${inv.id}/pay-link`)
+      try { await navigator.clipboard.writeText(data.url); toast.success(data.card_enabled ? 'Pay link copied' : 'Pay link copied (card payment is off, so it shows e-Transfer details only)') }
+      catch { prompt('Copy this pay link:', data.url) }
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not make the pay link') }
   }
 
   const sendReminder = async (inv) => {
@@ -482,6 +491,9 @@ export default function Payments() {
                         <button onClick={() => sendReminder(inv)} title="Email a payment reminder now" aria-label="Email a payment reminder" className="btn-ghost py-1 px-2 text-xs text-slate-500">
                           <EnvelopeIcon className="w-3.5 h-3.5" />
                         </button>
+                      )}
+                      {!inv.paid && (
+                        <button onClick={() => copyPayLink(inv)} title="Copy this invoice's pay link to send the couple" aria-label="Copy pay link" className="btn-ghost py-1 px-2 text-xs text-slate-500">Pay link</button>
                       )}
                       <button onClick={() => openEdit(inv)} title="Edit" aria-label="Edit invoice" className="btn-ghost py-1 px-2 text-xs text-slate-500">
                         <PencilIcon className="w-3.5 h-3.5" />

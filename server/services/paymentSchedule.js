@@ -11,6 +11,7 @@
 const DAY_MS = 86400000;
 const SECOND_DAYS = 180;
 const BALANCE_DAYS = 90;
+const MIDWEEK_BALANCE_DAYS = 30;
 
 const round2 = n => Math.round(n * 100) / 100;
 
@@ -31,10 +32,21 @@ function addDays(iso, days) {
  * @param depositPct   deposit percentage (proposals let staff change it; 25 by default)
  * @returns [{ key, label, pct, amount, due_date }] — amounts sum exactly to total
  */
-function buildPaymentSchedule({ total, checkIn = null, depositDue = null, depositPct = 25 }) {
+function buildPaymentSchedule({ total, checkIn = null, depositDue = null, depositPct = 25, packageName = null }) {
   const today = new Date().toISOString().slice(0, 10);
   const depDue = isoDay(depositDue) || today;
   const start = isoDay(checkIn);
+
+  // Midweek elopements and vow renewals (owner, Nov 2026): half at booking,
+  // half 30 days before the date (with the deposit if that has passed).
+  if (/\bmidweek\b/i.test(packageName || '')) {
+    const half = round2(total / 2);
+    const balDue = start ? (addDays(start, -MIDWEEK_BALANCE_DAYS) <= depDue ? depDue : addDays(start, -MIDWEEK_BALANCE_DAYS)) : null;
+    return [
+      { key: 'deposit', label: 'Booking Deposit (50%)', pct: 50, amount: half, due_date: depDue },
+      { key: 'balance', label: `Final Balance (50%) — ${MIDWEEK_BALANCE_DAYS} days before the date`, pct: 50, amount: round2(total - half), due_date: balDue },
+    ];
+  }
 
   const deposit = round2(total * depositPct / 100);
   const second = round2(total * 0.25);

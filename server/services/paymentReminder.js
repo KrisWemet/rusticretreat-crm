@@ -41,6 +41,7 @@ async function checkAndSendReminders() {
       dueDate: dueDate.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' }),
       daysUntilDue,
       items: require('./extras').itemsFor(invoice.id),
+      ...(require('./cardPayments').enabled() ? { payUrl: require('./cardPayments').payUrlFor(invoice.id), cardFeePct: require('./cardPayments').feePct() } : {}),
     });
     if (r && r.delivered) {
       // Earlier reminders that were skipped are not worth sending late.

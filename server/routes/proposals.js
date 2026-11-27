@@ -182,7 +182,7 @@ router.get('/:id/print', authenticateToken, (req, res) => {
   // Dates are indicative until the proposal is accepted; the invoices are
   // created from the same schedule then.
   const schedule = buildPaymentSchedule({
-    total: proposal.total, checkIn: proposal.event_date, depositPct: proposal.deposit_pct,
+    total: proposal.total, checkIn: proposal.event_date, depositPct: proposal.deposit_pct, packageName: proposal.package_name,
   });
 
   const kindLabel = { package: 'Package', addon: 'Add-On', custom: 'Other', discount: 'Discount' };

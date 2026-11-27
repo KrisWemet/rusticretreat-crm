@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
-const { sendCsv } = require('../services/planning');
+const { sendCsv, toCsv } = require('../services/planning');
 const { albertaToday } = require('../services/schedule');
 const { defaultEndDate } = require('../services/bookingRules');
 
@@ -43,6 +43,33 @@ router.get('/payments', authenticateToken, (req, res) => {
       rows.map(r => [r.date, r.couple, r.description, r.method, r.reference, r.amount.toFixed(2), r.gst.toFixed(2)]));
   }
   res.json({ from, to, rows, total, gst: r2(total * GST_SHARE), by_month: Object.values(months).map(m => ({ ...m, amount: r2(m.amount), gst: r2(m.gst) })) });
+});
+
+// Payments received, laid out to import into QuickBooks Online as bank
+// transactions (Banking → Upload transactions: Date, Description, Amount; pick
+// DD/MM/YYYY when asked). A card fee charged on top is its own line, so the
+// bookkeeper can book it apart from the wedding income. Deposits held are not
+// income and are not here.
+router.get('/quickbooks.csv', authenticateToken, (req, res) => {
+  const { from, to } = range(req);
+  const dmy = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+  const rows = [];
+  db.prepare(`SELECT i.id, i.description, i.amount, i.card_fee, i.paid_at, i.payment_method, i.payment_reference, c.partner1_name, c.partner2_name
+    FROM invoices i JOIN couples c ON c.id = i.couple_id WHERE i.paid = 1`).all()
+    .map(r => ({ ...r, day: paidDay(r.paid_at) }))
+    .filter(r => r.day && r.day >= from && r.day <= to)
+    .sort((a, b) => a.day.localeCompare(b.day) || a.id - b.id)
+    .forEach(r => {
+      const who = names(r);
+      const how = [r.payment_method, r.payment_reference && `ref ${r.payment_reference}`].filter(Boolean).join(' ');
+      rows.push([dmy(r.day), `${who}: ${r.description}${how ? ` (${how})` : ''}`, r2(r.amount).toFixed(2)]);
+      if (r.card_fee > 0) rows.push([dmy(r.day), `${who}: credit card fee on ${r.description}`, r2(r.card_fee).toFixed(2)]);
+    });
+  // No byte-order mark here: QuickBooks reads the first header as "Date" only without one.
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="quickbooks-payments-${from}-to-${to}.csv"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.send(toCsv(['Date', 'Description', 'Amount'], rows));
 });
 
 // Everything still owed, oldest first, grouped by how late it is.

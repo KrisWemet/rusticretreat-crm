@@ -382,6 +382,29 @@ Item 4 on the list. The owner's answers: extras change by year and the 2027 pric
 
 **Owner to-dos:** set the real 2027 prices for the five new extras (pencil next to each in Packages & Add-Ons). Add a 2028 price when you know it.
 
+### Midweek elopements and vow renewals (27 Nov 2026)
+
+Item 5 on the list. Still being planned by the owner; answers so far: day use only (no overnight), probably Tuesday to Thursday, up to 20 guests, price not decided, paid 50% at booking and 50% before the date.
+
+- A **Midweek Elopement & Vow Renewal** package is added **switched off** with no price. Packages & Add-Ons → set the price → make it Active.
+- **Booking rules:** any package with "Midweek" in its name books one Tuesday, Wednesday or Thursday (same start and end day), at most 20 guests. The day after stays free like every booking.
+- **Payments:** 50% deposit at booking, 50% 30 days before the date (with the deposit if that's already passed). Proposals, signing and Auto Schedule all use it. Weddings keep 25/25/50.
+- **Not done yet:** the rental agreement is written for weekend stays (package table, camping, Final Details Form). Before the first midweek booking, the owner needs a short midweek agreement. Until then, sign one on paper and file it with Record Signed Contract. The days and 30-day timing are easy to change once decided.
+
+### Card payments with the fee passed on, and the QuickBooks export (27 Nov 2026)
+
+Item 6. Owner's answers: no card processor yet; a 2.4% fee on card payments; couples pay from a link per invoice (the portal is off); QuickBooks by export file.
+
+- **Pay link:** every unpaid invoice can have a private link (Payments → **Pay link**), opened with no login. It shows the invoice, its lines and the e-Transfer details (free). When card payment is on, it also shows **Pay by card** with the 2.4% fee as its own line, through Stripe Checkout. The webhook marks the invoice paid and records the fee separately (`invoices.card_fee`). Payment reminder emails include the link when card payment is on.
+- **Switched off** until the owner has a Stripe account and its keys are in Railway: `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (the webhook URL is `/api/payments/webhook`). Settings → Card payments shows On/Off and the fee (admin, capped at 2.4%).
+- **QuickBooks export:** Reports → QuickBooks export: payments received in the chosen dates as Date (DD/MM/YYYY), Description, Amount, for QuickBooks Online's Banking → Upload transactions. A card fee is its own line.
+
+**Owner to-dos before switching card payments on:**
+- Open a Stripe account and put its two keys into Railway's settings, never in chat.
+- Tell Visa, Mastercard and Stripe 30 days before charging the fee (Canadian surcharge rules). The fee can't apply to debit cards. Stripe can block debit cards with a Radar rule; ask Stripe, or set the fee to 0% for debit-heavy months.
+- Ask the accountant whether GST applies to the card fee. It's kept apart from the invoice amount so it can be booked either way.
+- Try one month's QuickBooks export with the bookkeeper first.
+
 ## Open items
 
 1. **Shannon & Chris booking shows $6,439.**

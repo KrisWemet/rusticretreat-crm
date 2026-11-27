@@ -280,6 +280,7 @@ export const pageGuides = [
       'Add Invoice for anything extra, Edit invoice, or Split into two payments.',
       'Record payment with date received, method (e-Transfer, cash, cheque, card) and reference, and email a receipt to the couple.',
       'Email a payment reminder now; filter by client, upcoming, overdue and paid.',
+      'Pay link: copies an unpaid invoice\'s private link for the couple. It shows your e-Transfer details and, once card payment is switched on (Settings → Card payments), a Pay by card button with the card fee as its own line. Payment reminders include the link automatically when card payment is on.',
       'See Collected, Outstanding and Overdue totals.',
       'Damage deposits: what you are holding right now, whose refund is still to send, and a CSV of every deposit. Deposits are not invoices, because a refundable deposit is not income.',
     ],
@@ -472,6 +473,14 @@ export const pageGuides = [
     ],
     howTo: [
       {
+        title: 'Bring payments into QuickBooks Online',
+        steps: [
+          'Reports: choose the dates (for example last month), then click QuickBooks export.',
+          'In QuickBooks Online: Banking → Upload transactions, choose the file, and pick DD/MM/YYYY when asked about the date format.',
+          'Each payment is one line; a credit card fee is its own line, so your bookkeeper can book it separately. Try one month first with your bookkeeper.',
+        ],
+      },
+      {
         title: 'Send your accountant last year\'s payments',
         steps: [
           'Click Last year (or pick the dates).',
@@ -516,6 +525,7 @@ export const pageGuides = [
     tips: [
       'Changing a price here does not change proposals or bookings you already made.',
       'Make a package Inactive rather than deleting it, so old weddings still show it.',
+      'The Midweek Elopement & Vow Renewal package starts Inactive with no price. Set its price, then make it Active. It books a single Tuesday, Wednesday or Thursday (day use), for up to 20 guests, paid 50% at booking and 50% 30 days before.',
     ],
     related: ['proposals'],
   },
