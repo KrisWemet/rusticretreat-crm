@@ -183,7 +183,10 @@ const housekeeping = require('./services/housekeeping');
 schedule.registerJob('backup', 2, () => require('./services/backup').dailyBackup());
 schedule.registerJob('complete-past-weddings', 3, ({ day }) => housekeeping.completePastWeddings(day));
 schedule.registerJob('expire-proposals', 3, ({ day }) => housekeeping.expireProposals(day));
-schedule.registerJob('morning-summary', 7, async ({ day }) => {
+// The 7 am summary email is off by default (the owner asked to stop it, Nov
+// 2026). The same list is always on the Dashboard. Set MORNING_SUMMARY_EMAIL=on
+// in Railway to bring the email back; nothing else needs to change.
+if (/^(on|true|1|yes)$/i.test(process.env.MORNING_SUMMARY_EMAIL || '')) schedule.registerJob('morning-summary', 7, async ({ day }) => {
   const today = require('./services/today');
   const summary = today.todaySummary(day);
   const items = today.itemCount(summary);

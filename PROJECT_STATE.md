@@ -791,8 +791,15 @@ See `DEPLOY.md` for the full write-up.
   before any data migration, plus an off-site copy in a Railway storage bucket
   when the `BACKUP_BUCKET*` variables are set (see `.env.example`). A failed
   backup or upload is emailed to `ADMIN_EMAIL`.
+  The `BACKUP_BUCKET*` variables are **references** to the `crm-backups` bucket
+  (`${{crm-backups.SECRET_ACCESS_KEY}}` etc.). Hand-copied keys went stale when
+  the bucket's credentials were reset on 2026-10-21, and every off-site upload
+  failed with "signature does not match" until 2026-11-19. A credential reset
+  still needs a redeploy before the running service sees the new keys.
 - Daily jobs run in Alberta time from one runner (`services/schedule.js`,
   recorded in `job_runs`); the Backups page shows each job's last run.
+- The 7 am morning summary email is **off** (owner asked, Nov 2026). It only
+  registers when `MORNING_SUMMARY_EMAIL=on`; the Dashboard shows the same list.
 - The printable executed contract has never been eyeballed by the owner in
   production (verified locally: toolbar hidden, three signature blocks, all
   three parties labelled).

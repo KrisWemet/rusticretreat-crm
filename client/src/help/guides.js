@@ -26,7 +26,7 @@ export const pageGuides = [
       },
     ],
     tips: [
-      'The same list arrives as the morning summary email at about 7 am Alberta time — but only on days with something to report.',
+      'Check it each morning: this list is the CRM\'s daily reminder. (The 7 am summary email is turned off.)',
       'An enquiry stops showing under "Needs a follow-up" once it has a tour booked, a proposal sent, a booking, or you click Mark contacted.',
     ],
     related: ['morning-routine', 'enquiry-to-booking', 'clients'],
@@ -158,7 +158,7 @@ export const pageGuides = [
       },
     ],
     tips: [
-      'Tours booked for this week appear on the dashboard and in the morning email, so they don\'t sneak up on you.',
+      'Tours booked for this week appear on the dashboard, so they don\'t sneak up on you.',
       'A booked tour takes the couple off the "Needs a follow-up" list.',
     ],
     related: ['enquiry-to-booking', 'calendar'],
@@ -401,7 +401,7 @@ export const pageGuides = [
         steps: [
           'Click Add Task and choose a shortcut like "Follow up after tour", or type your own title.',
           'Set Due in (for example 3 days) and the Related Couple.',
-          'It appears on the dashboard and in the morning email when it\'s due.',
+          'It appears on the dashboard when it\'s due.',
         ],
       },
     ],
@@ -605,7 +605,7 @@ export const recipes = [
     summary: 'The whole journey, and which page to use at each step.',
     steps: [
       'An enquiry arrives — from the website on its own, or you add it with Add Couple on Clients & Leads. The venue gets an email.',
-      'It shows under "Needs a follow-up" on the dashboard and in the morning email. The CRM does not email the couple for you — you reach out.',
+      'It shows under "Needs a follow-up" on the dashboard. The CRM does not email the couple for you — you reach out.',
       'Contact the couple, then click Mark contacted on their page (or book a tour, which also counts).',
       'Book a site tour on Site Tours; leave the confirmation email box ticked. Mark it completed after the visit.',
       'Build and send a proposal on Proposals. The couple can accept it online.',
@@ -634,7 +634,7 @@ export const recipes = [
     title: 'Your morning routine',
     summary: 'Ten minutes each morning keeps every couple looked after.',
     steps: [
-      'Read the morning summary email (about 7 am) or open the Dashboard.',
+      'Open the Dashboard.',
       'Tours today: check the notes and prepare the site.',
       'Needs a follow-up: contact each couple, then Mark contacted.',
       'Payments due and overdue: check your bank for e-Transfers and record any that arrived.',
@@ -688,7 +688,7 @@ export const recipes = [
     title: 'Before and after the wedding',
     summary: 'The last weeks, the weekend itself, and wrapping up.',
     steps: [
-      'Weddings this week show on the dashboard and in the morning email.',
+      'Weddings this week show on the dashboard.',
       'Check the Bookings details (guest count, locations, special requests) and the couple\'s Vendors.',
       'Make sure the final payment is recorded on Payments before the weekend.',
       'At check-in, collect the $1,000 damage deposit by e-Transfer and record it on the couple\'s Event plan tab (Damage deposit).',
@@ -761,7 +761,7 @@ export const faq = [
   },
   {
     q: 'Why didn\'t the couple get an automatic follow-up email?',
-    a: 'On purpose. The CRM reminds you (dashboard and morning email) instead of emailing couples, so every enquiry gets a personal reply. Payment reminders are the only automatic emails couples get.',
+    a: 'On purpose. The CRM reminds you on the dashboard instead of emailing couples, so every enquiry gets a personal reply. Payment reminders are the only automatic emails couples get.',
   },
   {
     q: 'I archived a couple by mistake. Where did they go?',
