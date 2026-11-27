@@ -260,6 +260,15 @@ export default function Payments() {
     }
   }
 
+  // The invoice's private pay link (e-Transfer details, and card payment when it is on).
+  const copyPayLink = async (inv) => {
+    try {
+      const { data } = await getAdminAxios().post(`/api/payments/invoice/${inv.id}/pay-link`)
+      try { await navigator.clipboard.writeText(data.url); toast.success(data.card_enabled ? 'Pay link copied' : 'Pay link copied (card payment is off, so it shows e-Transfer details only)') }
+      catch { prompt('Copy this pay link:', data.url) }
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not make the pay link') }
+  }
+
   const sendReminder = async (inv) => {
     if (!confirm(`Email ${inv.partner1_name} & ${inv.partner2_name} a reminder about "${inv.description}" now?`)) return
     try {
@@ -482,6 +491,9 @@ export default function Payments() {
                         <button onClick={() => sendReminder(inv)} title="Email a payment reminder now" aria-label="Email a payment reminder" className="btn-ghost py-1 px-2 text-xs text-slate-500">
                           <EnvelopeIcon className="w-3.5 h-3.5" />
                         </button>
+                      )}
+                      {!inv.paid && (
+                        <button onClick={() => copyPayLink(inv)} title="Copy this invoice's pay link to send the couple" aria-label="Copy pay link" className="btn-ghost py-1 px-2 text-xs text-slate-500">Pay link</button>
                       )}
                       <button onClick={() => openEdit(inv)} title="Edit" aria-label="Edit invoice" className="btn-ghost py-1 px-2 text-xs text-slate-500">
                         <PencilIcon className="w-3.5 h-3.5" />

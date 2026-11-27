@@ -221,6 +221,7 @@ router.post('/:id/remind', authenticateToken, async (req, res) => {
     dueDate: inv.due_date ? new Date(inv.due_date + 'T12:00:00Z').toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : 'now',
     daysUntilDue: days,
     items: extras.itemsFor(inv.id),
+    ...(require('../services/cardPayments').enabled() ? { payUrl: require('../services/cardPayments').payUrlFor(inv.id), cardFeePct: require('../services/cardPayments').feePct() } : {}),
   });
   if (!r.delivered) return res.status(502).json({ error: `The reminder did not send: ${r.error}` });
   logActivity(req, { action: 'invoice.reminded', entity: 'invoice', entityId: inv.id, coupleId: inv.couple_id,

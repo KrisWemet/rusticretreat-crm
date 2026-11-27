@@ -1477,6 +1477,15 @@ runOnce('extras-list-2027', () => {
 // Tuesday, Wednesday or Thursday, up to 20 guests, paid 50/50. Still being
 // planned, so it is added switched off with no price; the owner sets the price
 // and makes it Active in Packages when ready. Skipped if one already exists.
+// Card payments with the fee passed on: each invoice can have a private pay
+// link, and a card payment records the fee charged on top, apart from the
+// invoice amount (which stays what was owed, GST included).
+for (const sql of [
+  'ALTER TABLE invoices ADD COLUMN pay_token TEXT',
+  'ALTER TABLE invoices ADD COLUMN card_fee REAL',
+]) { try { db.exec(sql); } catch (_) {} }
+try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_pay_token ON invoices(pay_token)'); } catch (_) {}
+
 runOnce('midweek-package-v1', () => {
   if (db.prepare("SELECT 1 FROM packages WHERE LOWER(name) LIKE '%midweek%'").get()) return;
   db.prepare('INSERT INTO packages (name, description, price, max_guests, includes, is_active) VALUES (?, ?, ?, ?, ?, 0)').run(

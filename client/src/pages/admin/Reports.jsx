@@ -62,6 +62,7 @@ export default function Reports() {
           <p className="page-subtitle">Money in, money owed, weddings booked and where couples come from. Each one downloads as CSV.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" title="Payments received in the dates below, to upload into QuickBooks Online (Banking → Upload transactions)" onClick={csv(`/api/reports/quickbooks.csv?from=${range.from}&to=${range.to}`, `quickbooks-${range.from}-to-${range.to}.csv`)}><ArrowDownTrayIcon className="w-4 h-4" /> QuickBooks export</button>
           <button className="btn-secondary" onClick={csv('/api/damage-deposits?format=csv', `damage-deposits-${todayISO()}.csv`)}><ArrowDownTrayIcon className="w-4 h-4" /> Damage deposits</button>
           <button className="btn-secondary" onClick={csv('/api/reports/couples.csv', `couples-${todayISO()}.csv`)}><ArrowDownTrayIcon className="w-4 h-4" /> All couples’ contact details</button>
         </div>

@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import ForgotPassword from './pages/ForgotPassword'
 import FinalDetails from './pages/FinalDetails'
+import PayInvoice from './pages/PayInvoice'
 import PortalLogin from './pages/PortalLogin'
 import SignContract from './pages/SignContract'
 import Dashboard from './pages/admin/Dashboard'
@@ -75,6 +76,7 @@ function App() {
           <Route path="/proposal/:token" element={<PublicProposal />} />
           <Route path="/form/:token" element={<PublicForm />} />
           <Route path="/final-details/:token" element={<FinalDetails />} />
+          <Route path="/pay/:token" element={<PayInvoice />} />
           <Route path="/inquire" element={<Inquire />} />
 
           {/* Admin/Staff routes */}

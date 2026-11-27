@@ -16,6 +16,7 @@ const PUBLIC_ROUTES = [
   /^\/signup\//,     // staff choosing a password from their invite link
   /^\/forgot-password\/?$/, // staff asking for a reset link
   /^\/final-details\//, // the couple's Final Details Form link
+  /^\/pay\//, // an invoice's private pay link
 ]
 
 export function AuthProvider({ children }) {
