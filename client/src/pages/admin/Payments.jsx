@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
 import Input, { Select } from '../../components/ui/Input'
+import DamageDepositsPanel from '../../components/DamageDepositsPanel'
 import {
   PlusIcon,
   CurrencyDollarIcon,
@@ -360,6 +361,8 @@ export default function Payments() {
           </div>
         </div>
       </div>
+
+      <DamageDepositsPanel />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">

@@ -5,6 +5,7 @@ import { CheckCircleIcon, ExclamationCircleIcon, PrinterIcon } from '@heroicons/
 import { useAuth } from '../../contexts/AuthContext'
 import { openPrintable, dayLabel } from '../../utils/files'
 import FinalDetailsCard from './FinalDetailsCard'
+import DamageDepositCard from './DamageDepositCard'
 
 // The wedding weekend at a glance: what is still missing, the venue's own
 // notes for the day, and the printable event order built from all of it.
@@ -169,6 +170,8 @@ export default function EventPlan({ coupleId, onTab }) {
       </div>
 
       <FinalDetailsCard api={api} coupleId={coupleId} onChanged={load} />
+
+      <DamageDepositCard api={api} coupleId={coupleId} onChanged={load} />
 
       <ApplyChecklist api={api} coupleId={coupleId} onApplied={load} />
 

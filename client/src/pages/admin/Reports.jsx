@@ -61,7 +61,10 @@ export default function Reports() {
           <h1 className="page-title">Reports</h1>
           <p className="page-subtitle">Money in, money owed, weddings booked and where couples come from. Each one downloads as CSV.</p>
         </div>
-        <button className="btn-secondary" onClick={csv('/api/reports/couples.csv', `couples-${todayISO()}.csv`)}><ArrowDownTrayIcon className="w-4 h-4" /> All couples’ contact details</button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={csv('/api/damage-deposits?format=csv', `damage-deposits-${todayISO()}.csv`)}><ArrowDownTrayIcon className="w-4 h-4" /> Damage deposits</button>
+          <button className="btn-secondary" onClick={csv('/api/reports/couples.csv', `couples-${todayISO()}.csv`)}><ArrowDownTrayIcon className="w-4 h-4" /> All couples’ contact details</button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 card p-4">

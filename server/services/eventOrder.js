@@ -8,6 +8,7 @@ const { defaultEndDate } = require('./bookingRules');
 const { sortRunOfShow, esc } = require('./planning');
 const { summarize, renderSvg } = require('./floorPlan');
 const finalDetails = require('./finalDetails');
+const damageDeposit = require('./damageDeposit');
 
 const longDay = (d) => (d ? new Intl.DateTimeFormat('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(d + 'T00:00:00Z')) : '');
 const shortDay = (d) => (d ? new Intl.DateTimeFormat('en-CA', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(d + 'T00:00:00Z')) : '');
@@ -139,6 +140,7 @@ function buildEventOrder(coupleId) {
     agreement, onsite, vendors, days, guests: guestSummary, plans, forms, forms_outstanding: formsOutstanding,
     payments: { total, paid, balance: Math.max(0, total - paid), next },
     tasks_open: tasksOpen, readiness, final,
+    deposit: (() => { const d = damageDeposit.view(coupleId); return { status: d.status, expected: d.agreed_amount, received: d.received, received_at: d.record?.received_at || null, method: d.record?.received_method || null }; })(),
   };
 }
 
@@ -231,7 +233,7 @@ ${forms ? `<h2>Forms</h2>${forms}` : ''}
 ${financials ? `<h2>Payments</h2><table class="kv">
 ${row('Total', money(eo.payments.total))}${row('Paid', money(eo.payments.paid))}${row('Balance', `<strong>${money(eo.payments.balance)}</strong>`)}
 ${eo.payments.next ? row('Next due', `${esc(eo.payments.next.description)} · ${money(eo.payments.next.amount)}${eo.payments.next.due_date ? ` · ${esc(shortDay(eo.payments.next.due_date))}` : ''}`) : ''}
-${row('Damage deposit (at check-in)', eo.agreement.damage_deposit ? money(eo.agreement.damage_deposit) : '')}
+${row('Damage deposit', eo.deposit.received_at ? `${money(eo.deposit.received)} received ${esc(shortDay(eo.deposit.received_at))}${eo.deposit.method ? ` by ${esc(eo.deposit.method)}` : ''}` : `<strong>${money(eo.deposit.expected)} to collect at check-in</strong>`)}
 </table>` : ''}
 
 <p class="foot">Generated ${esc(stamp)} from the CRM. Re-print after changes; this copy does not update itself.</p>

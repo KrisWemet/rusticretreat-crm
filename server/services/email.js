@@ -190,6 +190,12 @@ async function sendMorningSummary(s) {
     `${p.overdue ? 'OVERDUE ' : ''}${p.couple_names} — ${p.description}, $${money(p.amount)} due ${fmtDay(p.due_date)}`), '/payments');
   add('Contracts waiting for a signature', s.contracts_waiting.map(c => `${c.couple_names} — "${c.title}", waiting on ${c.waiting_on || 'a signer'}`), '/contracts');
   add('Forms sent but not returned', s.forms_waiting.map(f => `${f.couple_names} — "${f.title}", sent ${fmtDay(f.link_sent_at)}`), '/forms');
+  const dep = s.deposits || { collect: [], inspect: [], refund: [] };
+  add('Damage deposits', [
+    ...dep.collect.map(d => `${d.couple_names} — collect $${money(d.amount)} at check-in${d.on_site ? ' (on site now)' : ` ${fmtDay(d.check_in)}`}`),
+    ...dep.inspect.map(d => `${d.overdue ? 'OVERDUE ' : ''}${d.couple_names} — inspection due by ${fmtDay(d.due)}${d.held ? `, holding $${money(d.held)}` : ', deposit not recorded'}`),
+    ...dep.refund.map(d => `${d.couple_names} — send the $${money(d.amount)} refund`),
+  ], '/payments');
   if (s.tour_requests) add('Tour requests to schedule', [`${s.tour_requests} tour request${s.tour_requests === 1 ? '' : 's'} not scheduled yet`], '/tours');
 
   const heading = `Your day at Rustic Retreat — ${fmtDay(s.today)}`;
@@ -277,6 +283,37 @@ async function sendFinalDetailsLink({ to, coupleId, coupleNames, url, deadline }
 <p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Fill in your Final Details</a></p>
 <p>Or copy this link: <a href="${esc(url)}">${esc(url)}</a></p>
 <p>It is due by <strong>${esc(due)}</strong>. Once you submit it, the counts are locked and cannot be changed (Section 2.3 of your rental agreement). The form shows any overage fees as you go; we will review it and send an invoice for anything owing, payable by the same date.</p>
+<p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
+// The damage deposit statement (agreement Section 4.2), sent only when staff
+// press the button: what was received, each deduction and why, and what is
+// coming back.
+async function sendDepositStatement({ to, coupleId, coupleNames, received, receivedAt, deductions, refund, refundedAt, refundMethod, excess }) {
+  const m = (n) => `$${Number(n || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const lines = deductions.map(d => `${d.label}${d.quantity > 1 ? ` (${d.quantity})` : ''}: ${d.description} — ${m(d.amount)}`);
+  const outcome = refundedAt
+    ? `We sent your refund of ${m(refund)}${refundMethod ? ` by ${refundMethod}` : ''} on ${fmtDay(refundedAt)}.`
+    : refund > 0 ? `Your refund of ${m(refund)} is on its way.`
+    : 'No refund is due.';
+  const owed = excess > 0 ? ` The deductions come to ${m(excess)} more than the deposit; we will send an invoice for that amount.` : '';
+  return send({
+    kind: 'damage-deposit-statement',
+    coupleId,
+    to,
+    subject: 'Your Rustic Retreat damage deposit',
+    text: `Hi ${coupleNames},\n\nThank you for celebrating with us. Here is where your damage deposit stands (Section 4.2 of your rental agreement).\n\nReceived: ${m(received)}${receivedAt ? ` on ${fmtDay(receivedAt)}` : ''}\n${lines.length ? `Deductions:\n${lines.map(l => `  - ${l}`).join('\n')}\n` : 'Deductions: none\n'}\n${outcome}${owed}\n\nIf you have any questions, just reply to this email.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
+<p>Thank you for celebrating with us. Here is where your damage deposit stands (Section 4.2 of your rental agreement).</p>
+<table style="border-collapse:collapse;font-size:14px;margin:12px 0">
+<tr><td style="padding:4px 16px 4px 0;color:#64748b">Received${receivedAt ? ` ${esc(fmtDay(receivedAt))}` : ''}</td><td style="padding:4px 0;text-align:right"><strong>${m(received)}</strong></td></tr>
+${deductions.map(d => `<tr><td style="padding:4px 16px 4px 0">${esc(d.label)}${d.quantity > 1 ? ` (${d.quantity})` : ''}: ${esc(d.description)}</td><td style="padding:4px 0;text-align:right">−${m(d.amount)}</td></tr>`).join('')}
+${deductions.length ? '' : '<tr><td style="padding:4px 16px 4px 0">Deductions</td><td style="padding:4px 0;text-align:right">none</td></tr>'}
+<tr><td style="padding:8px 16px 4px 0;border-top:1px solid #e2e8f0"><strong>Refund</strong></td><td style="padding:8px 0 4px;border-top:1px solid #e2e8f0;text-align:right"><strong>${m(refund)}</strong></td></tr>
+</table>
+<p>${esc(outcome)}${esc(owed)}</p>
+<p>If you have any questions, just reply to this email.</p>
 <p>Warm regards,<br>Rustic Retreat</p>`,
   });
 }
@@ -627,6 +664,7 @@ module.exports = {
   sendPasswordResetRequest,
   sendFinalDetailsLink,
   sendFinalDetailsSubmittedAdmin,
+  sendDepositStatement,
   sendTourConfirmation,
   isConfigured: () => configured,
   sendCoupleMessage,

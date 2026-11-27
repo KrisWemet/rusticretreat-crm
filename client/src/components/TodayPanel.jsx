@@ -94,6 +94,18 @@ export default function TodayPanel({ data }) {
       {more(s.contracts_waiting, '/contracts')}
     </Section>)
 
+  const dep = s.deposits || { collect: [], inspect: [], refund: [] }
+  const depRows = [
+    ...dep.collect.map(d => ({ key: `c${d.couple_id}`, id: d.couple_id, main: `${d.couple_names}: collect ${money(d.amount)}`, side: d.on_site ? 'On site now' : `check-in ${day(d.check_in)}` })),
+    ...dep.inspect.map(d => ({ key: `i${d.couple_id}`, id: d.couple_id, main: `${d.couple_names}: inspect`, side: d.overdue ? `Overdue · due ${day(d.due)}` : `by ${day(d.due)}`, alert: d.overdue })),
+    ...dep.refund.map(d => ({ key: `r${d.couple_id}`, id: d.couple_id, main: `${d.couple_names}: send refund`, side: money(d.amount) })),
+  ]
+  if (depRows.length) sections.push(
+    <Section key="d" title="Damage deposits" count={depRows.length} to="/payments" tone={depRows.some(r => r.alert) ? 'red' : 'slate'}>
+      {depRows.slice(0, MAX).map(r => <Row key={r.key} to={`${client(r.id)}?tab=event`} main={r.main} side={r.side} alert={r.alert} />)}
+      {more(depRows, '/payments')}
+    </Section>)
+
   if (s.forms_waiting.length) sections.push(
     <Section key="f" title="Forms not returned" count={s.forms_waiting.length} to="/forms">
       {s.forms_waiting.slice(0, MAX).map(f => (
