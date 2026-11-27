@@ -103,6 +103,24 @@ changes never reprice it. Only an admin can reopen, never once the overage
 invoice is paid; reopening deletes the unpaid invoice and logs the old record.
 The link token is 48 hex chars, lasts 120 days, and a new link retires the old.
 
+**Damage deposit (Nov 2026, agreement Section 4.2).** Table `damage_deposits`
+(one per couple), rules in `services/damageDeposit.js`, routes
+`routes/damageDeposits.js` (`/api/damage-deposits`), card
+`components/planning/DamageDepositCard.jsx` on the Event plan tab, panel
+`components/DamageDepositsPanel.jsx` on Payments. Steps: received (amount
+defaults to the signed agreement's `damage_deposit` field, else $1,000) →
+inspection with deductions (agreement categories only, a description each, tree
+≥ $500 each) → refund (worked out, never typed) or kept. **It is deliberately
+not an invoice**: a refundable deposit is not income, and every invoice is
+counted as GST-included revenue in Reports. Only charges *beyond* the deposit
+become an invoice, by a staff click, once. Admin "undo last step" is logged
+with the old record and refuses to delete a paid excess invoice. Reminders
+(`actionList`) feed the dashboard and the 7 am email: collect at check-in this
+week, inspect after check-out (overdue after 48 hours), refund to send. A stay
+with nothing recorded is only chased for 14 days after check-out, so weddings
+from before this existed do not flood the list; a deposit actually received is
+chased until it is closed.
+
 **Forgot password (Nov 2026).** `/forgot-password` → `POST /api/auth/forgot-password`
 (5 per 15 min per IP). Same reply whether or not the address has a login; the
 email is not awaited, so a real address does not answer more slowly. It reuses

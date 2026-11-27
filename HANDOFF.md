@@ -316,7 +316,7 @@ The owner asked how well the CRM fits Rustic Retreat and answered a round of que
 6. card payments with the fee passed on, then QuickBooks Online
 7. couple portal, later
 
-Items 1 and 2 are built on PR #33.
+Items 1 and 2 were merged in PR #33 (`71746ed`) and deployed on 27 Nov 2026.
 
 - **Forgot your password?** on the sign-in page emails the login a one-time link. It lasts 2 hours. The page says the same thing whether or not the address has a login.
 - **Final Details Form** (agreement Section 2.3), on each couple's **Event plan** tab:
@@ -334,6 +334,23 @@ Items 1 and 2 are built on PR #33.
 - **Packages & Add-Ons:** add propane, firewood, signage and décor with real prices. Untick anything that shouldn't be on the form. Day-of Coordination and Rehearsal Dinner Setup are probably better booked earlier than chosen on a final-counts form.
 - **Choosing an "Extra Night" on the form charges its price but does not change the nights used for tent and RV fees.** Adjust "Nights charged" on the card if needed.
 - Confirm GST on overages with the accountant.
+
+### Damage deposit tracking (27 Nov 2026)
+
+Item 3 on the list. On each couple's **Event plan** tab, a **Damage deposit** card follows Section 4.2:
+1. **Record deposit received** at check-in (e-Transfer, with the reference). The amount comes from their signed agreement, normally $1,000.
+2. **Record the inspection** within 48 hours of check-out, adding any deductions. Only the agreement's reasons are allowed, each with a description the couple can see: damage, missing items, excessive cleaning, a fire extinguisher set off, or a tree cut ($500 minimum each).
+3. **Record refund sent.** The CRM works out the amount.
+4. Optionally, **Email the couple a statement.**
+
+If deductions come to more than the deposit, one click makes an invoice for the difference. An admin can **undo the last step** if it was entered by mistake.
+
+- **Reminders:** on the dashboard and in the morning email: deposits to collect this week, inspections due (red once 48 hours pass), and refunds to send. Nothing is emailed to couples automatically.
+- **Payments page:** what you're holding right now, refunds still to send, and a CSV of every deposit. The CSV is also on Reports.
+- **Event order:** shows whether the deposit is received.
+- **Bookkeeping:** deposits are kept off invoices and the payments/GST report, because a refundable deposit isn't income. The amount kept for deductions is in the deposits CSV for the bookkeeper.
+
+**Owner to-dos:** ask the accountant how deductions kept from a deposit should be booked, and whether GST applies to them. The CRM currently treats them as non-GST amounts, listed separately. An invoice for charges beyond the deposit is an ordinary invoice, so the payments report counts it as GST-included like every other invoice.
 
 ## Open items
 

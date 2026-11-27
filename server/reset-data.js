@@ -66,7 +66,7 @@ const BOOKING_DATA = [
   'timeline_events', 'checklist_items', 'budget_items', 'guests', 'documents',
   // floor_plans is not listed: a couple's plans cascade with the couple, and
   // rows with no couple are the venue's saved layouts (venue setup, below).
-  'couple_files', 'couple_notes', 'final_details',
+  'couple_files', 'couple_notes', 'final_details', 'damage_deposits',
   // vendors is each couple's own supplier list (couple_id NOT NULL), not the
   // venue's preferred-vendor directory — it belongs with the booking data.
   'vendors',

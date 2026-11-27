@@ -3,6 +3,7 @@
 const db = require('../db');
 const { needsFollowUp } = require('./leadNurture');
 const { defaultEndDate } = require('./bookingRules');
+const damageDeposit = require('./damageDeposit');
 
 function addDays(day, n) {
   const d = new Date(day + 'T00:00:00Z');
@@ -77,13 +78,17 @@ function todaySummary(today) {
     contracts_waiting: contracts.map(c => ({ ...c, couple_names: names(c) })),
     forms_waiting: forms.map(f => ({ ...f, couple_names: names(f) })),
     weddings_week: weddings.map(w => ({ ...w, couple_names: names(w), on_site: w.event_date <= today })),
+    // The damage deposit (agreement Section 4.2): collect at check-in, inspect
+    // within 48 hours of check-out, send the refund.
+    deposits: damageDeposit.actionList(today, weekEnd),
   };
 }
 
 // How many things are in the summary (weddings and tours count as news too).
 function itemCount(s) {
   return s.tours_today.length + s.tours_week.length + s.tasks_due.length + s.payments_due.length +
-    s.follow_ups.length + s.contracts_waiting.length + s.forms_waiting.length + s.weddings_week.length;
+    s.follow_ups.length + s.contracts_waiting.length + s.forms_waiting.length + s.weddings_week.length +
+    (s.deposits ? s.deposits.collect.length + s.deposits.inspect.length + s.deposits.refund.length : 0);
 }
 
 module.exports = { todaySummary, itemCount, addDays };

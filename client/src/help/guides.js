@@ -281,8 +281,20 @@ export const pageGuides = [
       'Record payment with date received, method (e-Transfer, cash, cheque, card) and reference, and email a receipt to the couple.',
       'Email a payment reminder now; filter by client, upcoming, overdue and paid.',
       'See Collected, Outstanding and Overdue totals.',
+      'Damage deposits: what you are holding right now, whose refund is still to send, and a CSV of every deposit. Deposits are not invoices, because a refundable deposit is not income.',
     ],
     howTo: [
+      {
+        title: 'Handle the $1,000 damage deposit',
+        steps: [
+          'Open the couple\'s page → Event plan → Damage deposit. The dashboard reminds you in the week of check-in.',
+          'When their e-Transfer arrives at check-in, click Record deposit received (add the e-Transfer reference if you have it).',
+          'Within 48 hours of check-out, walk the site and click Record the inspection. Add a deduction only for a reason the agreement allows: damage, missing items, excessive cleaning, a fire extinguisher set off, or a tree cut ($500 minimum per tree). Say what happened; the couple sees it.',
+          'The card works out the refund. Send it by e-Transfer, then click Record refund sent.',
+          'Optional: Email the couple a statement showing what was received, each deduction and the refund.',
+          'If the deductions come to more than the deposit, click Create an invoice for the difference.',
+        ],
+      },
       {
         title: 'Record an e-Transfer that just arrived',
         recipe: 'payment-recipe',
@@ -649,6 +661,8 @@ export const recipes = [
       'Weddings this week show on the dashboard and in the morning email.',
       'Check the Bookings details (guest count, locations, special requests) and the couple\'s Vendors.',
       'Make sure the final payment is recorded on Payments before the weekend.',
+      'At check-in, collect the $1,000 damage deposit by e-Transfer and record it on the couple\'s Event plan tab (Damage deposit).',
+      'Within 48 hours of check-out, inspect the site, record the inspection there with any deductions, then send the refund and record it.',
       'The morning after the last day of the stay, the CRM marks the couple completed on its own.',
     ],
     links: ['bookings', 'vendors', 'payments'],
@@ -691,6 +705,10 @@ export const recipes = [
 ]
 
 export const faq = [
+  {
+    q: 'Why isn\'t the damage deposit in my payments or GST report?',
+    a: 'A refundable deposit is money you are holding, not income, so it is kept off invoices and the payments report. Payments → Damage deposits shows what you are holding, and its CSV lists what was kept for deductions, for your bookkeeper.',
+  },
   {
     q: 'A couple made a mistake on their Final Details Form after submitting. Can it be changed?',
     a: 'The agreement says submitted counts are final, so the couple cannot change it. An admin can click Reopen form on the Event plan tab if the venue agrees; that withdraws the unpaid overage invoice so you can approve again. Once the overage invoice is paid it cannot be reopened. Record any change as a new invoice instead.',

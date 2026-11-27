@@ -172,6 +172,7 @@ app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/email-templates', require('./routes/emailTemplates'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/final-details', require('./routes/finalDetails'));
+app.use('/api/damage-deposits', require('./routes/damageDeposits'));
 
 // ── Daily jobs (Alberta time; see services/schedule.js) ─────────────────────
 const schedule = require('./services/schedule');

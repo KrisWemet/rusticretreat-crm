@@ -1384,6 +1384,37 @@ db.exec(`
     updated_at DATETIME
   );
 `);
+// The refundable damage deposit (rental agreement Section 4.2): collected at
+// check-in by e-Transfer, inspected within 48 hours of check-out, then sent
+// back less any deductions. Held money, not income — so not an invoice, and
+// never in the payment or GST reports. One per couple.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS damage_deposits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL UNIQUE REFERENCES couples(id) ON DELETE CASCADE,
+    amount REAL NOT NULL,
+    received_at DATE,
+    received_amount REAL,
+    received_method TEXT,
+    received_reference TEXT,
+    received_by TEXT,
+    inspected_at DATE,
+    inspected_by TEXT,
+    inspection_notes TEXT,
+    deductions TEXT NOT NULL DEFAULT '[]',
+    refund_amount REAL,
+    refunded_at DATE,
+    refund_method TEXT,
+    refund_reference TEXT,
+    refunded_by TEXT,
+    excess_invoice_id INTEGER,
+    statement_sent_at DATETIME,
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
 // Guest overages are worked out from the head count, so the per-guest add-on
 // is not offered as a separate extra on the form.
 runOnce('final-form-skip-extra-guest', () => {
