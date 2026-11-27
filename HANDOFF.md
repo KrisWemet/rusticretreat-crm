@@ -382,6 +382,15 @@ Item 4 on the list. The owner's answers: extras change by year and the 2027 pric
 
 **Owner to-dos:** set the real 2027 prices for the five new extras (pencil next to each in Packages & Add-Ons). Add a 2028 price when you know it.
 
+### Midweek elopements and vow renewals (27 Nov 2026)
+
+Item 5 on the list. Still being planned by the owner; answers so far: day use only (no overnight), probably Tuesday to Thursday, up to 20 guests, price not decided, paid 50% at booking and 50% before the date.
+
+- A **Midweek Elopement & Vow Renewal** package is added **switched off** with no price. Packages & Add-Ons → set the price → make it Active.
+- **Booking rules:** any package with "Midweek" in its name books one Tuesday, Wednesday or Thursday (same start and end day), at most 20 guests. The day after stays free like every booking.
+- **Payments:** 50% deposit at booking, 50% 30 days before the date (with the deposit if that's already passed). Proposals, signing and Auto Schedule all use it. Weddings keep 25/25/50.
+- **Not done yet:** the rental agreement is written for weekend stays (package table, camping, Final Details Form). Before the first midweek booking, the owner needs a short midweek agreement. Until then, sign one on paper and file it with Record Signed Contract. The days and 30-day timing are easy to change once decided.
+
 ## Open items
 
 1. **Shannon & Chris booking shows $6,439.**

@@ -1244,7 +1244,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       if (!hasInvoices && Number(contract.total_price) > 0) {
         const insertInvoice = db.prepare(
           'INSERT INTO invoices (couple_id, booking_id, description, amount, due_date) VALUES (?, ?, ?, ?, ?)');
-        for (const p of buildPaymentSchedule({ total: Number(contract.total_price), checkIn: contract.wedding_date })) {
+        for (const p of buildPaymentSchedule({ total: Number(contract.total_price), checkIn: contract.wedding_date, packageName: contract.package_name })) {
           insertInvoice.run(contract.couple_id, bookingId, p.label, p.amount, p.due_date);
         }
         scheduleCreated = true;
@@ -1386,6 +1386,7 @@ router.post('/from-proposal/:proposalId', authenticateToken, (req, res) => {
       checkIn: proposal.event_date,
       depositDue: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
       depositPct: proposal.deposit_pct,
+      packageName: proposal.package_name,
     }).map(p => `   ${p.label}:  ${fmtCAD(p.amount)} — due by ${p.due_date ? longDate(p.due_date) : 'TBD (set once the date is confirmed)'}`).join('\n');
 
     // Build itemized section

@@ -1473,6 +1473,18 @@ runOnce('extras-list-2027', () => {
   }
 });
 
+// Midweek elopements and vow renewals (owner, Nov 2026): day use on a
+// Tuesday, Wednesday or Thursday, up to 20 guests, paid 50/50. Still being
+// planned, so it is added switched off with no price; the owner sets the price
+// and makes it Active in Packages when ready. Skipped if one already exists.
+runOnce('midweek-package-v1', () => {
+  if (db.prepare("SELECT 1 FROM packages WHERE LOWER(name) LIKE '%midweek%'").get()) return;
+  db.prepare('INSERT INTO packages (name, description, price, max_guests, includes, is_active) VALUES (?, ?, ?, ?, ?, 0)').run(
+    'Midweek Elopement & Vow Renewal',
+    'Day use only, on a Tuesday, Wednesday or Thursday, for elopements and vow renewals. Price to be set before offering.',
+    0, 20, 'Day use (no overnight stay), Up to 20 guests');
+});
+
 // Starting points the owner can edit or delete. Seeded once, so a deleted
 // template stays deleted.
 runOnce('seed-email-templates-v1', () => {

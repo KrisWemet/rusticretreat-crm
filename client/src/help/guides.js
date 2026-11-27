@@ -516,6 +516,7 @@ export const pageGuides = [
     tips: [
       'Changing a price here does not change proposals or bookings you already made.',
       'Make a package Inactive rather than deleting it, so old weddings still show it.',
+      'The Midweek Elopement & Vow Renewal package starts Inactive with no price. Set its price, then make it Active. It books a single Tuesday, Wednesday or Thursday (day use), for up to 20 guests, paid 50% at booking and 50% 30 days before.',
     ],
     related: ['proposals'],
   },

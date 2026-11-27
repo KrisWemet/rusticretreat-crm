@@ -10,6 +10,8 @@
 //   • 3-Day Weekend runs Friday–Sunday.
 //   • 5-Day Experience runs Wednesday–Sunday, Thursday–Monday or Friday–Tuesday.
 //   • The 2-Day Weekday Escape is no longer offered for new bookings.
+//   • A Midweek package (elopements, vow renewals) is day use only: one
+//     Tuesday, Wednesday or Thursday, at most 20 guests (owner, Nov 2026).
 //   • The reception is capped at 100 guests (80 included; 81–100 are overage,
 //     priced on the proposal).
 //
@@ -58,11 +60,14 @@ function packageKind(name) {
   if (/\b2[-\s]?day\b/i.test(name)) return 'two_day';
   if (/\b3[-\s]?day\b/i.test(name)) return 'three_day';
   if (/\b5[-\s]?day\b/i.test(name)) return 'five_day';
+  if (/\bmidweek\b/i.test(name)) return 'midweek';
   return null;
 }
 
-const PACKAGE_LENGTH = { three_day: 3, five_day: 5 };
+const PACKAGE_LENGTH = { three_day: 3, five_day: 5, midweek: 1 };
+const MIDWEEK_MAX_GUESTS = 20;
 const ALLOWED_STARTS = {
+  midweek: { days: [2, 3, 4], label: 'a single Tuesday, Wednesday or Thursday' },
   three_day: { days: [5], label: 'Friday to Sunday' },
   five_day: { days: [3, 4, 5], label: 'Wednesday–Sunday, Thursday–Monday or Friday–Tuesday' },
 };
@@ -126,6 +131,9 @@ function assertBookable(db, booking, options = {}) {
   if (guests != null && guests > MAX_RECEPTION_GUESTS) {
     throw new BookingRuleError(`The reception holds at most ${MAX_RECEPTION_GUESTS} guests.`, 400);
   }
+  if (checkPackage && kind === 'midweek' && guests != null && guests > MIDWEEK_MAX_GUESTS) {
+    throw new BookingRuleError(`${booking.package_name} is for at most ${MIDWEEK_MAX_GUESTS} guests.`, 400);
+  }
 
   const end = lastDay(start, rawEnd, kind);
   // The new booking needs its own dates plus its reset day clear.
@@ -181,4 +189,4 @@ function defaultEndDate(eventDate, packageName) {
   return fromDay(start + length - 1);
 }
 
-module.exports = { assertBookable, BookingRuleError, sendRuleError, packageKind, defaultEndDate, MAX_RECEPTION_GUESTS };
+module.exports = { assertBookable, BookingRuleError, sendRuleError, packageKind, defaultEndDate, MAX_RECEPTION_GUESTS, MIDWEEK_MAX_GUESTS };

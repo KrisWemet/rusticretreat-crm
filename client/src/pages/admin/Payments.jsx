@@ -88,8 +88,8 @@ export default function Payments() {
 
   useEffect(() => { fetchData().catch(err => toast.error(err.response?.data?.error || 'Could not load payments. Check your connection and refresh.')).finally(() => setLoading(false)) }, [])
 
-  const preview = async (total, checkIn) =>
-    (await getAdminAxios().post('/api/invoices/schedule-preview', { total_price: Number(total), wedding_date: checkIn || null })).data
+  const preview = async (total, checkIn, coupleId) =>
+    (await getAdminAxios().post('/api/invoices/schedule-preview', { total_price: Number(total), wedding_date: checkIn || null, couple_id: coupleId || null })).data
 
   // When couple is selected in Add form, load their booking so a payment can be
   // picked as a share of its total.
@@ -102,7 +102,7 @@ export default function Payments() {
       const b = r.data[0]
       if (b) setForm(p => ({ ...p, due_date: b.event_date || '' }))
       if (b && Number(b.total_price) > 0) {
-        setAddBooking({ total: Number(b.total_price), checkIn: b.event_date, schedule: await preview(b.total_price, b.event_date) })
+        setAddBooking({ total: Number(b.total_price), checkIn: b.event_date, schedule: await preview(b.total_price, b.event_date, coupleId) })
       }
     } catch {}
   }
@@ -134,7 +134,7 @@ export default function Payments() {
   useEffect(() => {
     if (!showSchedule || !(Number(scheduleForm.total_price) > 0)) { setScheduleItems([]); return }
     let cancelled = false
-    preview(scheduleForm.total_price, scheduleForm.wedding_date)
+    preview(scheduleForm.total_price, scheduleForm.wedding_date, scheduleForm.couple_id)
       .then(rows => { if (!cancelled) setScheduleItems(rows.map(r => ({ description: r.label, amount: String(r.amount), due_date: r.due_date || '' }))) })
       .catch(() => {})
     return () => { cancelled = true }
