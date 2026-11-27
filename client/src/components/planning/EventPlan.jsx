@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { CheckCircleIcon, ExclamationCircleIcon, PrinterIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../../contexts/AuthContext'
 import { openPrintable, dayLabel } from '../../utils/files'
+import FinalDetailsCard from './FinalDetailsCard'
 
 // The wedding weekend at a glance: what is still missing, the venue's own
 // notes for the day, and the printable event order built from all of it.
@@ -21,6 +22,7 @@ const FIX = {
   vendors: { tab: 'vendors', label: 'Vendors' },
   floorplan: { tab: 'floorplans', label: 'Floor plans' },
   forms: { tab: 'overview', label: 'Forms' },
+  finaldetails: { scroll: 'final-details-card', label: 'Final Details' },
 }
 
 // Turn one of the venue's checklists into dated tasks for this couple.
@@ -104,7 +106,7 @@ export default function EventPlan({ coupleId, onTab }) {
     ['Check-in', eo.check_in ? dayLabel(eo.check_in, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Not set'],
     ['Check-out', eo.check_out ? dayLabel(eo.check_out, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Not set'],
     ['Package', eo.package_name || 'Not set'],
-    ['Expected guests', eo.booking?.guest_count || (eo.guests.expected ? `${eo.guests.expected} (from guest list)` : 'Not set')],
+    ['Expected guests', eo.final ? `${eo.final.guests} (final)` : eo.booking?.guest_count || (eo.guests.expected ? `${eo.guests.expected} (from guest list)` : 'Not set')],
     ['Ceremony', eo.booking?.ceremony_location || '—'],
     ['Reception', eo.booking?.reception_location || '—'],
     ['Balance', eo.payments.total ? `${money(eo.payments.balance)} of ${money(eo.payments.total)}` : 'No invoices yet'],
@@ -157,13 +159,16 @@ export default function EventPlan({ coupleId, onTab }) {
                   <span className={`flex-1 ${r.done ? 'text-slate-500' : 'text-slate-800 font-medium'}`}>{r.label}</span>
                   {!r.done && fix && (fix.to
                     ? <Link to={fix.to} className="text-xs font-medium text-rose-600 hover:underline">{fix.label}</Link>
-                    : <button type="button" onClick={() => onTab?.(fix.tab)} className="text-xs font-medium text-rose-600 hover:underline">{fix.label}</button>)}
+                    : <button type="button" onClick={() => (fix.scroll ? document.getElementById(fix.scroll)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : onTab?.(fix.tab))}
+                        className="text-xs font-medium text-rose-600 hover:underline">{fix.label}</button>)}
                 </li>
               )
             })}
           </ul>
         </div>
       </div>
+
+      <FinalDetailsCard api={api} coupleId={coupleId} onChanged={load} />
 
       <ApplyChecklist api={api} coupleId={coupleId} onApplied={load} />
 

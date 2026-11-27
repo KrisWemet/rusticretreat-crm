@@ -305,6 +305,36 @@ The owner asked for the CRM to do what Planning Pod does. Planning Pod was resea
 - Vendors → Vendor directory: add the vendors you work with.
 - Draw the reception layout once on a couple's Floor plans tab and save it as a venue layout.
 
+### Fit check, then Forgot password and the Final Details Form (27 Nov 2026)
+
+The owner asked how well the CRM fits Rustic Retreat and answered a round of questions. Shannon is the main user, mostly on a computer. Today the venue uses spreadsheets, Gmail, paper and memory, for 10–20 weddings a season. The answers produced a priority list:
+1. forgot password
+2. Final Details Form
+3. damage deposit tracking (e-Transfer in and back)
+4. full extras list
+5. midweek elopements and vow renewals
+6. card payments with the fee passed on, then QuickBooks Online
+7. couple portal, later
+
+Items 1 and 2 are built on PR #33.
+
+- **Forgot your password?** on the sign-in page emails the login a one-time link. It lasts 2 hours. The page says the same thing whether or not the address has a login.
+- **Final Details Form** (agreement Section 2.3), on each couple's **Event plan** tab:
+  - staff email the couple a private link, or copy it to text;
+  - the couple enters final guests, overnight campers, tents, RVs (and whether any is over 30 ft) and extras, and sees overage fees as they type;
+  - it is due 7 days before check-in and locks when submitted, and the venue gets an email;
+  - staff click **Approve** to create one overage invoice due on that date;
+  - staff can also take the numbers by phone (**Fill it in for them**);
+  - only an admin can reopen a submitted form, and not once its invoice is paid;
+  - the final counts print on the event order (the vendor copy has no prices).
+- **Rates** are under Settings → Final Details Form rates and start as the agreement's table. **GST at 5% on overages is an assumption**; change it there if the accountant disagrees.
+- **Extras** come from Packages & Add-Ons: each add-on has "Offer on the Final Details Form" (on by default, except the per-guest "Extra Guest" add-on, which the form already covers).
+
+**Owner to-dos for this round:**
+- **Packages & Add-Ons:** add propane, firewood, signage and décor with real prices. Untick anything that shouldn't be on the form. Day-of Coordination and Rehearsal Dinner Setup are probably better booked earlier than chosen on a final-counts form.
+- **Choosing an "Extra Night" on the form charges its price but does not change the nights used for tent and RV fees.** Adjust "Nights charged" on the card if needed.
+- Confirm GST on overages with the accountant.
+
 ## Open items
 
 1. **Shannon & Chris booking shows $6,439.**

@@ -7,6 +7,7 @@ const db = require('../db');
 const { defaultEndDate } = require('./bookingRules');
 const { sortRunOfShow, esc } = require('./planning');
 const { summarize, renderSvg } = require('./floorPlan');
+const finalDetails = require('./finalDetails');
 
 const longDay = (d) => (d ? new Intl.DateTimeFormat('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(d + 'T00:00:00Z')) : '');
 const shortDay = (d) => (d ? new Intl.DateTimeFormat('en-CA', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(d + 'T00:00:00Z')) : '');
@@ -97,18 +98,28 @@ function buildEventOrder(coupleId) {
 
   const tasksOpen = db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE couple_id = ? AND completed = 0').get(coupleId).n;
 
+  // The Final Details Form (agreement Section 2.3): the final counts, once
+  // the couple has submitted them, outrank any earlier estimate.
+  const fdRec = finalDetails.recordFor(coupleId);
+  const final = fdRec?.submitted_at ? {
+    guests: fdRec.guests, campers: fdRec.campers, tents: fdRec.tents, rvs: fdRec.rvs, rv_over_30ft: fdRec.rv_over_30ft,
+    extras: fdRec.extras, notes: fdRec.notes, submitted_at: fdRec.submitted_at, submitted_name: fdRec.submitted_name,
+    reviewed_at: fdRec.reviewed_at, total: fdRec.quote?.total || 0,
+  } : null;
+
   // What is still missing before the weekend, in the order a coordinator
   // would chase it.
   const readiness = [
     { key: 'contract', label: 'Rental agreement signed', done: contract?.status === 'signed' },
     { key: 'deposit', label: 'Deposit paid', done: invoices.length > 0 && !!invoices[0].paid },
     { key: 'balance', label: 'Balance paid in full', done: invoices.length > 0 && paid >= total - 0.005 },
-    { key: 'guests', label: 'Guest count confirmed', done: !!booking?.guest_count || guestSummary.accepted > 0 },
+    { key: 'guests', label: 'Guest count confirmed', done: !!final || !!booking?.guest_count || guestSummary.accepted > 0 },
     { key: 'onsite', label: 'On-site contacts named', done: onsite.length >= 2 },
     { key: 'runofshow', label: 'Run of show planned', done: items.length > 0 },
     { key: 'vendors', label: 'Vendors confirmed', done: vendors.length > 0 && vendors.every(v => v.booked) },
     { key: 'floorplan', label: 'Floor plan drawn', done: plans.some(p => p.items.length > 0) },
     { key: 'forms', label: 'Forms returned', done: formsOutstanding === 0 },
+    { key: 'finaldetails', label: 'Final Details Form submitted', done: !!final },
   ];
 
   return {
@@ -127,7 +138,7 @@ function buildEventOrder(coupleId) {
     contract: contract && { id: contract.id, title: contract.title, status: contract.status },
     agreement, onsite, vendors, days, guests: guestSummary, plans, forms, forms_outstanding: formsOutstanding,
     payments: { total, paid, balance: Math.max(0, total - paid), next },
-    tasks_open: tasksOpen, readiness,
+    tasks_open: tasksOpen, readiness, final,
   };
 }
 
@@ -138,7 +149,16 @@ function renderEventOrder(eo, { financials = true, generatedAt = new Date() } = 
   const stamp = new Intl.DateTimeFormat('en-CA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Edmonton' }).format(generatedAt);
   const setup = eo.agreement.setup_date ? `${esc(longDay(eo.agreement.setup_date))}${eo.agreement.setup_time ? `, ${esc(clock(eo.agreement.setup_time))}` : ''}` : esc(longDay(eo.check_in));
   const teardown = eo.agreement.teardown_date ? `${esc(longDay(eo.agreement.teardown_date))}${eo.agreement.teardown_time ? `, ${esc(clock(eo.agreement.teardown_time))}` : ''}` : esc(longDay(eo.check_out));
-  const expected = eo.booking?.guest_count || (eo.guests.expected || '');
+  const expected = eo.final ? `${eo.final.guests} (final)` : eo.booking?.guest_count || (eo.guests.expected || '');
+  const fin = eo.final;
+  const finalSection = fin ? `<h2>Final details</h2><table class="kv">
+${row('Guests (ceremony and reception)', esc(String(fin.guests)))}
+${row('Overnight campers', esc(String(fin.campers)))}
+${row('Tents', esc(String(fin.tents)))}
+${row('RVs', `${esc(String(fin.rvs))}${fin.rv_over_30ft ? ' <span class="warn">one or more over 30 ft: alternate exit route</span>' : ''}`)}
+${fin.extras.map(e => row(e.name, `${esc(String(e.quantity))}${financials ? ` <span class="muted">· ${money(e.unit_price * e.quantity)}</span>` : ''}`)).join('')}
+${row('Notes', fin.notes ? `<span class="pre">${esc(fin.notes)}</span>` : '')}
+</table><p class="muted">Submitted by ${esc(fin.submitted_name || 'the couple')}${fin.reviewed_at ? ' · reviewed by the venue' : ' · <span class="warn">not yet reviewed</span>'}${financials && fin.total ? ` · overages ${money(fin.total)} incl. GST` : ''}</p>` : '';
 
   const contacts = [
     [eo.couple.partner1_name, eo.couple.phone, eo.couple.email, 'Client 1'],
@@ -193,6 +213,8 @@ ${eo.agreement.preferred_contact ? `<p class="muted">Preferred contact: ${esc(eo
 ${eo.booking?.special_requests || eo.booking?.catering_type ? `<h2>Requests and catering</h2><table class="kv">${row('Catering', esc(eo.booking?.catering_type || ''))}${row('Special requests', eo.booking?.special_requests ? `<span class="pre">${esc(eo.booking.special_requests)}</span>` : '')}</table>` : ''}
 
 ${eo.couple.event_notes ? `<h2>Venue notes</h2><p class="pre">${esc(eo.couple.event_notes)}</p>` : ''}
+
+${finalSection}
 
 <h2>Run of show</h2>${days || '<p class="muted">No run of show yet.</p>'}
 

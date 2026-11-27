@@ -4,7 +4,7 @@ import { PlusIcon, PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon } from '@
 import toast from 'react-hot-toast'
 
 const EMPTY = { name: '', description: '', price: '', max_guests: '', includes: '', is_active: true, seasons: [] }
-const EMPTY_ADDON = { name: '', description: '', price: '', unit: 'flat' }
+const EMPTY_ADDON = { name: '', description: '', price: '', unit: 'flat', on_final_form: true }
 const UNIT_LABEL = { flat: 'flat', per_guest: 'per guest', per_night: 'per night' }
 
 export default function Packages() {
@@ -31,13 +31,13 @@ export default function Packages() {
 
   function openAddonAdd() { setAddonForm(EMPTY_ADDON); setAddonModal('add') }
   function openAddonEdit(a) {
-    setAddonForm({ name: a.name, description: a.description || '', price: a.price, unit: a.unit })
+    setAddonForm({ name: a.name, description: a.description || '', price: a.price, unit: a.unit, on_final_form: a.on_final_form !== 0 })
     setAddonModal(a)
   }
   async function saveAddon() {
     if (!addonForm.name || addonForm.price === '') return toast.error('Name and price are required')
     try {
-      const payload = { name: addonForm.name, description: addonForm.description || null, price: parseFloat(addonForm.price), unit: addonForm.unit }
+      const payload = { name: addonForm.name, description: addonForm.description || null, price: parseFloat(addonForm.price), unit: addonForm.unit, on_final_form: !!addonForm.on_final_form }
       if (addonModal === 'add') { await api.post('/api/addons', payload); toast.success('Add-on created') }
       else { await api.put(`/api/addons/${addonModal.id}`, payload); toast.success('Add-on updated') }
       setAddonModal(null); load()
@@ -212,6 +212,7 @@ export default function Packages() {
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-slate-800 text-sm">{a.name}</span>
                   <span className="text-xs text-slate-400">${Number(a.price).toLocaleString()} {UNIT_LABEL[a.unit]}</span>
+                  {a.on_final_form !== 0 && <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">On Final Details Form</span>}
                 </div>
                 {a.description && <p className="text-xs text-slate-400 truncate">{a.description}</p>}
               </div>
@@ -255,6 +256,11 @@ export default function Packages() {
                 <label htmlFor="packages-description-4" className="label">Description</label>
                 <textarea id="packages-description-4" name="packages-description-4" className="input-field" rows={2} value={addonForm.description} onChange={e => setAddonForm(f => ({ ...f, description: e.target.value }))} placeholder="Shown to couples on the proposal…" />
               </div>
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="addon-on-final-form" className="mt-0.5" checked={!!addonForm.on_final_form}
+                  onChange={e => setAddonForm(f => ({ ...f, on_final_form: e.target.checked }))} />
+                <span>Offer on the Final Details Form <span className="block text-xs text-slate-500">Couples can choose it, with a quantity, when they send their final numbers (propane, firewood, generator…).</span></span>
+              </label>
             </div>
             <div className="flex gap-3 px-6 pb-6">
               <button onClick={() => setAddonModal(null)} className="btn-secondary flex-1">Cancel</button>

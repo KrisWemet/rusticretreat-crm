@@ -470,6 +470,7 @@ export const pageGuides = [
       'Create and edit packages: name, description, what\'s included, max guests, and prices by wedding year.',
       'Mark a package Active or Inactive.',
       'Manage the Add-On Catalog: flat fee, per guest or per night.',
+      'Tick "Offer on the Final Details Form" on an add-on (propane, firewood, generator…) so couples can choose it, with a quantity, when they send their final numbers.',
     ],
     howTo: [
       {
@@ -515,12 +516,13 @@ export const pageGuides = [
     slug: 'settings',
     title: 'Settings',
     path: '/settings',
-    summary: 'Your password, who can log in (admins), email templates, and calendar sync.',
+    summary: 'Your password, who can log in (admins), email templates, Final Details rates and calendar sync.',
     whatYouCanDo: [
       'Change your password (at least 10 characters).',
       'Admins: invite someone to sign up (they choose their own password), send a login a link to choose a new password, or remove a login.',
       'Email templates: write and edit the saved emails used on Messages, with placeholders such as {first_names}, {wedding_date} and {balance_owing}.',
       'Calendar sync (admins turn it on): a private address that shows weddings, holds, blocked dates and site tours in Google Calendar, Outlook or a phone.',
+      'Final Details Form rates (admins change them): guests, tents and RVs included, the fee for each extra, the caps, GST on overages and how many days before check-in the form is due. They start as the rental agreement\'s Section 2.3 table.',
     ],
     howTo: [
       {
@@ -658,7 +660,8 @@ export const recipes = [
     steps: [
       'Change your own password on Settings (at least 10 characters).',
       'Admins: under "Who can log in", click Invite to sign up, enter their name and email, pick the role and tick Email them the link. They open the link and choose their own password. The link works once and lasts 7 days; you can also copy it and text it.',
-      'Someone forgot their password? Click Send password link next to their name. They get an email to choose a new one.',
+      'Forgot your own password? On the sign-in page click "Forgot your password?" and enter your email. A link to choose a new one arrives by email; it works once and lasts 2 hours. Check spam if it does not arrive.',
+      'An admin can also click Send password link next to someone\'s name. They get an email to choose a new one.',
       'Emails are not case-sensitive when signing in; passwords are.',
       'Staff logins can do the day-to-day work; Admin logins can also manage logins and backups, and permanently delete.',
       'Remove a login when someone leaves.',
@@ -671,13 +674,16 @@ export const recipes = [
     title: 'Plan the wedding weekend',
     summary: 'From booked to the morning of check-in: schedule, guests, layout, vendors and the event order.',
     steps: [
-      'Open the couple\'s page. The Event plan tab lists what is still missing (signed agreement, payments, guest count, on-site contacts, run of show, vendors, floor plan, forms).',
+      'Open the couple\'s page. The Event plan tab lists what is still missing (signed agreement, payments, guest count, on-site contacts, run of show, vendors, floor plan, forms, Final Details Form).',
+      'A few weeks before check-in, Event plan → Final Details Form: click Email the link to the couple (or Make a link to copy and text it). They enter their final guests, campers, tents, RVs and extras and see the overage fees as they type. It is due 7 days before check-in and locks when they submit.',
+      'Taking the numbers by phone instead? Click Fill it in for them, type the numbers, say who confirmed them, and Submit and lock.',
+      'When it comes in (you get an email), check the numbers and click Approve. If anything is owing, that makes an overage invoice due on the form\'s due date; record the e-Transfer on Payments as usual. Only an admin can reopen a submitted form, and not once its invoice is paid.',
       'Event plan → Checklists: add the venue checklist so each deadline becomes a dated task.',
       'Run of show: add each day hour by hour (check-in, vendor arrivals, ceremony, dinner, quiet hours, check-out), or start from a saved template. Give each item a place and the person responsible.',
       'Guests: add guests or import the couple\'s spreadsheet (CSV). Track RSVPs, meals and dietary needs.',
       'Floor plans: New floor plan, then add tables, the dance floor and anything else, drag them into place and save. Select a table to seat guests at it.',
       'Vendors: add everyone working the weekend, with arrival times, and mark each one confirmed.',
-      'Event plan: write the venue\'s notes for the day, then Print event order. Use Vendor copy (no prices) for anyone who should not see payments.',
+      'Event plan: write the venue\'s notes for the day, then Print event order. It includes the final counts once the Final Details Form is in. Use Vendor copy (no prices) for anyone who should not see payments.',
       'Print the run of show for one vendor by choosing them in the filter first.',
     ],
     links: ['client-page', 'tasks', 'vendors', 'before-after-wedding'],
@@ -685,6 +691,14 @@ export const recipes = [
 ]
 
 export const faq = [
+  {
+    q: 'A couple made a mistake on their Final Details Form after submitting. Can it be changed?',
+    a: 'The agreement says submitted counts are final, so the couple cannot change it. An admin can click Reopen form on the Event plan tab if the venue agrees; that withdraws the unpaid overage invoice so you can approve again. Once the overage invoice is paid it cannot be reopened. Record any change as a new invoice instead.',
+  },
+  {
+    q: 'Is GST added to Final Details overage fees?',
+    a: 'Yes, 5% by default, on the assumption that overages are taxed like the package. Change it under Settings → Final Details Form rates if your accountant says otherwise.',
+  },
   {
     q: 'Can couples see the run of show, guest list or floor plan?',
     a: 'Not while the couple portal is switched off. These are staff tools; print the run of show or event order (vendor copy has no prices) when you want to share them.',

@@ -1351,6 +1351,45 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_task_template_items_tpl ON task_template_items(template_id);
 `);
 
+// ── Final Details Form (rental agreement Section 2.3) ────────────────────────
+// One per couple. The couple's counts and extras are locked at submission;
+// quote holds the priced lines frozen at that moment, so a later change to the
+// rates or the add-on list never rewrites what the couple agreed to.
+try { db.exec('ALTER TABLE addons ADD COLUMN on_final_form INTEGER DEFAULT 1'); } catch (_) {}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS final_details (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL UNIQUE REFERENCES couples(id) ON DELETE CASCADE,
+    access_token TEXT UNIQUE,
+    token_expires_at DATETIME,
+    link_sent_at DATETIME,
+    nights INTEGER,
+    guests INTEGER,
+    campers INTEGER,
+    tents INTEGER,
+    rvs INTEGER,
+    rv_over_30ft INTEGER NOT NULL DEFAULT 0,
+    extras TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    quote TEXT,
+    submitted_at DATETIME,
+    submitted_name TEXT,
+    submitted_by TEXT,
+    submitted_ip TEXT,
+    submitted_user_agent TEXT,
+    reviewed_at DATETIME,
+    reviewed_by TEXT,
+    invoice_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME
+  );
+`);
+// Guest overages are worked out from the head count, so the per-guest add-on
+// is not offered as a separate extra on the form.
+runOnce('final-form-skip-extra-guest', () => {
+  db.prepare("UPDATE addons SET on_final_form = 0 WHERE name LIKE 'Extra Guest%'").run();
+});
+
 // Starting points the owner can edit or delete. Seeded once, so a deleted
 // template stays deleted.
 runOnce('seed-email-templates-v1', () => {

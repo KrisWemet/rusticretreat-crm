@@ -5,6 +5,8 @@ import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import ForgotPassword from './pages/ForgotPassword'
+import FinalDetails from './pages/FinalDetails'
 import PortalLogin from './pages/PortalLogin'
 import SignContract from './pages/SignContract'
 import Dashboard from './pages/admin/Dashboard'
@@ -72,11 +74,13 @@ function App() {
           <Route path="/sign/:token" element={<SignContract />} />
           <Route path="/proposal/:token" element={<PublicProposal />} />
           <Route path="/form/:token" element={<PublicForm />} />
+          <Route path="/final-details/:token" element={<FinalDetails />} />
           <Route path="/inquire" element={<Inquire />} />
 
           {/* Admin/Staff routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup/:token" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />

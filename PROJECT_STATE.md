@@ -4,7 +4,7 @@ Running handoff document. **Update it when you change something structural, hit
 a trap worth recording, or change the deployment.** It exists so a new session
 does not rediscover the same landmines.
 
-Last updated: 2026-11-22 · branch `main` (Railway deploys from it).
+Last updated: 2026-11-27 · branch `main` (Railway deploys from it).
 The owner-facing handoff (business rules, what was built when, open items) is
 `HANDOFF.md` at the root of this repo; this file is the technical one.
 
@@ -84,6 +84,32 @@ Settings → Calendar sync) and a Reports page with CSVs (`routes/reports.js`).
 The research behind it is `docs/planning-pod-features.md` (public sources
 only: planningpod.com is blocked from the sandbox); the gap list is in HANDOFF.md.
 
+**Final Details Form (Nov 2026, agreement Section 2.3).** Table `final_details`
+(one row per couple), pricing in `services/finalDetails.js`, routes in
+`routes/finalDetails.js` (`/api/final-details`), couple page
+`client/src/pages/FinalDetails.jsx` at `/final-details/:token`, staff card
+`components/planning/FinalDetailsCard.jsx` on the Event plan tab, shared fields
+`components/FinalDetailsFields.jsx`, rates editor in Settings. Rules: 80 guests
+included, $25 each over, cap 100; 60 campers, no per-person fee; 12 tents and 8
+RVs included, $25 / $35 per extra per night, RV cap 15; every 3 unused tent
+slots add one included RV; due 7 days before check-in; locked at submission;
+venue approves → one overage invoice due on the deadline (today if past).
+Rates live in `app_settings.final_details_rates` and default to the agreement.
+**GST 5% on overages is an assumption**, not in the agreement; it is a setting.
+Extras are add-ons with `addons.on_final_form = 1` (default; the seeded
+"Extra Guest" add-on is turned off by a `runOnce`). Prices are computed only on
+the server; a submitted form stores its quote, rates included, so later rate
+changes never reprice it. Only an admin can reopen, never once the overage
+invoice is paid; reopening deletes the unpaid invoice and logs the old record.
+The link token is 48 hex chars, lasts 120 days, and a new link retires the old.
+
+**Forgot password (Nov 2026).** `/forgot-password` → `POST /api/auth/forgot-password`
+(5 per 15 min per IP). Same reply whether or not the address has a login; the
+email is not awaited, so a real address does not answer more slowly. It reuses
+the invite machinery: a `user_invites` row with `user_id` set, `created_by`
+NULL, expiring in 2 hours, opened at `/signup/:token`. Asking again replaces
+the previous unused reset link for that login.
+
 - **SMS / unified inbox** — code exists (`services/sms.js`, `routes/sms.js`) but is off: no provider keys are set. See below.
 - **Vercel** — the original target, deferred. See below.
 
@@ -115,7 +141,10 @@ Curling the API proves nothing; the API was correct throughout both bugs.
 
 The same applies to **staff sign-up links** (`/signup/:token`, API
 `/api/auth/invite/:token`): the person opening one has no login and no gate
-cookie yet, so both paths are on both lists.
+cookie yet, so both paths are on both lists. Likewise `/forgot-password` (+ its
+API) and the **Final Details Form** (`/final-details/`, API
+`/api/final-details/public/`). Verified 2026-11-27 with the gate on, in a
+browser with no cookie.
 
 ### Staff sign-up is invite-only, on purpose
 
@@ -566,6 +595,13 @@ compares `scrollWidth` with `clientWidth` on every page.
 `services/planning.js` `csvCell` prefixes `'` to anything starting with `= + - @`
 (a guest named `=HYPERLINK(...)` must stay text) and `sendCsv` adds a UTF-8 BOM
 so Excel keeps accents. `fetch().text()` strips the BOM, so tests check bytes.
+
+### Final Details prices come from the server only
+
+The couple's page and the staff "fill it in" panel never price anything
+themselves: they call `/quote`, which runs `services/finalDetails.js compute()`.
+Keep it that way, or the couple and the venue can see different totals. The
+event order prints the submitted counts (vendor copy without prices).
 
 ### The calendar feed is public by token
 

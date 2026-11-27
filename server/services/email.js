@@ -262,6 +262,38 @@ async function sendFormLink({ to, cc, coupleNames, formTitle, path }) {
   });
 }
 
+// The Final Details Form link. Its deadline and the lock come from the rental
+// agreement (Section 2.3): counts are final once submitted.
+async function sendFinalDetailsLink({ to, coupleId, coupleNames, url, deadline }) {
+  const due = deadline ? fmtDay(deadline) : '7 days before check-in';
+  return send({
+    kind: 'final-details-link',
+    coupleId,
+    to,
+    subject: `Your Final Details Form for Rustic Retreat (due ${due})`,
+    text: `Hi ${coupleNames},\n\nIt's time for your Final Details Form: your final guest count, overnight campers, tents and RVs, and any extras such as propane or generator rental.\n\nFill it in here: ${url}\n\nIt is due by ${due}. Once you submit it, the counts are locked and cannot be changed (Section 2.3 of your rental agreement). The form shows any overage fees as you go; we will review it and send an invoice for anything owing, payable by the same date.\n\nIf you have any questions, just reply to this email.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
+<p>It's time for your <strong>Final Details Form</strong>: your final guest count, overnight campers, tents and RVs, and any extras such as propane or generator rental.</p>
+<p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Fill in your Final Details</a></p>
+<p>Or copy this link: <a href="${esc(url)}">${esc(url)}</a></p>
+<p>It is due by <strong>${esc(due)}</strong>. Once you submit it, the counts are locked and cannot be changed (Section 2.3 of your rental agreement). The form shows any overage fees as you go; we will review it and send an invoice for anything owing, payable by the same date.</p>
+<p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
+async function sendFinalDetailsSubmittedAdmin({ coupleId, coupleNames, total }) {
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  const owing = total > 0 ? `Overages come to $${Number(total).toFixed(2)} including GST.` : 'There are no overage fees.';
+  return send({
+    kind: 'final-details-submitted',
+    coupleId,
+    to: ADMIN_EMAIL,
+    subject: `${coupleNames} submitted their Final Details Form`,
+    text: `${coupleNames} submitted their Final Details Form. ${owing}\n\nReview it on their page in the CRM (Event plan tab), then approve it to create the overage invoice.`,
+    html: `<p><strong>${esc(coupleNames)}</strong> submitted their Final Details Form. ${esc(owing)}</p><p>Review it on their page in the CRM (Event plan tab), then approve it to create the overage invoice.</p>`,
+  });
+}
+
 async function sendFormCompletedAdmin({ coupleNames, formTitle }) {
   if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
   return send({
@@ -555,6 +587,22 @@ async function sendUnmatchedSmsAdmin({ fromNumber, text, receivedAt }) {
 // ── Staff sign-up invite ─────────────────────────────────────────────────────
 // Returned so the admin is told whether it went out; the link is also shown on
 // screen to copy, so a failed send is never a dead end.
+// Someone used "Forgot your password?" with this login's address.
+async function sendPasswordResetRequest({ to, name, url, hours }) {
+  return send({
+    kind: 'staff-password-reset',
+    to,
+    subject: 'Reset your Rustic Retreat CRM password',
+    text: `Hi ${name},\n\nSomeone (hopefully you) asked to reset the password for your Rustic Retreat CRM login.\n\nChoose a new password here: ${url}\n\nThe link works once and expires in ${hours} hours. If you did not ask for this, ignore this email; your password has not changed.\n\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(name)}</strong>,</p>
+<p>Someone (hopefully you) asked to reset the password for your Rustic Retreat CRM login.</p>
+<p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Choose a new password</a></p>
+<p>Or copy this link: <a href="${esc(url)}">${esc(url)}</a></p>
+<p style="color:#64748b;font-size:14px">The link works once and expires in ${hours} hours. If you did not ask for this, ignore this email; your password has not changed.</p>
+<p>Rustic Retreat</p>`,
+  });
+}
+
 async function sendStaffInvite({ to, name, invitedBy, url, expiresDays, reset = false }) {
   // reset: the person already has a login and is choosing a new password.
   const intro = reset
@@ -576,6 +624,9 @@ async function sendStaffInvite({ to, name, invitedBy, url, expiresDays, reset = 
 
 module.exports = {
   send,
+  sendPasswordResetRequest,
+  sendFinalDetailsLink,
+  sendFinalDetailsSubmittedAdmin,
   sendTourConfirmation,
   isConfigured: () => configured,
   sendCoupleMessage,

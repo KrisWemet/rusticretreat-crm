@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext'
 import EmailTemplatesSettings from '../../components/EmailTemplatesSettings'
 import CalendarSync from '../../components/CalendarSync'
+import FinalDetailsRates from '../../components/FinalDetailsRates'
 
 // Your own password, and (for the admin) who can log in to the CRM.
 export default function Settings() {
@@ -214,6 +215,7 @@ export default function Settings() {
       )}
 
       <EmailTemplatesSettings />
+      <FinalDetailsRates />
       <CalendarSync />
     </div>
   )

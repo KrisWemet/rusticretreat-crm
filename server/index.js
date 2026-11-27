@@ -83,8 +83,12 @@ const PUBLIC_PATHS = [
   /^\/api\/proposals\/public\//,
   /^\/form\//,                       // couple filling in a form from their private link
   /^\/api\/forms\/public\//,          // …and the API that page calls (token + rate limit)
+  /^\/final-details\//,              // couple filling in the Final Details Form from their private link
+  /^\/api\/final-details\/public\//,  // …and the API that page calls (token + rate limit)
   /^\/inquire\/?$/,                  // public enquiry form
   /^\/signup\//,                     // staff choosing a password from their invite link
+  /^\/forgot-password\/?$/,          // staff asking for a reset link (no login, by definition)
+  /^\/api\/auth\/forgot-password$/,   // …and the API it calls (rate limited, same reply for any address)
   /^\/api\/auth\/invite\//,           // …and the API that page calls (token + rate limit)
   /^\/api\/inquire/,
   /^\/assets\//,                     // JS/CSS the above pages need to render
@@ -167,6 +171,7 @@ app.use('/api/vendor-directory', require('./routes/vendorDirectory'));
 app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/email-templates', require('./routes/emailTemplates'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/final-details', require('./routes/finalDetails'));
 
 // ── Daily jobs (Alberta time; see services/schedule.js) ─────────────────────
 const schedule = require('./services/schedule');
