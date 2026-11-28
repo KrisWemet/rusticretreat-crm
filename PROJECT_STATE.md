@@ -633,6 +633,30 @@ compares `scrollWidth` with `clientWidth` on every page.
 (a guest named `=HYPERLINK(...)` must stay text) and `sendCsv` adds a UTF-8 BOM
 so Excel keeps accents. `fetch().text()` strips the BOM, so tests check bytes.
 
+### Public pages under /portal/ need the guard exemption too
+
+The React route guard sends any `/portal/...` path without a couple session to
+`/portal/login`. The portal setup link (`/portal/setup/:token`) lives under
+`/portal/` but is opened by someone with no login, so the guard now skips
+`PUBLIC_ROUTES` for portal paths as well. Found only by opening the emailed link
+in a fresh browser: the API answered 200 throughout.
+
+### The couple portal is one switch
+
+`ENABLE_COUPLE_PORTAL=1` turns it on. With it off, couple sign-in returns 403,
+`authenticateCouple` rejects every couple token (even one issued earlier), and
+staff can't send portal links. Each couple request also checks that the couple
+still has a password, so "Withdraw access" signs them out immediately. Couples
+get in only through a one-time setup link (`portal_invites`, SHA-256 of the
+token stored, 14 days; 1 day for a reset). Signing no longer generates or shows
+a password; when the portal is on and the couple has no login, the signed-
+contract email carries the setup link. The run of show is read-only for couples
+(`/api/portal/schedule`; timeline writes from a couple token return 403). Files
+reach the portal only when staff tick "Couple can see" (`couple_files.shared_with_couple`).
+Portal payments go through the invoice pay links, so the card fee is applied the
+same way everywhere. The portal needs `CRM_PUBLIC=1` (live today): its API
+calls are not on `PUBLIC_PATHS`, so a preview gate would block couples.
+
 ### Final Details prices come from the server only
 
 The couple's page and the staff "fill it in" panel never price anything

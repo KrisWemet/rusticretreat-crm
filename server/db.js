@@ -1486,6 +1486,24 @@ for (const sql of [
 ]) { try { db.exec(sql); } catch (_) {} }
 try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_pay_token ON invoices(pay_token)'); } catch (_) {}
 
+// Couple portal: one-time setup links (only a hash of the token is stored),
+// the last time a couple signed in, and files staff choose to share.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS portal_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME
+  );
+`);
+for (const sql of [
+  'ALTER TABLE couples ADD COLUMN portal_last_login_at DATETIME',
+  'ALTER TABLE couple_files ADD COLUMN shared_with_couple INTEGER DEFAULT 0',
+]) { try { db.exec(sql); } catch (_) {} }
+
 runOnce('midweek-package-v1', () => {
   if (db.prepare("SELECT 1 FROM packages WHERE LOWER(name) LIKE '%midweek%'").get()) return;
   db.prepare('INSERT INTO packages (name, description, price, max_guests, includes, is_active) VALUES (?, ?, ?, ?, ?, 0)').run(

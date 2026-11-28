@@ -125,6 +125,7 @@ router.get('/portal', authenticateCouple, (req, res) => {
 });
 
 router.post('/portal', authenticateCouple, (req, res) => {
+  return res.status(403).json({ error: 'Your weekend schedule is planned with Rustic Retreat. Send us a message to change it.' });
   const { value, error } = readItem(req.body);
   if (error) return res.status(400).json({ error });
   res.status(201).json(insertItem(req.couple.coupleId, value));
@@ -134,8 +135,8 @@ router.post('/portal', authenticateCouple, (req, res) => {
 router.put('/:id', authenticateAny, (req, res) => {
   const event = db.prepare('SELECT * FROM timeline_events WHERE id = ?').get(req.params.id);
   if (!event) return res.status(404).json({ error: 'Event not found' });
-  if (req.auth.coupleId && req.auth.coupleId !== event.couple_id) {
-    return res.status(403).json({ error: 'Access denied' });
+  if (req.auth.coupleId) {
+    return res.status(403).json({ error: 'Your weekend schedule is planned with Rustic Retreat. Send us a message to change it.' });
   }
   const { value, error } = readItem(req.body, event);
   if (error) return res.status(400).json({ error });
@@ -152,8 +153,8 @@ router.put('/:id', authenticateAny, (req, res) => {
 router.delete('/:id', authenticateAny, (req, res) => {
   const event = db.prepare('SELECT * FROM timeline_events WHERE id = ?').get(req.params.id);
   if (!event) return res.status(404).json({ error: 'Event not found' });
-  if (req.auth.coupleId && req.auth.coupleId !== event.couple_id) {
-    return res.status(403).json({ error: 'Access denied' });
+  if (req.auth.coupleId) {
+    return res.status(403).json({ error: 'Your weekend schedule is planned with Rustic Retreat. Send us a message to change it.' });
   }
   db.prepare('DELETE FROM timeline_events WHERE id = ?').run(req.params.id);
   res.json({ message: 'Event deleted' });

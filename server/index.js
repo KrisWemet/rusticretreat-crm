@@ -83,6 +83,9 @@ const PUBLIC_PATHS = [
   /^\/api\/proposals\/public\//,
   /^\/form\//,                       // couple filling in a form from their private link
   /^\/api\/forms\/public\//,          // …and the API that page calls (token + rate limit)
+  /^\/portal\/setup\//,               // couple choosing their portal password from the emailed link
+  /^\/api\/portal\/setup\//,           // …and the API it calls (token + rate limit)
+  /^\/api\/auth\/couple-forgot-password$/,
   /^\/pay\//,                        // couple paying an invoice from its private link
   /^\/api\/payments\/public\//,      // …and the API that page calls (token + rate limit)
   /^\/final-details\//,              // couple filling in the Final Details Form from their private link

@@ -41,6 +41,7 @@ export const pageGuides = [
       'Add a couple by hand with Add Couple — for phone calls, walk-ins or referrals.',
       'See archived couples with the Archived filter, and restore them.',
       'Click View → to open a couple\'s full page.',
+      'Wedding portal (on the couple\'s Overview tab): send the couple their portal link, see when they last signed in, or withdraw access. The link is also emailed on its own once both partners have signed, when the portal is on.',
     ],
     howTo: [
       {

@@ -1,3 +1,5 @@
+import toast from 'react-hot-toast'
+import { downloadFile } from '../../utils/files'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import {
@@ -27,7 +29,7 @@ export default function Documents() {
   useEffect(() => {
     const api = getCoupleAxios()
     Promise.all([
-      api.get('/api/portal/documents').catch(() => ({ data: [] })),
+      api.get('/api/portal/files').catch(() => ({ data: [] })),
       api.get('/api/portal/contracts').catch(() => ({ data: [] })),
     ]).then(([docsRes, contractsRes]) => {
       setDocuments(docsRes.data)
@@ -168,17 +170,18 @@ export default function Documents() {
                 <div key={doc.id} className="card p-5 group hover:border-rose-200 transition-all">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
-                      {getFileIcon(doc.file_type)}
+                      {getFileIcon(doc.mime_type)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-slate-800 truncate">{doc.title}</h3>
-                      <p className="text-xs text-slate-400 mt-0.5 truncate">{doc.file_name}</p>
-                      <p className="text-xs text-slate-400 mt-1">Shared by {doc.uploaded_by}</p>
-                      <p className="text-xs text-slate-300 mt-0.5">{doc.created_at ? format(parseISO(doc.created_at), 'MMM d, yyyy') : ''}</p>
+                      <h3 className="font-medium text-slate-800 truncate">{doc.filename}</h3>
+                      {doc.category && <p className="text-xs text-slate-400 mt-0.5 truncate">{doc.category}</p>}
+                      <p className="text-xs text-slate-300 mt-0.5">{doc.uploaded_at ? format(parseISO(doc.uploaded_at.replace(' ', 'T')), 'MMM d, yyyy') : ''}</p>
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-slate-50">
-                    <p className="text-xs text-slate-400">Need a copy? Ask your coordinator via Messages.</p>
+                    <button type="button" className="text-sm font-medium text-rose-600 hover:text-rose-700" onClick={async () => {
+                      try { await downloadFile(api, `/api/portal/files/${doc.id}`, doc.filename) } catch { toast.error('Could not download the file') }
+                    }}>Download</button>
                   </div>
                 </div>
               ))}

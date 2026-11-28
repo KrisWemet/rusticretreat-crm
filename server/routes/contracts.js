@@ -1284,12 +1284,11 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
     let plain_password = null;
     let is_new_account = false;
 
+    let portalUrl = null;
     if (PORTAL_ENABLED && !contract.password_hash) {
-      // First-time: generate credentials
-      plain_password = generatePassword();
-      const hashed = bcrypt.hashSync(plain_password, 10);
-      db.prepare('UPDATE couples SET password_hash = ? WHERE id = ?')
-        .run(hashed, contract.couple_id);
+      // First time: a one-time link to choose their own password, emailed with
+      // the confirmation below. No password is ever shown on screen.
+      portalUrl = require('../services/portalAccess').createInvite(contract.couple_id, 'contract signed').url;
       is_new_account = true;
     }
 
@@ -1304,6 +1303,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
         coupleNames,
         contractTitle: contract.title,
         portalEnabled: PORTAL_ENABLED,
+        portalUrl,
       });
     }
 
@@ -1325,7 +1325,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       couple_name: coupleNames,
       portal_enabled: PORTAL_ENABLED,
       portal_email: PORTAL_ENABLED ? contract.email : null,
-      portal_password: is_new_account ? plain_password : null,
+      portal_password: null,
       is_new_account,
       signers: signersFor(contract.id).map(s => ({
         role: s.role, name: s.name, status: s.status, signed_at: s.signed_at,

@@ -8,6 +8,7 @@ import Signup from './pages/Signup'
 import ForgotPassword from './pages/ForgotPassword'
 import FinalDetails from './pages/FinalDetails'
 import PayInvoice from './pages/PayInvoice'
+import PortalSetup from './pages/PortalSetup'
 import PortalLogin from './pages/PortalLogin'
 import SignContract from './pages/SignContract'
 import Dashboard from './pages/admin/Dashboard'
@@ -111,6 +112,7 @@ function App() {
 
           {/* Couple portal routes */}
           <Route path="/portal/login" element={<PortalLogin />} />
+          <Route path="/portal/setup/:token" element={<PortalSetup />} />
           <Route path="/portal" element={<PortalLayout />}>
             <Route index element={<Navigate to="/portal/dashboard" replace />} />
             <Route path="dashboard" element={<PortalDashboard />} />

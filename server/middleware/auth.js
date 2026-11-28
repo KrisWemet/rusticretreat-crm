@@ -91,6 +91,15 @@ function authenticateCouple(req, res, next) {
     if (!couple.coupleId) {
       return res.status(403).json({ error: 'Invalid couple token' });
     }
+    // The portal can be switched off, and a couple's access withdrawn (their
+    // password cleared), at any time: an earlier token must stop working too.
+    if (process.env.ENABLE_COUPLE_PORTAL !== '1') {
+      return res.status(401).json({ error: 'The couple portal is not open.', session_expired: true });
+    }
+    const row = require('../db').prepare('SELECT password_hash FROM couples WHERE id = ?').get(couple.coupleId);
+    if (!row || !row.password_hash) {
+      return res.status(401).json({ error: 'Portal access has ended. Please contact Rustic Retreat.', session_expired: true });
+    }
     req.couple = couple;
     next();
   } catch (err) {

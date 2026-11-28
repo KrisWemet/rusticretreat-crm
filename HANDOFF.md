@@ -405,6 +405,17 @@ Item 6. Owner's answers: no card processor yet; a 2.4% fee on card payments; cou
 - Ask the accountant whether GST applies to the card fee. It's kept apart from the invoice amount so it can be booked either way.
 - Try one month's QuickBooks export with the bookkeeper first.
 
+### The couple portal, built out (28 Nov 2026)
+
+Item 7. The owner asked to build it now.
+
+- **Getting in:** on a couple's Overview tab, **Wedding portal → Send portal link** emails both partners a one-time link to choose their password (14 days). It's also sent on its own when both partners have signed, if the portal is on. One login per couple, either email; **Forgot your password?** on the portal sign-in page. **Withdraw access** signs them out at once.
+- **What couples see:** a **next steps** list on the dashboard (payments with Pay buttons, agreements to sign, the Final Details Form, forms), payments with line items that open the invoice's pay page, the files staff share (tick "Couple can see" on Files & notes), a read-only weekend schedule, plus the existing checklist, guest list, budget, vendors, forms and messages.
+- **Switch:** the portal is off until `ENABLE_COUPLE_PORTAL=1` is set in Railway. Turning it off again closes it for everyone at once.
+- Signing no longer shows a generated password on screen.
+
+**Owner to-do:** decide when to switch it on, then send portal links to booked couples from their pages.
+
 ## Open items
 
 1. **Shannon & Chris booking shows $6,439.**

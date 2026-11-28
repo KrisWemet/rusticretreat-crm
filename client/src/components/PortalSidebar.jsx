@@ -24,7 +24,7 @@ const navItems = [
   { to: '/portal/payments', icon: BanknotesIcon, label: 'Payments' },
   { to: '/portal/forms', icon: PencilSquareIcon, label: 'Forms' },
   { to: '/portal/vendors', icon: BuildingStorefrontIcon, label: 'Vendors' },
-  { to: '/portal/timeline', icon: ClockIcon, label: 'Day-Of Timeline' },
+  { to: '/portal/timeline', icon: ClockIcon, label: 'Weekend Schedule' },
   { to: '/portal/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages' },
   { to: '/portal/documents', icon: DocumentTextIcon, label: 'Documents' },
   { to: '/portal/settings', icon: Cog6ToothIcon, label: 'Settings' },

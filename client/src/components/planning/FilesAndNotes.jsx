@@ -105,6 +105,14 @@ export default function FilesAndNotes({ coupleId }) {
                   <div className="text-sm font-medium text-slate-800 truncate hover:text-rose-600">{f.filename}</div>
                   <div className="text-xs text-slate-400">{f.category || 'Other'} · {size(f.size)} · {when(f.uploaded_at)}{f.uploaded_by ? ` · ${f.uploaded_by}` : ''}</div>
                 </button>
+                <label className="flex items-center gap-1.5 text-xs text-slate-500 whitespace-nowrap" title="Show this file in the couple's wedding portal">
+                  <input type="checkbox" name={`share-${f.id}`} checked={!!f.shared_with_couple} onChange={async e => {
+                    const shared = e.target.checked
+                    try { await api.patch(`/api/couple-files/${f.id}/share`, { shared }); setFiles(fs => fs.map(x => x.id === f.id ? { ...x, shared_with_couple: shared ? 1 : 0 } : x)); toast.success(shared ? 'Shared with the couple' : 'No longer shared') }
+                    catch (err) { toast.error(err.response?.data?.error || 'Could not change sharing') }
+                  }} />
+                  Couple can see
+                </label>
                 <button className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => removeFile(f)} aria-label={`Delete ${f.filename}`}><TrashIcon className="w-4 h-4" /></button>
               </li>
             ))}

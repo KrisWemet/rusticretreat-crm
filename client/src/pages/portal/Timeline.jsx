@@ -1,133 +1,64 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import Modal from '../../components/ui/Modal'
-import Input, { Textarea } from '../../components/ui/Input'
-import { PlusIcon, ClockIcon, MapPinIcon } from '@heroicons/react/24/outline'
-import toast from 'react-hot-toast'
+import { ClockIcon, MapPinIcon } from '@heroicons/react/24/outline'
 
-const emptyForm = { time: '', title: '', description: '', location: '', duration_minutes: '30' }
+// The weekend schedule (run of show) the venue plans with the couple. Read-only
+// here: changes go through Messages, so the venue's plan stays the one plan.
+
+const dayName = (d) => (d ? new Intl.DateTimeFormat('en-CA', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(d + 'T00:00:00Z')) : 'Date to be set')
+// Times are stored already written out ("3:30 PM"); a bare 24-hour time from an
+// older record ("15:30") is written out the same way.
+const clock = (t) => {
+  const s = String(t || '')
+  if (/[ap]\.?m/i.test(s)) return s
+  const m = s.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return s
+  const h = Number(m[1])
+  return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`
+}
 
 export default function Timeline() {
   const { getCoupleAxios } = useAuth()
-  const [events, setEvents] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showAdd, setShowAdd] = useState(false)
-  const [editEvent, setEditEvent] = useState(null)
-  const [form, setForm] = useState(emptyForm)
-  const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
+  const [items, setItems] = useState(null)
+  useEffect(() => { getCoupleAxios().get('/api/portal/schedule').then(r => setItems(r.data)).catch(() => setItems([])) }, [])
 
-  const fetchEvents = async () => {
-    const r = await getCoupleAxios().get('/api/timeline/portal')
-    setEvents(r.data)
-  }
-
-  useEffect(() => { fetchEvents().catch(() => {}).finally(() => setLoading(false)) }, [])
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    try {
-      const api = getCoupleAxios()
-      const data = { ...form, duration_minutes: parseInt(form.duration_minutes) || 30 }
-      if (editEvent) { await api.put(`/api/timeline/${editEvent.id}`, data); toast.success('Updated!') }
-      else { await api.post('/api/timeline/portal', data); toast.success('Event added!') }
-      setShowAdd(false); setEditEvent(null); setForm(emptyForm); fetchEvents()
-    } catch { toast.error('Failed to save') }
-  }
-
-  const openEdit = (ev) => {
-    setEditEvent(ev)
-    setForm({ time: ev.time, title: ev.title, description: ev.description || '', location: ev.location || '', duration_minutes: ev.duration_minutes || 30 })
-    setShowAdd(true)
-  }
-
-  const deleteEvent = async (id) => {
-    if (!confirm('Remove this event?')) return
-    await getCoupleAxios().delete(`/api/timeline/${id}`); fetchEvents()
+  const days = []
+  for (const it of items || []) {
+    let d = days.find(x => x.day === (it.day_date || ''))
+    if (!d) days.push(d = { day: it.day_date || '', items: [] })
+    d.items.push(it)
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-3xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="page-title">Day-Of Timeline</h1>
-          <p className="page-subtitle">{events.length} events scheduled</p>
-        </div>
-        <button className="btn-primary" onClick={() => { setForm(emptyForm); setEditEvent(null); setShowAdd(true) }}>
-          <PlusIcon className="w-4 h-4" />
-          Add Event
-        </button>
+    <div className="p-6 space-y-6 max-w-3xl">
+      <div>
+        <h1 className="page-title">Your weekend schedule</h1>
+        <p className="page-subtitle">Planned with Rustic Retreat. Want something changed? <Link to="/portal/messages" className="text-rose-600 hover:underline">Send us a message</Link>.</p>
       </div>
-
-      {loading ? (
-        <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-7 w-7 border-2 border-rose-200 border-t-rose-500" /></div>
-      ) : events.length === 0 ? (
+      {items === null ? <p className="text-slate-400">Loading…</p> : !items.length ? (
         <div className="card py-16 text-center">
           <ClockIcon className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400">No timeline events yet</p>
-          <p className="text-xs text-slate-300 mt-1">Add your day-of schedule to stay organized</p>
+          <p className="text-slate-500 font-medium">Your schedule isn't ready yet</p>
+          <p className="text-sm text-slate-400 mt-1">We'll plan it with you closer to your weekend. It will appear here.</p>
         </div>
-      ) : (
-        <div className="relative pl-24">
-          {/* Vertical line */}
-          <div className="absolute left-16 top-3 bottom-3 w-0.5 bg-rose-100" />
-
-          <div className="space-y-3">
-            {events.map(ev => (
-              <div key={ev.id} className="flex gap-4 relative group">
-                {/* Time label */}
-                <div className="absolute -left-24 w-20 text-right pt-3.5">
-                  <span className="text-sm font-semibold text-rose-600">{ev.time}</span>
+      ) : days.map(d => (
+        <div key={d.day} className="card p-5">
+          <h2 className="font-semibold text-slate-900 mb-3">{dayName(d.day)}</h2>
+          <ol className="space-y-3">
+            {d.items.map(it => (
+              <li key={it.id} className="flex gap-4">
+                <div className="w-20 flex-shrink-0 text-sm font-semibold text-rose-600">{clock(it.time)}</div>
+                <div className="min-w-0">
+                  <div className="font-medium text-slate-800">{it.title}</div>
+                  {it.description && <p className="text-sm text-slate-500">{it.description}</p>}
+                  {it.location && <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><MapPinIcon className="w-3.5 h-3.5" />{it.location}</p>}
                 </div>
-
-                {/* Dot */}
-                <div className="absolute -left-1 w-3.5 h-3.5 bg-rose-500 rounded-full border-2 border-white shadow mt-3.5 z-10" />
-
-                {/* Card */}
-                <div className="flex-1 card p-4 ml-3 mb-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-slate-800">{ev.title}</h3>
-                      {ev.description && <p className="text-sm text-slate-500 mt-0.5">{ev.description}</p>}
-                      <div className="flex items-center gap-4 mt-2">
-                        {ev.location && (
-                          <span className="flex items-center gap-1 text-xs text-slate-400">
-                            <MapPinIcon className="w-3.5 h-3.5" />{ev.location}
-                          </span>
-                        )}
-                        {ev.duration_minutes && (
-                          <span className="flex items-center gap-1 text-xs text-slate-400">
-                            <ClockIcon className="w-3.5 h-3.5" />{ev.duration_minutes} min
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openEdit(ev)} className="text-xs text-rose-600 hover:text-rose-700 font-medium">Edit</button>
-                      <button onClick={() => deleteEvent(ev.id)} className="text-xs text-slate-400 hover:text-red-500">Del</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
-      )}
-
-      <Modal isOpen={showAdd} onClose={() => { setShowAdd(false); setEditEvent(null) }} title={editEvent ? 'Edit Event' : 'Add Timeline Event'}>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Time" value={form.time} onChange={f('time')} required placeholder="4:00 PM" />
-            <Input label="Duration (minutes)" type="number" value={form.duration_minutes} onChange={f('duration_minutes')} placeholder="30" />
-          </div>
-          <Input label="Event Title" value={form.title} onChange={f('title')} required placeholder="e.g. Ceremony, First Dance..." />
-          <Input label="Location" value={form.location} onChange={f('location')} placeholder="Where does this happen?" />
-          <Textarea label="Description" value={form.description} onChange={f('description')} rows={2} placeholder="Additional notes..." />
-          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-            <button type="button" className="btn-secondary" onClick={() => { setShowAdd(false); setEditEvent(null) }}>Cancel</button>
-            <button type="submit" className="btn-primary">{editEvent ? 'Update' : 'Add'} Event</button>
-          </div>
-        </form>
-      </Modal>
+      ))}
     </div>
   )
 }

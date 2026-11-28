@@ -31,7 +31,7 @@ const upload = multer({
     : cb(Object.assign(new Error('bad type'), { code: 'BAD_TYPE' }))),
 }).single('file');
 
-const COLUMNS = 'id, couple_id, filename, mime_type, size, category, uploaded_by, uploaded_at';
+const COLUMNS = 'id, couple_id, filename, mime_type, size, category, uploaded_by, uploaded_at, shared_with_couple';
 
 router.get('/categories', authenticateToken, (req, res) => res.json(CATEGORIES));
 
@@ -65,6 +65,16 @@ router.get('/:id', authenticateToken, (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.send(f.data);
+});
+
+router.patch('/:id/share', authenticateToken, (req, res) => {
+  const f = db.prepare('SELECT id, couple_id, filename FROM couple_files WHERE id = ?').get(req.params.id);
+  if (!f) return res.status(404).json({ error: 'File not found' });
+  const shared = req.body?.shared ? 1 : 0;
+  db.prepare('UPDATE couple_files SET shared_with_couple = ? WHERE id = ?').run(shared, f.id);
+  require('../services/activity').logActivity(req, { action: shared ? 'file.shared' : 'file.unshared', entity: 'couple_file', entityId: f.id, coupleId: f.couple_id,
+    summary: `${shared ? 'Shared' : 'Stopped sharing'} "${f.filename}" ${shared ? 'with' : 'with'} the couple` });
+  res.json({ id: f.id, shared_with_couple: shared });
 });
 
 router.patch('/:id', authenticateToken, (req, res) => {

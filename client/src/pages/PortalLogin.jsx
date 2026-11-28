@@ -3,11 +3,14 @@ import { useNavigate, Navigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { HeartIcon, ClipboardDocumentCheckIcon, UserGroupIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
+import axios from 'axios'
 
 export default function PortalLogin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [forgot, setForgot] = useState(false)
+  const [sent, setSent] = useState(null)
   const { loginCouple, couple } = useAuth()
   const navigate = useNavigate()
 
@@ -27,11 +30,19 @@ export default function PortalLogin() {
     }
   }
 
+  const sendReset = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try { const { data } = await axios.post('/api/auth/couple-forgot-password', { email: email.trim() }); setSent(data.message) }
+    catch (err) { toast.error(err.response?.status === 429 ? 'Too many tries. Wait 15 minutes.' : (err.response?.data?.error || 'Could not send the link')) }
+    finally { setLoading(false) }
+  }
+
   const features = [
-    { icon: ClipboardDocumentCheckIcon, text: 'Interactive planning checklist' },
-    { icon: UserGroupIcon, text: 'Guest list & RSVP tracking' },
-    { icon: CurrencyDollarIcon, text: 'Budget tracker & vendor management' },
-    { icon: HeartIcon, text: 'Day-of timeline & direct messaging' },
+    { icon: CurrencyDollarIcon, text: 'Payments and what is still due' },
+    { icon: ClipboardDocumentCheckIcon, text: 'Final Details Form, forms and your checklist' },
+    { icon: UserGroupIcon, text: 'Guest list, RSVPs and vendors' },
+    { icon: HeartIcon, text: 'Your weekend schedule, documents and messages' },
   ]
 
   return (
@@ -80,8 +91,24 @@ export default function PortalLogin() {
             <div className="font-bold text-slate-900">Wedding Portal</div>
           </div>
 
+          {forgot ? (
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-1">Forgot your password?</h2>
+              {sent ? <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg p-3 mt-4">{sent}</p> : (
+                <form onSubmit={sendReset} className="space-y-4 mt-6">
+                  <p className="text-slate-500 text-sm">Enter either of your email addresses and we'll email you a link to choose a new password.</p>
+                  <div>
+                    <label htmlFor="portal-forgot-email" className="label">Email address</label>
+                    <input id="portal-forgot-email" name="portal-forgot-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="input-field" />
+                  </div>
+                  <button type="submit" disabled={loading} className="w-full bg-rose-500 hover:bg-rose-600 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg text-sm">{loading ? 'Sending…' : 'Email me a link'}</button>
+                </form>
+              )}
+              <button type="button" onClick={() => { setForgot(false); setSent(null) }} className="mt-6 text-sm text-rose-600 hover:text-rose-700 font-medium">← Back to sign in</button>
+            </div>
+          ) : (<>
           <h2 className="text-2xl font-bold text-slate-900 mb-1">Welcome back</h2>
-          <p className="text-slate-400 text-sm mb-8">Sign in to access your wedding planning tools</p>
+          <p className="text-slate-400 text-sm mb-8">Sign in with either of your email addresses</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -119,6 +146,8 @@ export default function PortalLogin() {
               ) : 'Access My Portal'}
             </button>
           </form>
+          <p className="mt-4 text-center text-sm"><button type="button" onClick={() => setForgot(true)} className="text-rose-600 hover:text-rose-700 font-medium">Forgot your password?</button></p>
+          </>)}
 
           <p className="mt-6 text-center text-sm text-slate-400">
             Venue staff?{' '}
