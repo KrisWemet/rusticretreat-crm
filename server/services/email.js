@@ -196,6 +196,8 @@ async function sendMorningSummary(s) {
     ...dep.inspect.map(d => `${d.overdue ? 'OVERDUE ' : ''}${d.couple_names} — inspection due by ${fmtDay(d.due)}${d.held ? `, holding $${money(d.held)}` : ', deposit not recorded'}`),
     ...dep.refund.map(d => `${d.couple_names} — send the $${money(d.amount)} refund`),
   ], '/payments');
+  add('Unread messages from couples', (s.unread_messages || []).map(m =>
+    `${m.couple_names} — ${m.n} unread message${m.n === 1 ? '' : 's'}, the first ${fmtDay(m.oldest)}`), '/messages');
   if (s.tour_requests) add('Tour requests to schedule', [`${s.tour_requests} tour request${s.tour_requests === 1 ? '' : 's'} not scheduled yet`], '/tours');
 
   const heading = `Your day at Rustic Retreat — ${fmtDay(s.today)}`;
@@ -339,6 +341,23 @@ async function sendFormCompletedAdmin({ coupleNames, formTitle }) {
     subject: `${coupleNames} filled in ${formTitle}`,
     text: `${coupleNames} have filled in "${formTitle}". Their answers are on their client page in the CRM.`,
     html: `<p><strong>${esc(coupleNames)}</strong> have filled in <strong>"${esc(formTitle)}"</strong>.</p><p>Their answers are on their client page in the CRM.</p>`,
+  });
+}
+
+// ── A couple wrote from their portal → the venue ─────────────────────────────
+async function sendCoupleMessageAdmin({ coupleId, coupleNames, content }) {
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  const url = `${BASE_URL}/messages?couple=${coupleId}`;
+  const preview = String(content || '').slice(0, 1500);
+  return send({
+    kind: 'couple-message',
+    to: ADMIN_EMAIL,
+    subject: `New message from ${coupleNames}`,
+    text: `${coupleNames} sent a message from their wedding portal:\n\n${preview}\n\nReply in the CRM: ${url}`,
+    html: `<p><strong>${esc(coupleNames)}</strong> sent a message from their wedding portal:</p>
+<blockquote style="margin:12px 0;padding:10px 14px;border-left:3px solid #fda4af;background:#fff1f2;color:#334155;white-space:pre-wrap">${esc(preview)}</blockquote>
+<p><a href="${esc(url)}" style="color:#e11d48">Reply in the CRM →</a></p>
+<p style="color:#94a3b8;font-size:12px">Replying to this email does not reach the couple. Reply from Messages in the CRM.</p>`,
   });
 }
 
@@ -722,6 +741,7 @@ module.exports = {
   sendNewLeadAdmin,
   sendFormLink,
   sendFormCompletedAdmin,
+  sendCoupleMessageAdmin,
   sendWebsiteSubmissionAdmin,
   sendPaymentReminder,
   sendPaymentReceipt,

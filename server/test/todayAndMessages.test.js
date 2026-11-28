@@ -133,3 +133,39 @@ test('staff can email a couple from Messages: both partners, reply to the venue,
   assert.equal(p.status, 400);
   assert.match(p.body.error, /portal is switched off/);
 });
+
+test('a couple\'s portal message emails the venue once per burst, and unread ones are in the morning summary', async () => {
+  process.env.ENABLE_COUPLE_PORTAL = '1';
+  try {
+    const id = couple({ partner1_name: 'Hazel', partner2_name: 'Rowan', password_hash: 'x' });
+    const tok = 'Bearer ' + jwt.sign({ coupleId: id, partner1_name: 'Hazel', partner2_name: 'Rowan' }, process.env.JWT_SECRET);
+    const post = (content) => fetch(`${base}/api/messages/portal/${id}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: tok }, body: JSON.stringify({ content }) });
+    sent = [];
+    assert.equal((await post('Can our dog come for the weekend?')).status, 201);
+    await new Promise(r => setTimeout(r, 300));
+    const toVenue = () => sent.filter(m => JSON.stringify(m.to).includes('venue@test.invalid') && /New message from Hazel & Rowan/.test(m.subject));
+    assert.equal(toVenue().length, 1, 'the venue is told');
+    assert.match(toVenue()[0].text, /Can our dog come/);
+    assert.match(toVenue()[0].text, new RegExp(`/messages\\?couple=${id}`));
+    assert.equal((await post('Also, can we arrive at 10?')).status, 201);
+    await new Promise(r => setTimeout(r, 300));
+    assert.equal(toVenue().length, 1, 'a second message minutes later does not send another email');
+
+    const { todaySummary, itemCount } = require('../services/today');
+    const s = todaySummary('2031-07-10');
+    const mine = s.unread_messages.find(m => m.couple_id === id);
+    assert.equal(mine.n, 2);
+    assert.equal(mine.couple_names, 'Hazel & Rowan');
+    assert.ok(itemCount(s) >= 1);
+    sent = [];
+    await require('../services/email').sendMorningSummary(s);
+    assert.match(sent[0].text, /UNREAD MESSAGES FROM COUPLES[\s\S]*Hazel & Rowan — 2 unread messages/);
+
+    // Once staff open the conversation, they are read and drop off.
+    db.prepare("UPDATE messages SET read_at = datetime('now') WHERE couple_id = ? AND sender_type = 'couple'").run(id);
+    assert.ok(!todaySummary('2031-07-10').unread_messages.some(m => m.couple_id === id));
+    assert.equal((await post('One more thing!')).status, 201);
+    await new Promise(r => setTimeout(r, 300));
+    assert.equal(toVenue().length, 1, 'after the earlier ones were read, a new message is emailed again');
+  } finally { delete process.env.ENABLE_COUPLE_PORTAL; }
+});

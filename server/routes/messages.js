@@ -191,6 +191,21 @@ router.post('/portal/:coupleId', authenticateCouple, (req, res) => {
 
   const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(message);
+
+  // Tell the venue. A couple's message used to wait in the CRM until someone
+  // happened to open Messages, and the portal tells couples to message us
+  // about anything the venue has locked. A burst of messages sends one email:
+  // none goes if this couple already has another unread one from the last
+  // 15 minutes (the venue was told about that one).
+  const earlier = db.prepare(`
+    SELECT 1 FROM messages WHERE couple_id = ? AND sender_type = 'couple' AND read_at IS NULL AND id != ?
+      AND created_at >= datetime('now', '-15 minutes')
+  `).get(req.params.coupleId, message.id);
+  if (!earlier) {
+    require('../services/email').sendCoupleMessageAdmin({ coupleId: Number(req.params.coupleId), coupleNames: senderName, content })
+      .then(r => { if (!r.delivered) console.error('[messages] venue not told of a couple message:', r.error); })
+      .catch(err => console.error('[messages] venue not told of a couple message:', err.message));
+  }
 });
 
 module.exports = router;

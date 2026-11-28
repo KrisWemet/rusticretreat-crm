@@ -86,7 +86,7 @@ function nextSteps(coupleId) {
     steps.push({ kind: 'contract', title: `Sign "${s.title}"`, detail: `Waiting for ${s.name}`, url: `${baseUrl()}/sign/${s.signing_token}` });
   }
   for (const i of db.prepare('SELECT id, description, amount, due_date FROM invoices WHERE couple_id = ? AND paid = 0 ORDER BY due_date IS NULL, due_date').all(coupleId)) {
-    steps.push({ kind: 'payment', title: `${i.description}: $${Number(i.amount).toFixed(2)}`, due: i.due_date, overdue: !!(i.due_date && i.due_date < today), url: card.payUrlFor(i.id) });
+    steps.push({ kind: 'payment', title: `${i.description}: $${Number(i.amount).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, due: i.due_date, overdue: !!(i.due_date && i.due_date < today), url: card.payUrlFor(i.id) });
   }
   const fdRec = db.prepare('SELECT access_token, token_expires_at, submitted_at FROM final_details WHERE couple_id = ?').get(coupleId);
   if (fdRec?.access_token && !fdRec.submitted_at && (!fdRec.token_expires_at || fdRec.token_expires_at > new Date().toISOString().replace('T', ' ').slice(0, 19))) {

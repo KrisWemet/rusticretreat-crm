@@ -113,10 +113,21 @@ export default function Forms() {
     if (!assignCouple) return
     try {
       await api.post(`/api/forms/${manage.id}/assign`, { couple_id: Number(assignCouple) })
-      toast.success('Form assigned')
+      // Assigning records the form; it does not send anything. Say so, because
+      // "Form assigned" read as if the couple had been sent it.
+      toast.success('Assigned. Nothing is sent yet: use Email link to send it to the couple.', { duration: 6000 })
       const { data } = await api.get(`/api/forms/${manage.id}/assignments`)
       setAssignments(data); setAssignCouple(''); load()
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to assign') }
+  }
+  async function emailLink(a) {
+    try {
+      const r = await api.post(`/api/forms/assignments/${a.id}/link`, { send: true })
+      if (r.data.sent) toast.success(`Link emailed to ${r.data.sent_to}`)
+      else toast.error(`Not sent${r.data.error ? ` (${r.data.error})` : ''}. Use Fill in → Just get the link to copy it instead.`)
+      const { data } = await api.get(`/api/forms/${manage.id}/assignments`)
+      setAssignments(data); load()
+    } catch (e) { toast.error(e.response?.data?.error || 'Could not send the link') }
   }
   async function viewResponses(a) {
     try {
@@ -265,13 +276,18 @@ export default function Forms() {
                     <div>
                       <div className="text-sm font-medium text-slate-700">{a.partner1_name} & {a.partner2_name}</div>
                       <div className="text-xs text-slate-400">
-                        {a.status === 'completed' ? `Completed ${a.submitted_at ? format(parseISO(a.submitted_at), 'MMM d') : ''}` : 'Pending'}
+                        {a.status === 'completed' ? `Completed ${a.submitted_at ? format(parseISO(a.submitted_at), 'MMM d') : ''}`
+                          : a.link_sent_at ? `Link sent ${format(parseISO(a.link_sent_at.replace(' ', 'T') + 'Z'), 'MMM d')}`
+                          : <span className="text-amber-700 font-medium">Not sent to the couple yet</span>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${a.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{a.status}</span>
                       {a.status === 'completed' && (
                         <button onClick={() => viewResponses(a)} className="p-1 text-slate-400 hover:text-slate-700" title="Read the answers" aria-label="Read the answers"><EyeIcon className="w-4 h-4" /></button>
+                      )}
+                      {a.status !== 'completed' && (
+                        <button onClick={() => emailLink(a)} className="btn-secondary py-1 px-2.5 text-xs" title="Email the couple their private link to this form">{a.link_sent_at ? 'Email again' : 'Email link'}</button>
                       )}
                       <button onClick={() => setFilling(a.id)} className="p-1 text-slate-400 hover:text-slate-700" title="Fill in or edit answers" aria-label="Fill in or edit answers"><PencilIcon className="w-4 h-4" /></button>
                     </div>

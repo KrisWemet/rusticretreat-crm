@@ -336,7 +336,7 @@ export const pageGuides = [
     summary: 'Questionnaires for couples — build them once, send them to each couple, and read the answers.',
     whatYouCanDo: [
       'Create a form with a title, description and questions (text, choices, dates…).',
-      'Assign a form to a couple, which gives them a link to fill it in.',
+      'Assign a form to a couple, then click Email link to send them their private link. Assigning on its own sends nothing; the row says "Not sent to the couple yet" until you do.',
       'Read the answers, or fill in or edit answers yourself (for example during a phone call).',
       'See forms "Waiting on couples" and click Resend link.',
     ],
@@ -681,7 +681,8 @@ export const recipes = [
     steps: [
       'Build the form once on Forms (Form Title, description, questions).',
       'Use "Assign to couple…" and click Assign, or add it from the couple\'s page under Forms.',
-      'The couple gets a link to fill it in. Until they do, it shows under "Waiting on couples" on Forms (with Resend link) and on the dashboard.',
+      'Click Email link on their row to send them a private link (assigning on its own sends nothing). With the couple portal on, the form also appears in their portal.',
+      'Until they fill it in, it shows under "Waiting on couples" on Forms (with Resend link) and on the dashboard.',
       'Click "Read the answers" to see their responses, or "Fill in or edit answers" to enter them yourself.',
     ],
     links: ['forms', 'client-page'],

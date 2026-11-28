@@ -78,7 +78,7 @@ test('couples see their own invoices with pay links, next steps and shared files
   assert.equal(invoices.length, 1, 'only their own');
   assert.match(invoices[0].pay_url, /\/pay\/[a-f0-9]{48}$/);
   const steps = (await call('GET', '/api/portal/next-steps', null, t)).body;
-  assert.ok(steps.some(s => s.kind === 'payment' && /Booking Deposit/.test(s.title)));
+  assert.ok(steps.some(s => s.kind === 'payment' && /Booking Deposit \(25%\): \$1,706\.25/.test(s.title)), JSON.stringify(steps));
 
   const shared = fileId(true), hidden = fileId(false), theirs = fileId(true, other);
   const files = (await call('GET', '/api/portal/files', null, t)).body.map(f => f.id);

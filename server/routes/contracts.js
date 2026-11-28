@@ -212,9 +212,12 @@ router.post('/', authenticateToken, (req, res) => {
     return res.status(400).json({ error: `Unknown contract template "${template_packet}"` });
   }
   // Each packet carries one year's prices. Refuse a mismatch outright rather
-  // than let a couple sign a price list for the wrong season.
-  if (packet && packet.season && wedding_date && /^\d{4}/.test(wedding_date)) {
-    const year = Number(String(wedding_date).slice(0, 4));
+  // than let a couple sign a price list for the wrong season. The New Contract
+  // form posts no date for the agreement, so the couple's own date counts too.
+  const seasonDate = wedding_date
+    || (couple_id ? db.prepare('SELECT wedding_date FROM couples WHERE id = ?').get(couple_id)?.wedding_date : null);
+  if (packet && packet.season && seasonDate && /^\d{4}/.test(seasonDate)) {
+    const year = Number(String(seasonDate).slice(0, 4));
     if (year !== packet.season) {
       const right = Object.values(tpl.PACKETS).find(p => p.season === year);
       return res.status(400).json({
@@ -262,6 +265,13 @@ router.post('/', authenticateToken, (req, res) => {
     if (packet) {
       const couple = db.prepare('SELECT * FROM couples WHERE id = ?').get(couple_id);
       if (couple) {
+        // The event details too, from the booking (made when the couple
+        // accepted their proposal): retyping dates and a price into a legal
+        // agreement is where a wrong number gets in. Staff still see and can
+        // change every one of them on the Prepare screen before signing.
+        const booking = db.prepare('SELECT * FROM bookings WHERE couple_id = ? ORDER BY id LIMIT 1').get(couple_id);
+        const option = tpl.packageOptionFor(packet, booking?.package_name || couple.venue_package);
+        const fee = option ? tpl.packagePriceWithTax(packet, option) : null;
         const seed = {
           // Fixed amounts the template declares, such as the $1,000 damage
           // deposit set by Section 4.2.
@@ -271,6 +281,12 @@ router.post('/', authenticateToken, (req, res) => {
           client1_email: couple.email,
           client2_email: couple.partner2_email,
           client1_phone: couple.phone,
+          agreement_date: require('../services/schedule').albertaToday(),
+          event_date:    couple.wedding_date || booking?.event_date,
+          setup_date:    booking?.event_date,
+          teardown_date: booking?.end_date,
+          package:       option,
+          total_package_fee: fee != null ? fee.toFixed(2) : null,
         };
         tpl.saveValues(
           result.lastInsertRowid,
@@ -278,6 +294,9 @@ router.post('/', authenticateToken, (req, res) => {
           'venue',
           packet,
         );
+        // The same summary columns a field save keeps up to date.
+        db.prepare('UPDATE contracts SET wedding_date = COALESCE(wedding_date, ?), package_name = COALESCE(package_name, ?), total_price = COALESCE(total_price, ?) WHERE id = ?')
+          .run(seed.event_date || null, option ? tpl.packageName(packet, { package: option }) : null, fee, result.lastInsertRowid);
       }
     }
 
@@ -291,6 +310,25 @@ router.post('/', authenticateToken, (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// The stay a contract books. The venue's agreement records the wedding day
+// (event_date, mirrored to contracts.wedding_date) apart from arrival and
+// departure (setup_date and teardown_date). A booking's event_date is check-in,
+// so it comes from the setup date; using the wedding day moved every weekend
+// booking's check-in from Friday to Saturday when the couple signed, which made
+// the stay a night short and showed the Friday as free. Free-text contracts
+// have only the one date. The package is stored by name, never by the agreement's
+// table row ("3-Day Weekend · $6,500 · 3 days / 2 nights").
+const cleanPackageName = (name) => (name ? String(name).split(' · ')[0].trim() || null : null);
+function stayFromContract(contract) {
+  const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
+  const v = contract.template_key ? tpl.getValues(contract.id).values : {};
+  const wedding = contract.wedding_date || null;
+  let checkIn = isDay(v.setup_date) ? v.setup_date : wedding;
+  if (wedding && checkIn && checkIn > wedding) checkIn = wedding;
+  const checkOut = isDay(v.teardown_date) && checkIn && v.teardown_date >= checkIn ? v.teardown_date : null;
+  return { check_in: checkIn, check_out: checkOut, wedding_date: wedding, package_name: cleanPackageName(contract.package_name) };
+}
 
 // ── Admin: update contract (title / content, only if not signed) ─────────────
 router.put('/:id', authenticateToken, (req, res) => {
@@ -550,11 +588,11 @@ router.put('/:id/fields', authenticateToken, (req, res) => {
     // Mirror the two answers the rest of the CRM reads onto the contract row, so
     // the calendar and the invoice list keep working without every consumer
     // learning how to walk a template.
-    const label = tpl.packageLabel(packet, values);
+    const pkgName = tpl.packageName(packet, values);
     const total = parseFloat(String(values.total_package_fee || '').replace(/[^0-9.]/g, ''));
     db.prepare('UPDATE contracts SET wedding_date = ?, package_name = ?, total_price = ? WHERE id = ?')
       .run(values.event_date || contract.wedding_date || null,
-           label || contract.package_name || null,
+           pkgName || cleanPackageName(contract.package_name),
            Number.isFinite(total) ? total : contract.total_price,
            contract.id);
 
@@ -785,11 +823,13 @@ router.post('/:id/sign-venue', authenticateToken, async (req, res) => {
     // the final signature books the date. Refuse now if another couple already
     // holds it, rather than after two people have signed. The couple's own
     // booking (created when they accepted a proposal) is not a clash.
-    if (contract.wedding_date) {
+    const stay = stayFromContract(contract);
+    if (stay.check_in) {
       try {
         assertBookable(db, {
-          event_date: contract.wedding_date,
-          package_name: contract.package_name,
+          event_date: stay.check_in,
+          end_date: stay.check_out,
+          package_name: stay.package_name,
           guest_count: contract.guest_count,
         }, { excludeCoupleId: contract.couple_id, checkPackage: false });
       } catch (err) {
@@ -1174,17 +1214,19 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
           wedding_date   = COALESCE(?, wedding_date),
           venue_package  = COALESCE(?, venue_package)
         WHERE id = ?
-      `).run(contract.wedding_date || null, contract.package_name || null, contract.couple_id);
+      `).run(contract.wedding_date || null, cleanPackageName(contract.package_name), contract.couple_id);
 
-      if (!contract.wedding_date) return;
+      const stay = stayFromContract(contract);
+      if (!stay.check_in) return;
 
       // The date was checked when the venue signed, but weeks can pass before
       // the couple finish. If someone else has taken it since, the signatures
       // still stand; the booking is left for staff to sort out, with a task.
       try {
         assertBookable(db, {
-          event_date: contract.wedding_date,
-          package_name: contract.package_name,
+          event_date: stay.check_in,
+          end_date: stay.check_out,
+          package_name: stay.package_name,
           guest_count: contract.guest_count,
         }, { excludeCoupleId: contract.couple_id, checkPackage: false });
       } catch (err) {
@@ -1198,7 +1240,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       }
 
       // Upsert booking with event details from the signed contract
-      const endDate = defaultEndDate(contract.wedding_date, contract.package_name);
+      const endDate = stay.check_out || defaultEndDate(stay.check_in, stay.package_name);
       const existing = db.prepare(
         'SELECT id FROM bookings WHERE couple_id = ? ORDER BY id LIMIT 1'
       ).get(contract.couple_id);
@@ -1208,7 +1250,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
         db.prepare(`
           UPDATE bookings SET
             event_date          = COALESCE(?, event_date),
-            end_date            = COALESCE(end_date, ?),
+            end_date            = COALESCE(?, end_date, ?),
             start_time          = COALESCE(?, start_time),
             end_time            = COALESCE(?, end_time),
             guest_count         = COALESCE(?, guest_count),
@@ -1218,9 +1260,9 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
             total_price         = COALESCE(?, total_price)
           WHERE id = ?
         `).run(
-          contract.wedding_date, endDate, contract.start_time, contract.end_time,
+          stay.check_in, stay.check_out, endDate, contract.start_time, contract.end_time,
           contract.guest_count, contract.ceremony_location, contract.reception_location,
-          contract.package_name, contract.total_price, existing.id,
+          stay.package_name, contract.total_price, existing.id,
         );
       } else {
         bookingId = db.prepare(`
@@ -1229,10 +1271,10 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
              ceremony_location, reception_location, package_name, total_price)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-          contract.couple_id, contract.wedding_date, endDate,
+          contract.couple_id, stay.check_in, endDate,
           contract.start_time || null, contract.end_time || null,
           contract.guest_count || null, contract.ceremony_location || null,
-          contract.reception_location || null, contract.package_name || null,
+          contract.reception_location || null, stay.package_name,
           contract.total_price || null,
         ).lastInsertRowid;
       }
@@ -1244,7 +1286,7 @@ router.post('/sign/:token', signLimiter, async (req, res) => {
       if (!hasInvoices && Number(contract.total_price) > 0) {
         const insertInvoice = db.prepare(
           'INSERT INTO invoices (couple_id, booking_id, description, amount, due_date) VALUES (?, ?, ?, ?, ?)');
-        for (const p of buildPaymentSchedule({ total: Number(contract.total_price), checkIn: contract.wedding_date, packageName: contract.package_name })) {
+        for (const p of buildPaymentSchedule({ total: Number(contract.total_price), checkIn: stay.check_in, packageName: stay.package_name })) {
           insertInvoice.run(contract.couple_id, bookingId, p.label, p.amount, p.due_date);
         }
         scheduleCreated = true;

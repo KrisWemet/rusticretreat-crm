@@ -677,6 +677,14 @@ is overwritten. They print on the event order. `/api/portal/weekend` is the
 couple's snapshot (stay, guests: Final Details counts once submitted, else the
 booking estimate; schedule; vendors; extras ordered from `invoice_items`).
 
+### Couples' portal messages email the venue
+
+`POST /api/messages/portal/:coupleId` emails `ADMIN_EMAIL` ("New message from
+…", with a link to `/messages?couple=ID`). One email per burst: none if the
+couple has another unread message from the last 15 minutes. Unread couple
+messages are also a section of the 7 AM summary (`today.js unread_messages`).
+Before this, a couple's message waited until someone happened to open Messages.
+
 ### Final Details prices come from the server only
 
 The couple's page and the staff "fill it in" panel never price anything
@@ -716,6 +724,21 @@ server/    Express 4 + better-sqlite3 (synchronous)
 - A contract becomes `signed` only when nobody is left. Until then no booking is
   created and the couple is not marked booked — none of that should fire off a
   half-signed agreement.
+- **The agreement's dates are not the booking's dates.** The template's
+  `event_date` is the wedding day (mirrored to `contracts.wedding_date`);
+  check-in and check-out are `setup_date` and `teardown_date`. A booking's
+  `event_date` is check-in. Until Nov 2026 the final signature copied the
+  wedding day into the booking, moving every weekend check-in from Friday to
+  Saturday (one night short, Friday shown as free, Final Details due a day
+  late). Use `stayFromContract()` in `routes/contracts.js` for anything that
+  turns a contract into a booking. Packages are stored by name
+  (`tpl.packageName`, "3-Day Weekend"), never the table row
+  (`tpl.packageLabel`, "3-Day Weekend · $6,500 · 3 days / 2 nights").
+  The runOnce `fix-signed-agreement-checkin-v1` repaired existing rows.
+- A new template contract is seeded from the couple **and their booking**:
+  wedding date, check-in/out, package, its fee incl. GST, today's agreement
+  date. Staff fill in event type and times. The wrong year's agreement is
+  refused using the couple's own wedding date when none is posted.
 - `contracts.signer_name` / `signature_data` are **legacy single-signer columns**,
   kept for contracts signed before this existed. They hold whoever signed *last*.
   Never use them to describe who signed — read `contract_signers`.

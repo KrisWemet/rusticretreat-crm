@@ -466,6 +466,11 @@ export default function SignContract() {
                 placeholder="Enter your full name as it appears on official ID"
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
               />
+              {/* The box starts with the first name the venue has on file. A
+                  legal signature needs the full name, so ask for it gently. */}
+              {signerName.trim() && !/\s/.test(signerName.trim()) && (
+                <p className="text-xs text-amber-700 mt-1.5">Please add your last name: this is your legal name on the agreement, as it appears on your ID.</p>
+              )}
             </div>
 
             {/* Signature pad */}

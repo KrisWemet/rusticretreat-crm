@@ -272,6 +272,41 @@ function packagePriceWithTax(packet, optionValue) {
   return null;
 }
 
+// The agreement's package option for a package the CRM knows by name. Matched on
+// the length ("3-Day"), because the agreement says "5-Day Weekend" where the
+// Packages page says "5-Day Experience".
+function packageOptionFor(packet, name) {
+  const days = String(name || '').match(/(\d+)\s*-?\s*Day/i)?.[1];
+  if (!days) return null;
+  for (const doc of packet.documents) {
+    for (const section of doc.sections) {
+      for (const block of section.blocks) {
+        if (block.t === 'choice' && block.key === 'package') {
+          return block.options.find(o => String(o.cells?.[0] || '').match(/(\d+)\s*-?\s*Day/i)?.[1] === days)?.value || null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// The chosen package's name ("3-Day Weekend"), as the rest of the CRM knows it.
+// packageLabel joins the whole table row ("3-Day Weekend · $6,500 · 3 days /
+// 2 nights"); that is for reading, never for a booking or a lookup.
+function packageName(packet, values) {
+  for (const doc of packet.documents) {
+    for (const section of doc.sections) {
+      for (const block of section.blocks) {
+        if (block.t === 'choice' && block.key === 'package') {
+          const opt = block.options.find(o => o.value === values.package);
+          return opt ? opt.cells[0] : null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function packageLabel(packet, values) {
   for (const doc of packet.documents) {
     for (const section of doc.sections) {
@@ -292,5 +327,5 @@ module.exports = {
   collectFields, initialsBlocks, defaultValues,
   getValues, saveValues, missingRequired,
   getInitials, initialsByBlock, saveInitials, missingInitials,
-  paymentSchedule, packageLabel, feeBreakdown, packagePriceWithTax,
+  paymentSchedule, packageLabel, packageName, packageOptionFor, feeBreakdown, packagePriceWithTax,
 };
