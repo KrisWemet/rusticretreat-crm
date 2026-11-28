@@ -118,11 +118,68 @@ router.get('/files/:id', authenticateCouple, (req, res) => {
   res.send(f.data);
 });
 
-// The weekend schedule, read-only: the venue plans it with the couple.
+// The weekend schedule: one plan the couple and the venue both edit (items
+// the venue locks are read-only for the couple).
 router.get('/schedule', authenticateCouple, (req, res) => {
   const { sortRunOfShow } = require('../services/planning');
-  res.json(sortRunOfShow(db.prepare('SELECT id, day_date, time, title, description, location, duration_minutes, category FROM timeline_events WHERE couple_id = ?').all(req.couple.coupleId)));
+  const fd = require('../services/finalDetails');
+  const stay = fd.stayFor(req.couple.coupleId);
+  const items = sortRunOfShow(db.prepare('SELECT id, day_date, time, title, description, location, duration_minutes, category, added_by, locked FROM timeline_events WHERE couple_id = ?').all(req.couple.coupleId))
+    .map(i => ({ ...i, locked: !!i.locked, by_couple: i.added_by === 'couple' }));
+  res.json({ items, stay });
 });
+
+// "Our weekend": everything about the stay at a glance, plus the couple's own
+// plans and notes (which staff see and can edit too).
+router.get('/weekend', authenticateCouple, (req, res) => {
+  const id = req.couple.coupleId;
+  const { sortRunOfShow } = require('../services/planning');
+  const fd = require('../services/finalDetails');
+  const c = db.prepare('SELECT partner1_name, partner2_name, wedding_date, couple_plan_notes, couple_plan_notes_updated_at, couple_plan_notes_updated_by FROM couples WHERE id = ?').get(id);
+  const stay = fd.stayFor(id);
+  const booking = db.prepare('SELECT guest_count, ceremony_location, reception_location FROM bookings WHERE couple_id = ? ORDER BY event_date DESC, id DESC').get(id) || {};
+  const final = db.prepare('SELECT guests, campers, tents, rvs, submitted_at FROM final_details WHERE couple_id = ?').get(id);
+  const schedule = sortRunOfShow(db.prepare('SELECT id, day_date, time, title, location, locked FROM timeline_events WHERE couple_id = ?').all(id));
+  const vendors = db.prepare('SELECT vendor_type, business_name, contact_name, phone, arrival_time, booked FROM vendors WHERE couple_id = ? ORDER BY vendor_type COLLATE NOCASE').all(id);
+  const extrasOrdered = db.prepare(`SELECT it.label, SUM(it.quantity) AS quantity FROM invoice_items it JOIN invoices i ON i.id = it.invoice_id
+    WHERE i.couple_id = ? AND it.kind = 'item' AND it.addon_id IS NOT NULL GROUP BY it.label ORDER BY it.label`).all(id);
+  res.json({
+    couple: `${c.partner1_name} & ${c.partner2_name}`, wedding_date: c.wedding_date, stay,
+    guests: final?.submitted_at ? { guests: final.guests, campers: final.campers, tents: final.tents, rvs: final.rvs, final: true } : { guests: booking.guest_count || null, final: false },
+    ceremony_location: booking.ceremony_location || null, reception_location: booking.reception_location || null,
+    schedule, vendors, extras_ordered: extrasOrdered,
+    notes: notesOut(c),
+  });
+});
+
+// One set of notes, two editors. A save says which version it started from
+// (base_updated_at); if the other side saved since, it is refused with their
+// version rather than silently overwriting it.
+const NOTES_COLS = 'couple_plan_notes, couple_plan_notes_updated_at, couple_plan_notes_updated_by';
+const notesOut = (c) => ({ text: c.couple_plan_notes || '', updated_at: c.couple_plan_notes_updated_at || null, updated_by: c.couple_plan_notes_updated_by || null });
+function saveNotes(coupleId, body, by, res) {
+  const cur = db.prepare(`SELECT ${NOTES_COLS} FROM couples WHERE id = ?`).get(coupleId);
+  if (!cur) return res.status(404).json({ error: 'Couple not found' });
+  if (body?.base_updated_at !== undefined && (body.base_updated_at || null) !== (cur.couple_plan_notes_updated_at || null)) {
+    return res.status(409).json({ error: 'These notes were changed while you were editing.', current: notesOut(cur) });
+  }
+  const text = String(body?.text ?? '').slice(0, 20000);
+  db.prepare("UPDATE couples SET couple_plan_notes = ?, couple_plan_notes_updated_at = datetime('now'), couple_plan_notes_updated_by = ? WHERE id = ?").run(text, by, coupleId);
+  res.json(notesOut(db.prepare(`SELECT ${NOTES_COLS} FROM couples WHERE id = ?`).get(coupleId)));
+}
+
+router.get('/notes', authenticateCouple, (req, res) => {
+  res.json(notesOut(db.prepare(`SELECT ${NOTES_COLS} FROM couples WHERE id = ?`).get(req.couple.coupleId)));
+});
+router.put('/notes', authenticateCouple, (req, res) => saveNotes(req.couple.coupleId, req.body, 'couple', res));
+
+// Staff read and edit the same notes from the couple's Event plan tab.
+router.get('/notes/:coupleId', authenticateToken, (req, res) => {
+  const c = db.prepare(`SELECT ${NOTES_COLS} FROM couples WHERE id = ?`).get(req.params.coupleId);
+  if (!c) return res.status(404).json({ error: 'Couple not found' });
+  res.json(notesOut(c));
+});
+router.put('/notes/:coupleId', authenticateToken, (req, res) => saveNotes(Number(req.params.coupleId), req.body, req.user?.name || 'staff', res));
 
 // Get couple's own profile/dashboard data
 router.get('/dashboard', authenticateCouple, (req, res) => {

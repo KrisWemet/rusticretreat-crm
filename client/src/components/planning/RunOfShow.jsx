@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import toast from 'react-hot-toast'
-import { PlusIcon, PencilIcon, TrashIcon, PrinterIcon, ClockIcon, MapPinIcon, UserIcon, DocumentDuplicateIcon, BookmarkIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon, PrinterIcon, ClockIcon, MapPinIcon, UserIcon, DocumentDuplicateIcon, BookmarkIcon, LockClosedIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../ui/Modal'
 import Input, { Select, Textarea } from '../ui/Input'
@@ -9,6 +9,8 @@ import { dayLabel, daysBetween, printHtml, esc } from '../../utils/files'
 
 // The wedding weekend hour by hour: every item on its own day, with where it
 // happens and who is responsible. Printable whole, or one vendor's part only.
+// The couple sees the same schedule in their portal and can add and change
+// items; staff lock the ones the couple must not move.
 
 const SPACES = [...new Set([...CEREMONY_SPACES, ...RECEPTION_SPACES, 'Newlywed Cabin', 'Fire Pit', 'Décor Shed', 'Parking', 'Camping Area'])]
 const CATEGORY_STYLE = {
@@ -26,7 +28,7 @@ function to24(t) {
   return `${String(h).padStart(2, '0')}:${m[2]}`
 }
 
-const blank = (day) => ({ day_date: day || '', time: '', duration_minutes: '30', title: '', category: '', location: '', assigned_to: '', description: '' })
+const blank = (day) => ({ day_date: day || '', time: '', duration_minutes: '30', title: '', category: '', location: '', assigned_to: '', description: '', locked: false })
 
 export default function RunOfShow({ coupleId, couple }) {
   const { getAdminAxios } = useAuth()
@@ -77,7 +79,7 @@ export default function RunOfShow({ coupleId, couple }) {
   const openNew = (day) => { setForm(blank(day || stayDays[0] || '')); setEditing('new') }
   const openEdit = (it) => {
     setForm({ day_date: it.day_date || '', time: to24(it.time), duration_minutes: String(it.duration_minutes ?? ''), title: it.title,
-      category: it.category || '', location: it.location || '', assigned_to: it.assigned_to || '', description: it.description || '' })
+      category: it.category || '', location: it.location || '', assigned_to: it.assigned_to || '', description: it.description || '', locked: !!it.locked })
     setEditing(it)
   }
 
@@ -165,6 +167,8 @@ export default function RunOfShow({ coupleId, couple }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-slate-900">{it.title}</span>
                     {it.category && <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${CATEGORY_STYLE[it.category] || CATEGORY_STYLE.Other}`}>{it.category}</span>}
+                    {it.added_by === 'couple' && <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-pink-100 text-pink-700">Added by couple</span>}
+                    {!!it.locked && <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-slate-800 text-white" title="The couple can see this but not change it"><LockClosedIcon className="w-3 h-3" />Locked</span>}
                   </div>
                   {it.description && <p className="text-sm text-slate-500 mt-0.5 whitespace-pre-wrap">{it.description}</p>}
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-slate-500">
@@ -183,7 +187,7 @@ export default function RunOfShow({ coupleId, couple }) {
         </div>
       ))}
 
-      <p className="text-xs text-slate-400">Times between midnight and 5 AM are listed at the end of their day, so a 12:30 AM sparkler exit stays with Saturday night.</p>
+      <p className="text-xs text-slate-400">Couples with portal access see this schedule and can add, change and remove items; their changes show here straight away, marked <strong>Added by couple</strong>, and are listed in the couple's activity. <strong>Lock</strong> anything they must not move, such as check-in, quiet hours and check-out. Times between midnight and 5 AM are listed at the end of their day, so a 12:30 AM sparkler exit stays with Saturday night.</p>
 
       <Modal isOpen={!!editing} onClose={() => setEditing(null)} title={editing === 'new' ? 'Add to the run of show' : 'Edit item'}>
         <form onSubmit={save} className="space-y-4">
@@ -206,6 +210,10 @@ export default function RunOfShow({ coupleId, couple }) {
           </div>
           <Input label="Who is responsible" list="ros-people" value={form.assigned_to} onChange={f('assigned_to')} placeholder="A vendor, staff member, Venue or Couple" />
           <Textarea label="Notes" value={form.description} onChange={f('description')} rows={2} />
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input id="ros-locked" name="ros-locked" type="checkbox" className="mt-0.5" checked={!!form.locked} onChange={e => setForm(p => ({ ...p, locked: e.target.checked }))} />
+            <span><strong>Lock</strong>: the couple can see this in their portal but cannot change or remove it (check-in, quiet hours, check-out).</span>
+          </label>
           <datalist id="ros-spaces">{SPACES.map(s => <option key={s} value={s} />)}</datalist>
           <datalist id="ros-people">{people.map(p => <option key={p} value={p} />)}</datalist>
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
@@ -226,7 +234,7 @@ export default function RunOfShow({ coupleId, couple }) {
             <Input label="First day of the wedding" type="date" value={tplForm.start_date} onChange={e => setTplForm(p => ({ ...p, start_date: e.target.value }))} />
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input id="tpl-replace" name="tpl-replace" type="checkbox" checked={tplForm.replace} onChange={e => setTplForm(p => ({ ...p, replace: e.target.checked }))} />
-              Replace this couple’s current run of show
+              Replace this couple’s current run of show (items the couple added are kept)
             </label>
             <div className="flex flex-wrap justify-between gap-3 pt-2 border-t border-slate-100">
               <div className="flex flex-wrap gap-2">

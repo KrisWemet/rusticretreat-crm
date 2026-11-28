@@ -1499,7 +1499,15 @@ db.exec(`
     used_at DATETIME
   );
 `);
+// The weekend schedule is one plan shared with the couple: who added each item,
+// and whether the venue has locked it (check-in, quiet hours, check-out). The
+// couple's own plans and notes sit on their record, editable by both sides.
 for (const sql of [
+  'ALTER TABLE timeline_events ADD COLUMN added_by TEXT',
+  'ALTER TABLE timeline_events ADD COLUMN locked INTEGER DEFAULT 0',
+  'ALTER TABLE couples ADD COLUMN couple_plan_notes TEXT',
+  'ALTER TABLE couples ADD COLUMN couple_plan_notes_updated_at DATETIME',
+  'ALTER TABLE couples ADD COLUMN couple_plan_notes_updated_by TEXT',
   'ALTER TABLE couples ADD COLUMN portal_last_login_at DATETIME',
   'ALTER TABLE couple_files ADD COLUMN shared_with_couple INTEGER DEFAULT 0',
 ]) { try { db.exec(sql); } catch (_) {} }

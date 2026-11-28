@@ -77,8 +77,8 @@ export const pageGuides = [
       'See their booking and tours, balance owing and next payment, contracts and signing progress, forms, tasks, every email the CRM sent them, and the history of changes.',
       'Add a task for this couple, start a New Proposal, or Generate Contract.',
       'Archive the couple (and Restore them later).',
-      'Event plan: see what is still missing before the weekend, keep the venue’s notes for the day, add a checklist of tasks, and print the event order (with or without prices).',
-      'Run of show: plan every day of the stay hour by hour, with where each thing happens and who is responsible; print it whole or for one vendor; save it as a template for other weddings.',
+      'Event plan: see what is still missing before the weekend, read and add to the couple’s own plans and notes, keep the venue’s notes for the day, add a checklist of tasks, and print the event order (with or without prices).',
+      'Run of show: plan every day of the stay hour by hour, with where each thing happens and who is responsible; print it whole or for one vendor; save it as a template for other weddings. Couples with portal access see the same schedule and can add and change items (marked "Added by couple"); tick Lock on anything they must not move.',
       'Guests: keep the guest list with RSVPs, meals, dietary needs and plus-ones; import a spreadsheet (CSV) and export one.',
       'Floor plans: drag tables, the dance floor, tents and more onto a plan of the space, then seat guests at tables and print it.',
       'Vendors: add the couple’s vendors from your directory or by hand, with arrival times and whether each is confirmed.',
@@ -107,6 +107,8 @@ export const pageGuides = [
       '"History" shows who changed what and when (payments recorded, prices changed, archives).',
       'The event order is built from the booking, the signed agreement (setup and teardown times, on-site contacts), the run of show, vendors, guests and floor plans. Print it again after changes; a printed copy does not update itself.',
       'In the run of show, times between midnight and 5 AM are listed at the end of their day, so a 12:30 AM sparkler exit stays with Saturday night.',
+      'Every change a couple makes to the run of show is listed in History on their Overview tab ("The couple changed…", "The couple added…"), so a changed ceremony time is never a surprise.',
+      'Save as template leaves out the couple’s own items and keeps your locks. Start from a template with Replace keeps the items the couple added.',
       'Removing a table from a floor plan unseats the guests who were at it; they show again under "Not seated yet".',
     ],
     related: ['plan-weekend', 'enquiry-to-booking', 'clients', 'payments'],
@@ -724,7 +726,8 @@ export const recipes = [
       'Taking the numbers by phone instead? Click Fill it in for them, type the numbers, say who confirmed them, and Submit and lock.',
       'When it comes in (you get an email), check the numbers and click Approve. If anything is owing, that makes an overage invoice due on the form\'s due date; record the e-Transfer on Payments as usual. Only an admin can reopen a submitted form, and not once its invoice is paid.',
       'Event plan → Checklists: add the venue checklist so each deadline becomes a dated task.',
-      'Run of show: add each day hour by hour (check-in, vendor arrivals, ceremony, dinner, quiet hours, check-out), or start from a saved template. Give each item a place and the person responsible.',
+      'Run of show: add each day hour by hour (check-in, vendor arrivals, ceremony, dinner, quiet hours, check-out), or start from a saved template. Give each item a place and the person responsible. Tick Lock on check-in, quiet hours and check-out so a couple using the portal can see them but not move them; the couple fills in their own moments around them.',
+      'Event plan → The couple’s plans and notes: read what the couple wrote in their portal (first look, toasts, family needs). Add to it if you like; they see your changes. It prints on the event order.',
       'Guests: add guests or import the couple\'s spreadsheet (CSV). Track RSVPs, meals and dietary needs.',
       'Floor plans: New floor plan, then add tables, the dance floor and anything else, drag them into place and save. Select a table to seat guests at it.',
       'Vendors: add everyone working the weekend, with arrival times, and mark each one confirmed.',
@@ -754,7 +757,7 @@ export const faq = [
   },
   {
     q: 'Can couples see the run of show, guest list or floor plan?',
-    a: 'Not while the couple portal is switched off. These are staff tools; print the run of show or event order (vendor copy has no prices) when you want to share them.',
+    a: 'With the couple portal switched on, couples see and edit the run of show (their Weekend Schedule) and see it on their Our Weekend page; items you lock they can see but not change. Floor plans and your guest records stay staff-only (couples keep their own guest list in the portal). With the portal off, print the run of show or event order (vendor copy has no prices) to share them.',
   },
   {
     q: 'Does the calendar in Google update straight away?',
@@ -790,7 +793,7 @@ export const faq = [
   },
   {
     q: 'Is there a portal where couples log in?',
-    a: 'Not yet — the client portal is on hold. Couples get emailed links for proposals, contracts and forms, and pay by e-Transfer.',
+    a: 'Yes, once it is switched on (ENABLE_COUPLE_PORTAL=1 in Railway). Send each couple their link from Wedding portal on their Overview tab. They get Our Weekend (dates, guests, each day at a glance, vendors, extras, and their own plans and notes), the weekend schedule they can edit, next steps with Pay and Sign buttons, payments, shared files, forms and messages. While it is off, couples use the emailed links for proposals, contracts, forms and payments.',
   },
   {
     q: 'How do I see who changed something?',

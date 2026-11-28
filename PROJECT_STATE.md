@@ -650,12 +650,32 @@ still has a password, so "Withdraw access" signs them out immediately. Couples
 get in only through a one-time setup link (`portal_invites`, SHA-256 of the
 token stored, 14 days; 1 day for a reset). Signing no longer generates or shows
 a password; when the portal is on and the couple has no login, the signed-
-contract email carries the setup link. The run of show is read-only for couples
-(`/api/portal/schedule`; timeline writes from a couple token return 403). Files
+contract email carries the setup link. Files
 reach the portal only when staff tick "Couple can see" (`couple_files.shared_with_couple`).
 Portal payments go through the invoice pay links, so the card fee is applied the
 same way everywhere. The portal needs `CRM_PUBLIC=1` (live today): its API
 calls are not on `PUBLIC_PATHS`, so a preview gate would block couples.
+
+### The run of show is one plan, shared with the couple
+
+Couples edit the same `timeline_events` rows staff see (`POST /api/timeline/portal`,
+`PUT`/`DELETE /api/timeline/:id` with a couple token, own couple only). Two
+columns carry the rules: `added_by` ('couple', a staff name, or null for older
+rows) and `locked`. A locked item is refused to a couple (403, "Rustic Retreat
+has set this one"), and only staff can set or clear `locked` (a couple's
+`locked` in a body is ignored). Every couple add, change or removal is logged to
+`activity_log` (`schedule.couple_change`), which shows in the Overview tab's
+History. Save as template skips `added_by = 'couple'` and keeps locks; Apply
+template with Replace deletes only rows not added by the couple. If you add a
+new way to bulk-delete a schedule, keep the couple's rows.
+
+The couple's plans and notes are `couples.couple_plan_notes` (+ `_updated_at`,
+`_updated_by`), edited from `/portal/weekend` and the Event plan tab through one
+component (`components/PlanNotes.jsx`). Saves send `base_updated_at`; if the
+other side saved since, the server returns 409 with their version and nothing
+is overwritten. They print on the event order. `/api/portal/weekend` is the
+couple's snapshot (stay, guests: Final Details counts once submitted, else the
+booking estimate; schedule; vendors; extras ordered from `invoice_items`).
 
 ### Final Details prices come from the server only
 

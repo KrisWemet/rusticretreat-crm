@@ -63,11 +63,12 @@ export default function PortalDashboard() {
   const budgetPct = budgetTotal > 0 ? Math.round((budgetSpent / budgetTotal) * 100) : 0
 
   const modules = [
+    { to: '/portal/weekend', icon: CalendarDaysIcon, label: 'Our weekend', description: 'Your stay at a glance, plans and notes', value: null, color: 'bg-rose-100 text-rose-600' },
     { to: '/portal/checklist', icon: ClipboardDocumentCheckIcon, label: 'Planning Checklist', description: `${checklistPct}% complete`, value: `${data?.stats?.checklist?.total - data?.stats?.checklist?.completed || 0} left`, color: 'bg-violet-100 text-violet-600' },
     { to: '/portal/guests', icon: UserGroupIcon, label: 'Guest List', description: `${data?.stats?.guests?.accepted || 0} confirmed`, value: data?.stats?.guests?.total || 0, color: 'bg-blue-100 text-blue-600' },
     { to: '/portal/budget', icon: CurrencyDollarIcon, label: 'Budget Tracker', description: `${budgetPct}% of budget used`, value: null, color: 'bg-emerald-100 text-emerald-600' },
     { to: '/portal/vendors', icon: BuildingStorefrontIcon, label: 'Vendors', description: 'Manage your vendors', value: null, color: 'bg-amber-100 text-amber-600' },
-    { to: '/portal/timeline', icon: ClockIcon, label: 'Weekend schedule', description: 'Planned with Rustic Retreat', value: null, color: 'bg-rose-100 text-rose-600' },
+    { to: '/portal/timeline', icon: ClockIcon, label: 'Weekend schedule', description: 'Your day-of timeline, hour by hour', value: null, color: 'bg-orange-100 text-orange-600' },
     { to: '/portal/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages', description: 'Chat with venue staff', value: data?.unreadMessages || null, color: 'bg-pink-100 text-pink-600' },
     { to: '/portal/documents', icon: DocumentTextIcon, label: 'Documents', description: 'Contracts & files', value: null, color: 'bg-slate-100 text-slate-500' },
   ]
@@ -88,6 +89,7 @@ export default function PortalDashboard() {
               {weddingDate && (
                 <p className="text-rose-200 text-sm mt-1">{format(weddingDate, 'EEEE, MMMM d, yyyy')}</p>
               )}
+              <Link to="/portal/weekend" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-white bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg">Our weekend at a glance <ChevronRightIcon className="w-4 h-4" /></Link>
             </div>
             <HeartIcon className="w-16 h-16 text-white/20 hidden sm:block" />
           </div>

@@ -28,6 +28,7 @@ import GuestList from './pages/portal/GuestList'
 import Budget from './pages/portal/Budget'
 import VendorList from './pages/portal/VendorList'
 import Timeline from './pages/portal/Timeline'
+import Weekend from './pages/portal/Weekend'
 import PortalMessages from './pages/portal/PortalMessages'
 import Documents from './pages/portal/Documents'
 import PortalPayments from './pages/portal/Payments'
@@ -116,6 +117,7 @@ function App() {
           <Route path="/portal" element={<PortalLayout />}>
             <Route index element={<Navigate to="/portal/dashboard" replace />} />
             <Route path="dashboard" element={<PortalDashboard />} />
+            <Route path="weekend" element={<Weekend />} />
             <Route path="checklist" element={<Checklist />} />
             <Route path="guests" element={<GuestList />} />
             <Route path="budget" element={<Budget />} />

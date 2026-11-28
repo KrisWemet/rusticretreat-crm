@@ -7,6 +7,7 @@ import { openPrintable, dayLabel } from '../../utils/files'
 import FinalDetailsCard from './FinalDetailsCard'
 import DamageDepositCard from './DamageDepositCard'
 import ExtrasCard from './ExtrasCard'
+import PlanNotes from '../PlanNotes'
 
 // The wedding weekend at a glance: what is still missing, the venue's own
 // notes for the day, and the printable event order built from all of it.
@@ -178,6 +179,12 @@ export default function EventPlan({ coupleId, onTab }) {
 
       <ApplyChecklist api={api} coupleId={coupleId} onApplied={load} />
 
+      <div className="card p-6" id="couple-plan-notes">
+        <h2 className="font-semibold text-slate-900">The couple’s plans and notes</h2>
+        <p className="text-xs text-slate-500 mb-3">Written by the couple in their portal: first look, toasts, family needs, the plan for each day. You can add to it too; they see your changes. Printed on the event order.</p>
+        <PlanNotes api={api} url={`/api/portal/notes/${coupleId}`} audience="staff" rows={8} saveLabel="Save couple’s notes" placeholder="Nothing yet. The couple writes this in their portal, or you can start it for them." />
+      </div>
+
       <div className="card p-6">
         <h2 className="font-semibold text-slate-900">Venue notes for the day</h2>
         <p className="text-xs text-slate-500 mb-3">For the team only: gate and generator plan, who opens up, anything to watch. Printed on the event order.</p>
@@ -185,7 +192,7 @@ export default function EventPlan({ coupleId, onTab }) {
         <textarea id="event-notes" name="event-notes" rows={5} value={notes} onChange={e => setNotes(e.target.value)}
           className="input-field resize-y" placeholder="e.g. Caterer arrives Saturday 2 PM by the north gate; generator by the gazebo from 4 PM." />
         <div className="flex justify-end mt-3">
-          <button className="btn-primary" onClick={saveNotes} disabled={saving || notes === savedNotes}>{saving ? 'Saving…' : 'Save notes'}</button>
+          <button className="btn-primary" onClick={saveNotes} disabled={saving || notes === savedNotes}>{saving ? 'Saving…' : 'Save venue notes'}</button>
         </div>
       </div>
     </div>

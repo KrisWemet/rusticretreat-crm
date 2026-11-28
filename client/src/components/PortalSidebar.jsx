@@ -14,10 +14,12 @@ import {
   HeartIcon,
   Cog6ToothIcon,
   PencilSquareIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline'
 
 const navItems = [
   { to: '/portal/dashboard', icon: HomeIcon, label: 'Dashboard' },
+  { to: '/portal/weekend', icon: CalendarDaysIcon, label: 'Our Weekend' },
   { to: '/portal/checklist', icon: ClipboardDocumentCheckIcon, label: 'Planning Checklist' },
   { to: '/portal/guests', icon: UserGroupIcon, label: 'Guest List' },
   { to: '/portal/budget', icon: CurrencyDollarIcon, label: 'Budget Tracker' },
@@ -35,7 +37,7 @@ export default function PortalSidebar({ open = false, onClose = () => {} }) {
   const location = useLocation()
 
   return (
-    <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-white border-r border-rose-100 flex flex-col transition-transform duration-200 lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
+    <aside className={`print:hidden fixed inset-y-0 left-0 z-40 w-60 bg-white border-r border-rose-100 flex flex-col transition-transform duration-200 lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* Logo */}
       <div className="px-5 py-5 border-b border-rose-100">
         <div className="flex items-center gap-3">
