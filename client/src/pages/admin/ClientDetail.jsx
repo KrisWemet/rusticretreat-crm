@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import EventPlan from '../../components/planning/EventPlan'
+import PortalAccessCard from '../../components/PortalAccessCard'
 import RunOfShow from '../../components/planning/RunOfShow'
 import GuestManager from '../../components/planning/GuestManager'
 import FloorPlans from '../../components/planning/FloorPlans'
@@ -261,6 +262,7 @@ export default function ClientDetail() {
       {tab === 'files' && <FilesAndNotes coupleId={id} />}
 
       {tab === 'overview' && <>
+      <PortalAccessCard coupleId={id} />
       {/* Main info cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Contact Info */}

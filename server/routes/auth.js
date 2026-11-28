@@ -68,7 +68,12 @@ router.post('/couple-login', coupleLoginLimiter, (req, res) => {
     return res.status(400).json({ error: 'Email and password required' });
   }
 
-  const couple = db.prepare('SELECT * FROM couples WHERE email = ?').get(email);
+  if (process.env.ENABLE_COUPLE_PORTAL !== '1') {
+    return res.status(403).json({ error: 'The couple portal is not open yet. Please contact Rustic Retreat.' });
+  }
+  // One login per couple: either partner's email works, in any letter case.
+  const clean = String(email).trim().toLowerCase();
+  const couple = db.prepare("SELECT * FROM couples WHERE (LOWER(email) = ? OR LOWER(partner2_email) = ?) AND archived_at IS NULL AND status != 'cancelled' ORDER BY id DESC").get(clean, clean);
 
   if (!couple) {
     return res.status(401).json({ error: 'Invalid credentials' });
@@ -83,6 +88,7 @@ router.post('/couple-login', coupleLoginLimiter, (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
+  db.prepare("UPDATE couples SET portal_last_login_at = datetime('now') WHERE id = ?").run(couple.id);
   const token = jwt.sign(
     {
       coupleId: couple.id,
@@ -106,6 +112,24 @@ router.post('/couple-login', coupleLoginLimiter, (req, res) => {
       status: couple.status
     }
   });
+});
+
+// A couple who forgot their portal password: the same reply whatever the
+// address, and a fresh setup link emailed only to a couple who has a login.
+const coupleForgotLimiter = rateLimit({ windowMs: 900000, max: 5, name: 'couple-forgot' });
+router.post('/couple-forgot-password', coupleForgotLimiter, (req, res) => {
+  const clean = String(req.body?.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return res.status(400).json({ error: 'Enter the email address you sign in with.' });
+  const reply = { ok: true, message: 'If that email has a portal login, we have sent it a link to choose a new password. Check your spam folder if it does not arrive in a few minutes.' };
+  if (process.env.ENABLE_COUPLE_PORTAL !== '1') return res.json(reply);
+  const c = db.prepare("SELECT * FROM couples WHERE (LOWER(email) = ? OR LOWER(partner2_email) = ?) AND password_hash IS NOT NULL AND archived_at IS NULL ORDER BY id DESC").get(clean, clean);
+  if (c) {
+    const access = require('../services/portalAccess');
+    const inv = access.createInvite(c.id, 'forgot password', 1);
+    Promise.resolve(email.sendPortalInvite({ to: [clean], coupleId: c.id, coupleNames: `${c.partner1_name} & ${c.partner2_name}`, url: inv.url, days: 1, hasLogin: true }))
+      .catch(err => console.error('[auth] portal reset email failed:', err.message));
+  }
+  res.json(reply);
 });
 
 // Staff names, for the "Assigned To" choice on tasks.

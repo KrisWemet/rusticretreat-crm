@@ -1,130 +1,158 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Link } from 'react-router-dom'
+import toast from 'react-hot-toast'
+import { ClockIcon, MapPinIcon, UserIcon, PlusIcon, PencilIcon, TrashIcon, LockClosedIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../../contexts/AuthContext'
 import Modal from '../../components/ui/Modal'
-import Input, { Textarea } from '../../components/ui/Input'
-import { PlusIcon, ClockIcon, MapPinIcon } from '@heroicons/react/24/outline'
-import toast from 'react-hot-toast'
+import Input, { Select, Textarea } from '../../components/ui/Input'
+import { dayLabel, daysBetween } from '../../utils/files'
 
-const emptyForm = { time: '', title: '', description: '', location: '', duration_minutes: '30' }
+// The weekend schedule: one plan the couple and Rustic Retreat share. The
+// couple adds, moves and removes their own moments; staff see each change at
+// once. Items the venue locks (check-in, quiet hours, check-out) are shown with
+// a lock and can only be changed by messaging the venue.
+
+// Times are stored written out ("3:30 PM"); an older record may hold "15:30".
+const clock = (t) => {
+  const s = String(t || '')
+  if (/[ap]\.?m/i.test(s)) return s
+  const m = s.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return s
+  const h = Number(m[1])
+  return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`
+}
+// "3:30 PM" (or "15:30") -> "15:30" for the time picker.
+const to24 = (t) => {
+  const s = String(t || '').trim()
+  const m = s.match(/^(\d{1,2}):(\d{2})\s*([AP])\.?M\.?$/i)
+  if (m) { let h = Number(m[1]) % 12; if (m[3].toUpperCase() === 'P') h += 12; return `${String(h).padStart(2, '0')}:${m[2]}` }
+  const n = s.match(/^(\d{1,2}):(\d{2})$/)
+  return n ? `${n[1].padStart(2, '0')}:${n[2]}` : ''
+}
+
+const blank = (day) => ({ day_date: day || '', time: '', title: '', location: '', assigned_to: '', description: '' })
 
 export default function Timeline() {
   const { getCoupleAxios } = useAuth()
-  const [events, setEvents] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showAdd, setShowAdd] = useState(false)
-  const [editEvent, setEditEvent] = useState(null)
-  const [form, setForm] = useState(emptyForm)
+  const api = getCoupleAxios()
+  const [data, setData] = useState(null) // { items, stay }
+  const [editing, setEditing] = useState(null) // null | 'new' | item
+  const [form, setForm] = useState(blank())
+  const [saving, setSaving] = useState(false)
   const f = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }))
 
-  const fetchEvents = async () => {
-    const r = await getCoupleAxios().get('/api/timeline/portal')
-    setEvents(r.data)
+  const load = useCallback(() => api.get('/api/portal/schedule').then(r => setData(r.data)).catch(() => setData({ items: [], stay: null })), [api])
+  useEffect(() => { load() }, [load])
+
+  const stayDays = useMemo(() => daysBetween(data?.stay?.check_in, data?.stay?.check_out), [data])
+  // Every day of the stay is shown, even before anything is planned on it, so
+  // there is somewhere to add the first item.
+  const days = useMemo(() => {
+    const keys = [...new Set([...stayDays, ...(data?.items || []).map(i => i.day_date || '')])]
+      .sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
+    return keys.map(day => ({ day, items: (data?.items || []).filter(i => (i.day_date || '') === day) }))
+  }, [data, stayDays])
+
+  const openNew = (day) => { setForm(blank(day ?? stayDays[0] ?? '')); setEditing('new') }
+  const openEdit = (it) => {
+    setForm({ day_date: it.day_date || '', time: to24(it.time), title: it.title, location: it.location || '', assigned_to: it.assigned_to || '', description: it.description || '' })
+    setEditing(it)
   }
 
-  useEffect(() => { fetchEvents().catch(() => {}).finally(() => setLoading(false)) }, [])
-
-  const handleSubmit = async (e) => {
+  const save = async (e) => {
     e.preventDefault()
+    setSaving(true)
+    const body = { ...form, day_date: form.day_date || null }
     try {
-      const api = getCoupleAxios()
-      const data = { ...form, duration_minutes: parseInt(form.duration_minutes) || 30 }
-      if (editEvent) { await api.put(`/api/timeline/${editEvent.id}`, data); toast.success('Updated!') }
-      else { await api.post('/api/timeline/portal', data); toast.success('Event added!') }
-      setShowAdd(false); setEditEvent(null); setForm(emptyForm); fetchEvents()
-    } catch { toast.error('Failed to save') }
+      if (editing === 'new') await api.post('/api/timeline/portal', body)
+      else await api.put(`/api/timeline/${editing.id}`, body)
+      toast.success(editing === 'new' ? 'Added to your schedule' : 'Schedule updated')
+      setEditing(null); load()
+    } catch (err) { toast.error(err.response?.data?.error || 'Could not save') }
+    finally { setSaving(false) }
   }
 
-  const openEdit = (ev) => {
-    setEditEvent(ev)
-    setForm({ time: ev.time, title: ev.title, description: ev.description || '', location: ev.location || '', duration_minutes: ev.duration_minutes || 30 })
-    setShowAdd(true)
+  const remove = async (it) => {
+    if (!confirm(`Remove "${it.title}" from your schedule?`)) return
+    try { await api.delete(`/api/timeline/${it.id}`); toast.success('Removed'); load() }
+    catch (err) { toast.error(err.response?.data?.error || 'Could not remove') }
   }
 
-  const deleteEvent = async (id) => {
-    if (!confirm('Remove this event?')) return
-    await getCoupleAxios().delete(`/api/timeline/${id}`); fetchEvents()
-  }
+  const dayOptions = [...new Set([...stayDays, ...(form.day_date ? [form.day_date] : [])])]
 
   return (
-    <div className="p-6 space-y-5 max-w-3xl">
-      <div className="flex items-center justify-between">
+    <div className="p-6 space-y-6 max-w-3xl">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="page-title">Day-Of Timeline</h1>
-          <p className="page-subtitle">{events.length} events scheduled</p>
+          <h1 className="page-title">Your weekend schedule</h1>
+          <p className="page-subtitle max-w-xl">Your day-of timeline, hour by hour. Add, move or remove anything: Rustic Retreat sees your changes straight away. Items with a <LockClosedIcon className="inline w-3.5 h-3.5 -mt-0.5" aria-label="lock" /> are set by the venue; <Link to="/portal/messages" className="text-rose-600 hover:underline">message us</Link> if one needs to change.</p>
         </div>
-        <button className="btn-primary" onClick={() => { setForm(emptyForm); setEditEvent(null); setShowAdd(true) }}>
-          <PlusIcon className="w-4 h-4" />
-          Add Event
-        </button>
+        <button className="btn-primary" onClick={() => openNew()}><PlusIcon className="w-4 h-4" /> Add to the schedule</button>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-7 w-7 border-2 border-rose-200 border-t-rose-500" /></div>
-      ) : events.length === 0 ? (
+      {data === null ? <p className="text-slate-400">Loading…</p> : days.length === 0 ? (
         <div className="card py-16 text-center">
           <ClockIcon className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400">No timeline events yet</p>
-          <p className="text-xs text-slate-300 mt-1">Add your day-of schedule to stay organized</p>
+          <p className="text-slate-500 font-medium">Nothing on your schedule yet</p>
+          <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">Start with the big moments: hair and makeup, the ceremony, dinner, the first dance. We add check-in, quiet hours and check-out.</p>
+          <button className="btn-primary mt-4" onClick={() => openNew()}><PlusIcon className="w-4 h-4" /> Add the first item</button>
         </div>
-      ) : (
-        <div className="relative pl-24">
-          {/* Vertical line */}
-          <div className="absolute left-16 top-3 bottom-3 w-0.5 bg-rose-100" />
-
-          <div className="space-y-3">
-            {events.map(ev => (
-              <div key={ev.id} className="flex gap-4 relative group">
-                {/* Time label */}
-                <div className="absolute -left-24 w-20 text-right pt-3.5">
-                  <span className="text-sm font-semibold text-rose-600">{ev.time}</span>
-                </div>
-
-                {/* Dot */}
-                <div className="absolute -left-1 w-3.5 h-3.5 bg-rose-500 rounded-full border-2 border-white shadow mt-3.5 z-10" />
-
-                {/* Card */}
-                <div className="flex-1 card p-4 ml-3 mb-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-slate-800">{ev.title}</h3>
-                      {ev.description && <p className="text-sm text-slate-500 mt-0.5">{ev.description}</p>}
-                      <div className="flex items-center gap-4 mt-2">
-                        {ev.location && (
-                          <span className="flex items-center gap-1 text-xs text-slate-400">
-                            <MapPinIcon className="w-3.5 h-3.5" />{ev.location}
-                          </span>
-                        )}
-                        {ev.duration_minutes && (
-                          <span className="flex items-center gap-1 text-xs text-slate-400">
-                            <ClockIcon className="w-3.5 h-3.5" />{ev.duration_minutes} min
-                          </span>
-                        )}
-                      </div>
+      ) : days.map(d => (
+        <div key={d.day || 'none'} className="card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 bg-rose-50/60 border-b border-rose-100">
+            <h2 className="font-semibold text-slate-900">{d.day ? dayLabel(d.day) : 'Day not set yet'}</h2>
+            <button className="text-xs font-medium text-rose-600 hover:underline" onClick={() => openNew(d.day)}>+ Add to this day</button>
+          </div>
+          {d.items.length === 0 ? <p className="px-5 py-4 text-sm text-slate-400">Nothing planned yet.</p> : (
+            <ol className="divide-y divide-slate-100">
+              {d.items.map(it => (
+                <li key={it.id} className="flex gap-4 px-5 py-3">
+                  <div className="w-20 flex-shrink-0 text-sm font-semibold text-rose-600 pt-0.5">{clock(it.time)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-slate-800">{it.title}</span>
+                      {it.locked && <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium"><LockClosedIcon className="w-3 h-3" />Set by Rustic Retreat</span>}
+                      {it.by_couple && <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-medium">Added by you</span>}
                     </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openEdit(ev)} className="text-xs text-rose-600 hover:text-rose-700 font-medium">Edit</button>
-                      <button onClick={() => deleteEvent(ev.id)} className="text-xs text-slate-400 hover:text-red-500">Del</button>
+                    {it.description && <p className="text-sm text-slate-500 mt-0.5 whitespace-pre-wrap">{it.description}</p>}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-slate-500">
+                      {it.location && <span className="inline-flex items-center gap-1"><MapPinIcon className="w-3.5 h-3.5" />{it.location}</span>}
+                      {it.assigned_to && <span className="inline-flex items-center gap-1"><UserIcon className="w-3.5 h-3.5" />{it.assigned_to}</span>}
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                  {!it.locked && (
+                    <div className="flex items-start gap-1">
+                      <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" onClick={() => openEdit(it)} aria-label={`Edit ${it.title}`}><PencilIcon className="w-4 h-4" /></button>
+                      <button className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" onClick={() => remove(it)} aria-label={`Remove ${it.title}`}><TrashIcon className="w-4 h-4" /></button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
-      )}
+      ))}
 
-      <Modal isOpen={showAdd} onClose={() => { setShowAdd(false); setEditEvent(null) }} title={editEvent ? 'Edit Event' : 'Add Timeline Event'}>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Time" value={form.time} onChange={f('time')} required placeholder="4:00 PM" />
-            <Input label="Duration (minutes)" type="number" value={form.duration_minutes} onChange={f('duration_minutes')} placeholder="30" />
+      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title={editing === 'new' ? 'Add to your schedule' : 'Change this item'}>
+        <form onSubmit={save} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {dayOptions.length ? (
+              <Select label="Day" value={form.day_date} onChange={f('day_date')}>
+                {dayOptions.map(d => <option key={d} value={d}>{dayLabel(d, { weekday: 'long', month: 'short', day: 'numeric' })}</option>)}
+                <option value="">Not sure yet</option>
+              </Select>
+            ) : <Input label="Day" type="date" value={form.day_date} onChange={f('day_date')} />}
+            <Input label="Time" type="time" value={form.time} onChange={f('time')} required />
           </div>
-          <Input label="Event Title" value={form.title} onChange={f('title')} required placeholder="e.g. Ceremony, First Dance..." />
-          <Input label="Location" value={form.location} onChange={f('location')} placeholder="Where does this happen?" />
-          <Textarea label="Description" value={form.description} onChange={f('description')} rows={2} placeholder="Additional notes..." />
+          <Input label="What happens" value={form.title} onChange={f('title')} required placeholder="e.g. Hair and makeup, First look, Speeches" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Where (optional)" value={form.location} onChange={f('location')} placeholder="e.g. By the creek" />
+            <Input label="Who (optional)" value={form.assigned_to} onChange={f('assigned_to')} placeholder="e.g. Photographer, bridal party" />
+          </div>
+          <Textarea label="Notes (optional)" value={form.description} onChange={f('description')} rows={3} placeholder="Anything we or your vendors should know" />
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-            <button type="button" className="btn-secondary" onClick={() => { setShowAdd(false); setEditEvent(null) }}>Cancel</button>
-            <button type="submit" className="btn-primary">{editEvent ? 'Update' : 'Add'} Event</button>
+            <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving…' : editing === 'new' ? 'Add' : 'Save'}</button>
           </div>
         </form>
       </Modal>

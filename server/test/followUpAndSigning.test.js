@@ -257,3 +257,95 @@ test('a checklist set to apply on booking is added at the final signature, and n
     db.prepare("UPDATE task_templates SET auto_apply = 'none' WHERE id = ?").run(tpl.id);
   }
 });
+
+// The venue agreement records the wedding day apart from arrival and
+// departure. Signing used to copy the wedding day into the booking's check-in
+// (Friday → Saturday) and store the package as the agreement's table row.
+async function signVenueAgreement({ checkIn, wedding, checkOut }) {
+  const tpl = require('../services/contractTemplate');
+  const id = couple({ partner2_email: `p2-${++n}@test.invalid`, wedding_date: wedding });
+  db.prepare("INSERT INTO bookings (couple_id, event_date, end_date, package_name, total_price) VALUES (?, ?, ?, '3-Day Weekend', 7875)").run(id, checkIn, checkOut);
+  db.prepare("INSERT INTO invoices (couple_id, description, amount, due_date) VALUES (?, 'Booking Deposit (25%)', 1968.75, '2027-12-01')").run(id);
+  const c = await call('POST', '/api/contracts', { couple_id: id, title: 'Event Venue Rental Agreement', template_packet: 'rental-2028' });
+  assert.equal(c.status, 201, JSON.stringify(c.body));
+  const cid = c.body.id;
+  const f = await call('PUT', `/api/contracts/${cid}/fields`, { fields: {
+    agreement_date: '2027-11-28', event_date: wedding, event_type: 'Wedding',
+    setup_date: checkIn, teardown_date: checkOut, setup_time: '12:00', teardown_time: '11:00',
+    package: '3-day', total_package_fee: '7875.00',
+  } });
+  assert.equal(f.status, 200, JSON.stringify(f.body));
+  assert.deepEqual(f.body.missing_venue, []);
+  assert.equal(db.prepare('SELECT package_name FROM contracts WHERE id = ?').get(cid).package_name, '3-Day Weekend', 'the package by name, not the table row');
+  const v = await call('POST', `/api/contracts/${cid}/sign-venue`, { signature_data: 'data:image/png;base64,AA', signer_name: 'Kris', agreed: true });
+  assert.equal(v.status, 200, JSON.stringify(v.body));
+  const packet = tpl.getPacket('rental-2028');
+  const initials = Object.fromEntries(tpl.initialsBlocks(packet).map(b => [b.key, 'AB']));
+  const fields = Object.fromEntries(tpl.collectFields(packet, 'client').filter(x => x.required).map(x => [x.key, x.type === 'tel' ? '780-555-0100' : 'June Park']));
+  for (const order of [2, 3]) {
+    const tok = db.prepare('SELECT signing_token FROM contract_signers WHERE contract_id = ? AND sign_order = ?').get(cid, order).signing_token;
+    const r = await call('POST', `/api/contracts/sign/${tok}`, { signer_name: order === 2 ? 'Ava Lee' : 'Ben Lee', signature_data: 'data:image/png;base64,AA', agreed: true, fields, initials }, null);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+  }
+  assert.equal(db.prepare('SELECT status FROM contracts WHERE id = ?').get(cid).status, 'signed');
+  return { id, cid };
+}
+
+test('signing the venue agreement keeps check-in on the setup date and the package by name', async () => {
+  // Friday 7 July to Sunday 9 July 2028, wedding on the Saturday.
+  const { id } = await signVenueAgreement({ checkIn: '2028-07-07', wedding: '2028-07-08', checkOut: '2028-07-09' });
+  const b = db.prepare('SELECT event_date, end_date, package_name FROM bookings WHERE couple_id = ?').all(id);
+  assert.equal(b.length, 1, 'the proposal\'s booking is updated, not doubled');
+  assert.deepEqual({ ...b[0] }, { event_date: '2028-07-07', end_date: '2028-07-09', package_name: '3-Day Weekend' });
+  const cp = db.prepare('SELECT wedding_date, venue_package FROM couples WHERE id = ?').get(id);
+  assert.deepEqual({ ...cp }, { wedding_date: '2028-07-08', venue_package: '3-Day Weekend' });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM invoices WHERE couple_id = ?').get(id).n, 1, 'no second payment schedule');
+});
+
+test('the one-time repair moves bookings shifted by the old signing back to the setup date', async () => {
+  const { execFileSync } = require('child_process');
+  // Two signed agreements, damaged the old way; staff fixed the second by hand.
+  const a = await signVenueAgreement({ checkIn: '2028-08-04', wedding: '2028-08-05', checkOut: '2028-08-06' });
+  const b = await signVenueAgreement({ checkIn: '2028-09-01', wedding: '2028-09-02', checkOut: '2028-09-03' });
+  const label = '3-Day Weekend · $7,500 · 3 days / 2 nights';
+  db.prepare('UPDATE bookings SET event_date = ?, package_name = ? WHERE couple_id = ?').run('2028-08-05', label, a.id);
+  db.prepare('UPDATE couples SET venue_package = ? WHERE id = ?').run(label, a.id);
+  db.prepare('UPDATE contracts SET package_name = ? WHERE id = ?').run(label, a.cid);
+  db.prepare("UPDATE bookings SET event_date = '2028-08-31' WHERE couple_id = ?").run(b.id); // a deliberate hand edit
+  db.prepare("DELETE FROM app_migrations WHERE name = 'fix-signed-agreement-checkin-v1'").run();
+  execFileSync(process.execPath, ['-e', "require('./db')"], { cwd: path.join(__dirname, '..'), env: { ...process.env }, stdio: 'pipe' });
+  assert.deepEqual({ ...db.prepare('SELECT event_date, end_date, package_name FROM bookings WHERE couple_id = ?').get(a.id) },
+    { event_date: '2028-08-04', end_date: '2028-08-06', package_name: '3-Day Weekend' });
+  assert.equal(db.prepare('SELECT venue_package FROM couples WHERE id = ?').get(a.id).venue_package, '3-Day Weekend');
+  assert.equal(db.prepare('SELECT package_name FROM contracts WHERE id = ?').get(a.cid).package_name, '3-Day Weekend');
+  assert.equal(db.prepare('SELECT event_date FROM bookings WHERE couple_id = ?').get(b.id).event_date, '2028-08-31', 'a hand-corrected date is left alone');
+  assert.ok(db.prepare("SELECT 1 FROM app_migrations WHERE name = 'fix-signed-agreement-checkin-v1'").get());
+});
+
+test('a new venue agreement starts with the booking\'s dates, package and fee filled in', async () => {
+  const p2 = `p2-${++n}@test.invalid`;
+  const id = couple({ partner2_email: p2, wedding_date: '2028-10-07' });
+  db.prepare("INSERT INTO bookings (couple_id, event_date, end_date, package_name, total_price) VALUES (?, '2028-10-06', '2028-10-08', '3-Day Weekend', 7875)").run(id);
+  const c = await call('POST', '/api/contracts', { couple_id: id, title: 'Event Venue Rental Agreement', template_packet: 'rental-2028' });
+  assert.equal(c.status, 201, JSON.stringify(c.body));
+  const v = Object.fromEntries(db.prepare('SELECT field_key, value FROM contract_field_values WHERE contract_id = ?').all(c.body.id).map(r => [r.field_key, r.value]));
+  assert.equal(v.event_date, '2028-10-07');
+  assert.equal(v.setup_date, '2028-10-06');
+  assert.equal(v.teardown_date, '2028-10-08');
+  assert.equal(v.package, '3-day');
+  assert.equal(v.total_package_fee, '7875.00', '$7,500 + 5% GST, as choosing the package would fill in');
+  assert.match(v.agreement_date, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(v.client2_email, p2);
+  const row = db.prepare('SELECT wedding_date, package_name, total_price FROM contracts WHERE id = ?').get(c.body.id);
+  assert.deepEqual({ ...row }, { wedding_date: '2028-10-07', package_name: '3-Day Weekend', total_price: 7875 });
+  // Left for staff: the event type and the two times.
+  const missing = (await call('GET', `/api/contracts/${c.body.id}/template`)).body.missing_venue.map(m => m.key);
+  assert.deepEqual(missing.sort(), ['event_type', 'setup_time', 'teardown_time']);
+});
+
+test('the wrong year\'s agreement is refused using the couple\'s own wedding date', async () => {
+  const id = couple({ partner2_email: `p2-${++n}@test.invalid`, wedding_date: '2028-06-10' });
+  const r = await call('POST', '/api/contracts', { couple_id: id, title: 'Event Venue Rental Agreement', template_packet: 'rental-2027' });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /2028/);
+});

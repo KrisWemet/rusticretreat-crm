@@ -67,8 +67,18 @@ function todaySummary(today) {
   `).all(weekEnd).map(b => ({ ...b, end_date: b.end_date || defaultEndDate(b.event_date, b.package_name) || b.event_date }))
     .filter(b => b.end_date >= today);
 
+  // Couples write from their portal; until a member of staff opens the
+  // conversation the messages count as unread.
+  const unread = db.prepare(`
+    SELECT m.couple_id, COUNT(*) AS n, substr(MIN(m.created_at), 1, 10) AS oldest, c.partner1_name, c.partner2_name
+    FROM messages m JOIN couples c ON c.id = m.couple_id
+    WHERE m.sender_type = 'couple' AND m.read_at IS NULL AND ${live}
+    GROUP BY m.couple_id ORDER BY MIN(m.created_at)
+  `).all();
+
   return {
     today, week_end: weekEnd,
+    unread_messages: unread.map(m => ({ ...m, couple_names: names(m) })),
     tours_today: tours.filter(t => t.scheduled_at.slice(0, 10) === today),
     tours_week: tours.filter(t => t.scheduled_at.slice(0, 10) !== today),
     tour_requests: tourRequests,
@@ -88,6 +98,7 @@ function todaySummary(today) {
 function itemCount(s) {
   return s.tours_today.length + s.tours_week.length + s.tasks_due.length + s.payments_due.length +
     s.follow_ups.length + s.contracts_waiting.length + s.forms_waiting.length + s.weddings_week.length +
+    (s.unread_messages ? s.unread_messages.length : 0) +
     (s.deposits ? s.deposits.collect.length + s.deposits.inspect.length + s.deposits.refund.length : 0);
 }
 

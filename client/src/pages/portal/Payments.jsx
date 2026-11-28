@@ -33,15 +33,12 @@ export default function Payments() {
       .catch(() => {})
   }, [])
 
-  async function payByCard(inv) {
+  // Every unpaid invoice has its own pay page: e-Transfer details, and card
+  // payment with its fee shown when the venue has switched it on.
+  function payByCard(inv) {
+    if (!inv.pay_url) return toast.error('Could not open the payment page.')
     setPaying(inv.id)
-    try {
-      const { data } = await getCoupleAxios().post(`/api/payments/checkout/${inv.id}`)
-      if (data.url) window.location.href = data.url
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Could not start payment.')
-      setPaying(null)
-    }
+    window.location.href = inv.pay_url
   }
 
   const paid   = invoices.filter(i => i.paid)
@@ -140,7 +137,11 @@ export default function Payments() {
                               Paid {format(parseISO(inv.paid_at), 'MMMM d, yyyy')}
                             </p>
                           )}
-                          {inv.notes && <p className="text-xs text-slate-400 mt-1">{inv.notes}</p>}
+                          {inv.items?.length > 0 && (
+                            <ul className="text-xs text-slate-500 mt-1 space-y-0.5">
+                              {inv.items.map(l => <li key={l.id}>{l.label}{l.kind === 'item' && Number(l.quantity) !== 1 ? ` × ${Number(l.quantity)}` : ''}: ${Number(l.amount).toFixed(2)}</li>)}
+                            </ul>
+                          )}
                         </div>
                         <div className="text-right flex-shrink-0">
                           <div className="text-lg font-bold text-slate-800">${inv.amount.toLocaleString()}</div>
@@ -150,7 +151,7 @@ export default function Payments() {
                           </span>
                         </div>
                       </div>
-                      {!inv.paid && cardEnabled && (
+                      {!inv.paid && inv.pay_url && (
                         <div className="mt-3 flex justify-end">
                           <button
                             onClick={() => payByCard(inv)}
@@ -158,7 +159,7 @@ export default function Payments() {
                             className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
                           >
                             <CreditCardIcon className="w-4 h-4" />
-                            {paying === inv.id ? 'Redirecting…' : 'Pay by card'}
+                            {paying === inv.id ? 'Opening…' : cardEnabled ? 'Pay now (e-Transfer or card)' : 'How to pay'}
                           </button>
                         </div>
                       )}

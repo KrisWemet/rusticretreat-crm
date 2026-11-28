@@ -36,6 +36,9 @@ export default function PortalDashboard() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const [steps, setSteps] = useState(null)
+  useEffect(() => { getCoupleAxios().get('/api/portal/next-steps').then(r => setSteps(r.data)).catch(() => setSteps([])) }, [])
+
   useEffect(() => {
     getCoupleAxios().get('/api/portal/dashboard')
       .then(r => setData(r.data))
@@ -60,11 +63,12 @@ export default function PortalDashboard() {
   const budgetPct = budgetTotal > 0 ? Math.round((budgetSpent / budgetTotal) * 100) : 0
 
   const modules = [
+    { to: '/portal/weekend', icon: CalendarDaysIcon, label: 'Our weekend', description: 'Your stay at a glance, plans and notes', value: null, color: 'bg-rose-100 text-rose-600' },
     { to: '/portal/checklist', icon: ClipboardDocumentCheckIcon, label: 'Planning Checklist', description: `${checklistPct}% complete`, value: `${data?.stats?.checklist?.total - data?.stats?.checklist?.completed || 0} left`, color: 'bg-violet-100 text-violet-600' },
     { to: '/portal/guests', icon: UserGroupIcon, label: 'Guest List', description: `${data?.stats?.guests?.accepted || 0} confirmed`, value: data?.stats?.guests?.total || 0, color: 'bg-blue-100 text-blue-600' },
     { to: '/portal/budget', icon: CurrencyDollarIcon, label: 'Budget Tracker', description: `${budgetPct}% of budget used`, value: null, color: 'bg-emerald-100 text-emerald-600' },
     { to: '/portal/vendors', icon: BuildingStorefrontIcon, label: 'Vendors', description: 'Manage your vendors', value: null, color: 'bg-amber-100 text-amber-600' },
-    { to: '/portal/timeline', icon: ClockIcon, label: 'Day-Of Timeline', description: 'Your event schedule', value: null, color: 'bg-rose-100 text-rose-600' },
+    { to: '/portal/timeline', icon: ClockIcon, label: 'Weekend schedule', description: 'Your day-of timeline, hour by hour', value: null, color: 'bg-orange-100 text-orange-600' },
     { to: '/portal/messages', icon: ChatBubbleLeftRightIcon, label: 'Messages', description: 'Chat with venue staff', value: data?.unreadMessages || null, color: 'bg-pink-100 text-pink-600' },
     { to: '/portal/documents', icon: DocumentTextIcon, label: 'Documents', description: 'Contracts & files', value: null, color: 'bg-slate-100 text-slate-500' },
   ]
@@ -85,6 +89,7 @@ export default function PortalDashboard() {
               {weddingDate && (
                 <p className="text-rose-200 text-sm mt-1">{format(weddingDate, 'EEEE, MMMM d, yyyy')}</p>
               )}
+              <Link to="/portal/weekend" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-white bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-lg">Our weekend at a glance <ChevronRightIcon className="w-4 h-4" /></Link>
             </div>
             <HeartIcon className="w-16 h-16 text-white/20 hidden sm:block" />
           </div>
@@ -99,6 +104,26 @@ export default function PortalDashboard() {
                 <div className="h-full bg-white rounded-full transition-all" style={{ width: `${checklistPct}%` }} />
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* What needs doing: payments, signatures, the Final Details Form, forms */}
+      {steps && (
+        <div className="card p-5">
+          <h2 className="font-semibold text-slate-900 mb-3">{steps.length ? 'Your next steps' : 'You\'re all caught up'}</h2>
+          {steps.length === 0 ? <p className="text-sm text-slate-500">Nothing needs doing right now. We'll let you know when something does.</p> : (
+            <ul className="divide-y divide-slate-100">
+              {steps.map((st, i) => (
+                <li key={i} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-slate-800">{st.title}</div>
+                    {(st.due || st.detail) && <div className={`text-xs ${st.overdue ? 'text-red-600 font-medium' : 'text-slate-500'}`}>{st.detail || ''}{st.due ? `${st.overdue ? 'Overdue: was due' : 'Due'} ${format(parseISO(st.due), 'MMMM d, yyyy')}` : ''}</div>}
+                  </div>
+                  {st.url && <a href={st.url} className="text-sm font-semibold text-white bg-rose-500 hover:bg-rose-600 px-3 py-1.5 rounded-lg">{st.kind === 'payment' ? 'Pay' : st.kind === 'contract' ? 'Sign' : 'Open'}</a>}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}

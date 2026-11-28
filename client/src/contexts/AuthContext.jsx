@@ -17,6 +17,7 @@ const PUBLIC_ROUTES = [
   /^\/forgot-password\/?$/, // staff asking for a reset link
   /^\/final-details\//, // the couple's Final Details Form link
   /^\/pay\//, // an invoice's private pay link
+  /^\/portal\/setup\//, // a couple choosing their portal password
 ]
 
 export function AuthProvider({ children }) {
@@ -62,7 +63,9 @@ export function AuthProvider({ children }) {
       navigate('/login', { replace: true })
     }
 
-    if (isPortalRoute && !isPortalLoginRoute && !couple) {
+    // A public portal page (the emailed setup link) sits under /portal/ but is
+    // opened by a couple who has no login yet: never bounce it to sign-in.
+    if (isPortalRoute && !isPortalLoginRoute && !isPublicRoute && !couple) {
       navigate('/portal/login', { replace: true })
     }
   }, [loading, user, couple, location.pathname])
@@ -85,6 +88,17 @@ export function AuthProvider({ children }) {
     localStorage.setItem('adminUser', JSON.stringify(userData))
     setUser(userData)
     return userData
+  }
+
+  // A couple choosing their password from the emailed setup link is signed
+  // straight in.
+  const setupCouple = async (setupToken, password) => {
+    const response = await axios.post(`/api/portal/setup/${setupToken}`, { password })
+    const { token, couple: coupleData } = response.data
+    localStorage.setItem('coupleToken', token)
+    localStorage.setItem('coupleData', JSON.stringify(coupleData))
+    setCouple(coupleData)
+    return coupleData
   }
 
   const loginCouple = async (email, password) => {
@@ -192,7 +206,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, couple, loading,
-      loginAdmin, loginCouple, signUpAdmin,
+      loginAdmin, loginCouple, signUpAdmin, setupCouple,
       logoutAdmin, logoutCouple,
       getAdminAxios, getCoupleAxios
     }}>

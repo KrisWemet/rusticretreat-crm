@@ -405,6 +405,36 @@ Item 6. Owner's answers: no card processor yet; a 2.4% fee on card payments; cou
 - Ask the accountant whether GST applies to the card fee. It's kept apart from the invoice amount so it can be booked either way.
 - Try one month's QuickBooks export with the bookkeeper first.
 
+### The couple portal, built out (28 Nov 2026)
+
+Item 7. The owner asked to build it now.
+
+- **Getting in:** on a couple's Overview tab, **Wedding portal → Send portal link** emails both partners a one-time link to choose their password (14 days). It's also sent on its own when both partners have signed, if the portal is on. One login per couple, either email; **Forgot your password?** on the portal sign-in page. **Withdraw access** signs them out at once.
+- **What couples see:** a **next steps** list on the dashboard (payments with Pay buttons, agreements to sign, the Final Details Form, forms), payments with line items that open the invoice's pay page, the files staff share (tick "Couple can see" on Files & notes), plus the existing checklist, guest list, budget, vendors, forms and messages.
+- **Our Weekend** (new portal page, owner's request): the whole stay on one page. Check-in and check-out, nights, package, guests (the booking estimate until the Final Details Form is in, then the final counts), ceremony and reception spots, each day at a glance, vendors with arrival times, extras ordered. Printable.
+- **The weekend schedule is the couple's to edit** (owner's request): it is the same run of show staff see. Couples add, move and remove items; staff see changes at once, marked **Added by couple**, and each change is listed in History on the Overview tab. Staff tick **Lock** on items couples must not move (check-in, quiet hours, check-out); couples see those with a lock and "Set by Rustic Retreat". Templates leave out couples' own items, and Replace keeps them.
+- **Our plans and notes:** a space on Our Weekend where couples write their plans in detail. Staff read and edit the same notes on the Event plan tab, and they print on the event order. If both sides save over each other, the second save is refused and shows the other version, so nothing is lost.
+- **Switch:** the portal is off until `ENABLE_COUPLE_PORTAL=1` is set in Railway. Turning it off again closes it for everyone at once.
+- Signing no longer shows a generated password on screen.
+
+**Owner to-do:** decide when to switch it on, then send portal links to booked couples from their pages.
+
+### End-to-end test of the whole couple journey (28 Nov 2026)
+
+The owner asked for an end-to-end test looking for bugs. Verified locally on the production build configured like live (portal on). It covered:
+- a couple from the public enquiry form through proposal, contract, both signatures, portal, payment, messages, a questionnaire, the Final Details link and the event order;
+- a crawl of all 84 pages at desktop and phone width;
+- every earlier browser test, rerun.
+
+Found and fixed:
+- **Signing moved check-in a day late (serious, older bug).** The couple's final signature set the booking's check-in to the agreement's wedding day (Saturday) instead of its setup/access date (Friday), and stored the package as "3-Day Weekend · $6,500 · 3 days / 2 nights". The stay became one night, the Friday showed as free, and the Final Details due date and per-night fees were off. Fixed, with tests. A one-time repair runs on the next deploy (after the automatic backup). It moves affected bookings back to the setup date, leaves any date staff already corrected by hand alone, and cleans the package names.
+- **The agreement now arrives pre-filled** from the booking: wedding date, check-in and check-out, package, fee and agreement date. Staff add the event type and the two times. The wrong year's agreement is refused using the couple's wedding date.
+- **Couples' portal messages now email the venue** (one email per burst) and appear in the 7 AM summary. Before, nobody was told.
+- **Forms:** "Assign" never sent anything, but looked as if it had. Each row now says "Not sent to the couple yet" and has its own **Email link** button.
+- **Small:** portal next steps show $1,706.25 (not $1706.25); the signing page asks for a last name when only a first name is filled in.
+
+No other errors were found. No page errors, failed requests or sideways scrolling on any page, and every invalid link shows a plain message.
+
 ## Open items
 
 1. **Shannon & Chris booking shows $6,439.**

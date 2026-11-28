@@ -35,8 +35,8 @@ export default function PortalLayout() {
 
       {/* Couples open this on their phones more than anywhere else, so the
           240px offset has to drop away with the sidebar below lg. */}
-      <div className="flex-1 lg:ml-60 flex flex-col min-h-screen min-w-0">
-        <header className="lg:hidden sticky top-0 z-20 flex items-center gap-3 bg-white border-b border-rose-100 px-4 py-3">
+      <div className="flex-1 lg:ml-60 print:ml-0 flex flex-col min-h-screen min-w-0">
+        <header className="lg:hidden print:hidden sticky top-0 z-20 flex items-center gap-3 bg-white border-b border-rose-100 px-4 py-3">
           <button
             onClick={() => setNavOpen(true)}
             aria-label="Open menu"

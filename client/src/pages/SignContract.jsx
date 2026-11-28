@@ -241,33 +241,12 @@ export default function SignContract() {
 
             {result.portal_enabled && result.is_new_account && (
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 text-left mb-6">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-2">
                   <KeyIcon className="w-5 h-5 text-rose-600" />
-                  <h3 className="font-semibold text-rose-900">Your Portal Access</h3>
+                  <h3 className="font-semibold text-rose-900">Your wedding portal</h3>
                 </div>
-                <p className="text-sm text-rose-700 mb-3">
-                  Your wedding planning portal has been set up! Use these credentials to log in and start planning:
-                </p>
-                <div className="bg-white rounded-lg border border-rose-200 p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <UserIcon className="w-4 h-4 text-slate-400" />
-                    <div>
-                      <span className="text-xs text-slate-400 uppercase tracking-wide">Email</span>
-                      <p className="text-sm font-mono font-medium text-slate-800">{result.portal_email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <LockClosedIcon className="w-4 h-4 text-slate-400" />
-                    <div>
-                      <span className="text-xs text-slate-400 uppercase tracking-wide">Password</span>
-                      <p className="text-sm font-mono font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
-                        {result.portal_password}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-rose-500 mt-3">
-                  Save these credentials — your password is only shown once. You can change it after logging in.
+                <p className="text-sm text-rose-700">
+                  Your wedding planning portal is ready. We've emailed you a link to choose your password; it works once, for 14 days. After that, sign in with either of your email addresses.
                 </p>
               </div>
             )}
@@ -275,7 +254,7 @@ export default function SignContract() {
             {result.portal_enabled && result.fully_signed !== false && !result.is_new_account && (
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 text-left">
                 <p className="text-sm text-slate-600">
-                  Your portal credentials remain the same. Log in with your existing email and password.
+                  You already have a portal login. Sign in with your email and password as usual.
                 </p>
               </div>
             )}
@@ -487,6 +466,11 @@ export default function SignContract() {
                 placeholder="Enter your full name as it appears on official ID"
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
               />
+              {/* The box starts with the first name the venue has on file. A
+                  legal signature needs the full name, so ask for it gently. */}
+              {signerName.trim() && !/\s/.test(signerName.trim()) && (
+                <p className="text-xs text-amber-700 mt-1.5">Please add your last name: this is your legal name on the agreement, as it appears on your ID.</p>
+              )}
             </div>
 
             {/* Signature pad */}

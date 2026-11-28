@@ -1486,6 +1486,32 @@ for (const sql of [
 ]) { try { db.exec(sql); } catch (_) {} }
 try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_pay_token ON invoices(pay_token)'); } catch (_) {}
 
+// Couple portal: one-time setup links (only a hash of the token is stored),
+// the last time a couple signed in, and files staff choose to share.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS portal_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    couple_id INTEGER NOT NULL REFERENCES couples(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME
+  );
+`);
+// The weekend schedule is one plan shared with the couple: who added each item,
+// and whether the venue has locked it (check-in, quiet hours, check-out). The
+// couple's own plans and notes sit on their record, editable by both sides.
+for (const sql of [
+  'ALTER TABLE timeline_events ADD COLUMN added_by TEXT',
+  'ALTER TABLE timeline_events ADD COLUMN locked INTEGER DEFAULT 0',
+  'ALTER TABLE couples ADD COLUMN couple_plan_notes TEXT',
+  'ALTER TABLE couples ADD COLUMN couple_plan_notes_updated_at DATETIME',
+  'ALTER TABLE couples ADD COLUMN couple_plan_notes_updated_by TEXT',
+  'ALTER TABLE couples ADD COLUMN portal_last_login_at DATETIME',
+  'ALTER TABLE couple_files ADD COLUMN shared_with_couple INTEGER DEFAULT 0',
+]) { try { db.exec(sql); } catch (_) {} }
+
 runOnce('midweek-package-v1', () => {
   if (db.prepare("SELECT 1 FROM packages WHERE LOWER(name) LIKE '%midweek%'").get()) return;
   db.prepare('INSERT INTO packages (name, description, price, max_guests, includes, is_active) VALUES (?, ?, ?, ?, ?, 0)').run(
@@ -1496,6 +1522,34 @@ runOnce('midweek-package-v1', () => {
 
 // Starting points the owner can edit or delete. Seeded once, so a deleted
 // template stays deleted.
+// Until Nov 2026, the couple's final signature on the venue agreement set the
+// booking's check-in to the agreement's wedding day instead of its setup/access
+// date, and stored the package as the agreement's table row ("3-Day Weekend ·
+// $6,500 · 3 days / 2 nights"). Put both right. Only a booking still holding
+// exactly the wedding day the agreement gives is moved, so a check-in staff
+// have corrected by hand is left alone.
+runOnce('fix-signed-agreement-checkin-v1', () => {
+  const val = db.prepare('SELECT value FROM contract_field_values WHERE contract_id = ? AND field_key = ?');
+  const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ''));
+  let moved = 0;
+  for (const c of db.prepare("SELECT id, couple_id FROM contracts WHERE status = 'signed' AND template_key IS NOT NULL").all()) {
+    const wedding = val.get(c.id, 'event_date')?.value;
+    const setup = val.get(c.id, 'setup_date')?.value;
+    const teardown = val.get(c.id, 'teardown_date')?.value;
+    if (!isDay(wedding) || !isDay(setup) || setup >= wedding) continue;
+    const b = db.prepare('SELECT id, event_date, end_date FROM bookings WHERE couple_id = ? ORDER BY id LIMIT 1').get(c.couple_id);
+    if (!b || b.event_date !== wedding) continue;
+    const end = isDay(teardown) && teardown >= setup ? teardown : b.end_date;
+    db.prepare('UPDATE bookings SET event_date = ?, end_date = ? WHERE id = ?').run(setup, end, b.id);
+    moved++;
+  }
+  const name = (col) => `CASE WHEN ${col} LIKE '% · $%' THEN substr(${col}, 1, instr(${col}, ' · ') - 1) ELSE ${col} END`;
+  const pk1 = db.prepare(`UPDATE bookings SET package_name = ${name('package_name')} WHERE package_name LIKE '% · $%'`).run().changes;
+  const pk2 = db.prepare(`UPDATE couples SET venue_package = ${name('venue_package')} WHERE venue_package LIKE '% · $%'`).run().changes;
+  const pk3 = db.prepare(`UPDATE contracts SET package_name = ${name('package_name')} WHERE package_name LIKE '% · $%'`).run().changes;
+  console.log(`[migrate] signed-agreement check-in: ${moved} booking(s) moved back to the setup date; package names cleaned: ${pk1 + pk2 + pk3}`);
+});
+
 runOnce('seed-email-templates-v1', () => {
   const add = db.prepare('INSERT INTO email_templates (name, subject, body) VALUES (?, ?, ?)');
   [

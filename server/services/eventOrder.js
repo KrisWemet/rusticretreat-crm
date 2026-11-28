@@ -127,7 +127,7 @@ function buildEventOrder(coupleId) {
     couple: {
       id: couple.id, partner1_name: couple.partner1_name, partner2_name: couple.partner2_name,
       email: couple.email, partner2_email: couple.partner2_email, phone: couple.phone, partner2_phone: couple.partner2_phone,
-      status: couple.status, event_notes: couple.event_notes || '',
+      status: couple.status, event_notes: couple.event_notes || '', plan_notes: couple.couple_plan_notes || '',
     },
     booking: booking && {
       id: booking.id, package_name: booking.package_name, guest_count: booking.guest_count,
@@ -221,6 +221,7 @@ ${eo.agreement.preferred_contact ? `<p class="muted">Preferred contact: ${esc(eo
 ${eo.booking?.special_requests || eo.booking?.catering_type ? `<h2>Requests and catering</h2><table class="kv">${row('Catering', esc(eo.booking?.catering_type || ''))}${row('Special requests', eo.booking?.special_requests ? `<span class="pre">${esc(eo.booking.special_requests)}</span>` : '')}</table>` : ''}
 
 ${eo.couple.event_notes ? `<h2>Venue notes</h2><p class="pre">${esc(eo.couple.event_notes)}</p>` : ''}
+${eo.couple.plan_notes ? `<h2>The couple's plans and notes</h2><p class="pre">${esc(eo.couple.plan_notes)}</p>` : ''}
 
 ${finalSection}
 

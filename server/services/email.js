@@ -196,6 +196,8 @@ async function sendMorningSummary(s) {
     ...dep.inspect.map(d => `${d.overdue ? 'OVERDUE ' : ''}${d.couple_names} — inspection due by ${fmtDay(d.due)}${d.held ? `, holding $${money(d.held)}` : ', deposit not recorded'}`),
     ...dep.refund.map(d => `${d.couple_names} — send the $${money(d.amount)} refund`),
   ], '/payments');
+  add('Unread messages from couples', (s.unread_messages || []).map(m =>
+    `${m.couple_names} — ${m.n} unread message${m.n === 1 ? '' : 's'}, the first ${fmtDay(m.oldest)}`), '/messages');
   if (s.tour_requests) add('Tour requests to schedule', [`${s.tour_requests} tour request${s.tour_requests === 1 ? '' : 's'} not scheduled yet`], '/tours');
 
   const heading = `Your day at Rustic Retreat — ${fmtDay(s.today)}`;
@@ -342,6 +344,23 @@ async function sendFormCompletedAdmin({ coupleNames, formTitle }) {
   });
 }
 
+// ── A couple wrote from their portal → the venue ─────────────────────────────
+async function sendCoupleMessageAdmin({ coupleId, coupleNames, content }) {
+  if (!ADMIN_EMAIL) return { delivered: false, error: 'No ADMIN_EMAIL set' };
+  const url = `${BASE_URL}/messages?couple=${coupleId}`;
+  const preview = String(content || '').slice(0, 1500);
+  return send({
+    kind: 'couple-message',
+    to: ADMIN_EMAIL,
+    subject: `New message from ${coupleNames}`,
+    text: `${coupleNames} sent a message from their wedding portal:\n\n${preview}\n\nReply in the CRM: ${url}`,
+    html: `<p><strong>${esc(coupleNames)}</strong> sent a message from their wedding portal:</p>
+<blockquote style="margin:12px 0;padding:10px 14px;border-left:3px solid #fda4af;background:#fff1f2;color:#334155;white-space:pre-wrap">${esc(preview)}</blockquote>
+<p><a href="${esc(url)}" style="color:#e11d48">Reply in the CRM →</a></p>
+<p style="color:#94a3b8;font-size:12px">Replying to this email does not reach the couple. Reply from Messages in the CRM.</p>`,
+  });
+}
+
 // ── Website enquiry / booking request → the venue ────────────────────────────
 // Replaces the Formspree email once the website sends its forms to the CRM.
 // Every answer is listed, the couple's page is linked, and replying goes
@@ -371,10 +390,15 @@ async function sendContractSignedCouple({ to, coupleNames, contractTitle, portal
   // Only point couples at the portal when it is actually running. Sending a
   // "log in here" button to a portal that is switched off invites a support
   // call on the happiest email the venue sends.
+  // A setup link (first time) asks them to choose a password; otherwise it is
+  // the portal's sign-in page.
+  const isSetup = /\/portal\/setup\//.test(url);
   const portalBlock = portalEnabled
     ? {
-        text: `\n\nLog in to your wedding planning portal to start planning: ${url}`,
-        html: `<p style="margin:24px 0"><a href="${url}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Open Wedding Portal</a></p>`,
+        text: isSetup
+          ? `\n\nYour wedding planning portal is ready. Choose your password here (the link works once, for 14 days): ${url}`
+          : `\n\nLog in to your wedding planning portal to start planning: ${url}`,
+        html: `<p>${isSetup ? 'Your wedding planning portal is ready: payments, your Final Details Form, documents, guests and messages in one place. Choose your password to get started (the link works once, for 14 days).' : ''}</p><p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">${isSetup ? 'Set up my portal' : 'Open Wedding Portal'}</a></p>`,
       }
     : {
         text: '\n\nWe will be in touch shortly with your next steps.',
@@ -388,6 +412,23 @@ async function sendContractSignedCouple({ to, coupleNames, contractTitle, portal
     html: `<p>Hi <strong>${coupleNames}</strong>,</p>
 <p>Thank you for signing <strong>"${contractTitle}"</strong>. Your booking with Rustic Retreat is now officially confirmed! 🎉</p>
 ${portalBlock.html}
+<p>Warm regards,<br>Rustic Retreat</p>`,
+  });
+}
+
+// The couple portal setup link, sent by staff (or to reset a forgotten
+// password). Choosing a password signs them straight in.
+async function sendPortalInvite({ to, coupleId, coupleNames, url, days, hasLogin = false }) {
+  return send({
+    kind: hasLogin ? 'portal-password-link' : 'portal-invite',
+    coupleId,
+    to,
+    subject: hasLogin ? 'Choose a new password for your Rustic Retreat portal' : 'Your Rustic Retreat wedding portal',
+    text: `Hi ${coupleNames},\n\n${hasLogin ? 'Here is a link to choose a new password for your wedding portal.' : 'Your Rustic Retreat wedding portal is ready: your payments, Final Details Form, documents, guest list and messages in one place.'}\n\nChoose your password here: ${url}\n\nThe link works once and expires in ${days} days. Afterwards, sign in at ${BASE_URL}/portal/login with either of your email addresses.\n\nWarm regards,\nRustic Retreat`,
+    html: `<p>Hi <strong>${esc(coupleNames)}</strong>,</p>
+<p>${hasLogin ? 'Here is a link to choose a new password for your wedding portal.' : 'Your Rustic Retreat wedding portal is ready: your payments, Final Details Form, documents, guest list and messages in one place.'}</p>
+<p style="margin:24px 0"><a href="${esc(url)}" style="background:#e11d48;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">${hasLogin ? 'Choose a new password' : 'Set up my portal'}</a></p>
+<p style="color:#64748b;font-size:14px">The link works once and expires in ${days} days. Afterwards, sign in at <a href="${esc(BASE_URL)}/portal/login">${esc(BASE_URL)}/portal/login</a> with either of your email addresses.</p>
 <p>Warm regards,<br>Rustic Retreat</p>`,
   });
 }
@@ -682,6 +723,7 @@ module.exports = {
   sendFinalDetailsLink,
   sendFinalDetailsSubmittedAdmin,
   sendDepositStatement,
+  sendPortalInvite,
   sendTourConfirmation,
   isConfigured: () => configured,
   sendCoupleMessage,
@@ -699,6 +741,7 @@ module.exports = {
   sendNewLeadAdmin,
   sendFormLink,
   sendFormCompletedAdmin,
+  sendCoupleMessageAdmin,
   sendWebsiteSubmissionAdmin,
   sendPaymentReminder,
   sendPaymentReceipt,
